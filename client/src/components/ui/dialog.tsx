@@ -175,6 +175,32 @@ function useDraggable() {
   return { offset, onDragStart, resetDrag: reset };
 }
 
+// Rev. 5127 — permite headers customizados renderizarem seu próprio botão de
+// maximizar (evita o botão flutuante padrão sobrepor botões "Fechar" custom).
+const DialogMaximizeContext = React.createContext<{
+  maximized: boolean;
+  toggle: () => void;
+} | null>(null);
+
+function DialogMaximizeButton({ className }: { className?: string }) {
+  const ctx = React.useContext(DialogMaximizeContext);
+  if (!ctx) return null;
+  return (
+    <button
+      type="button"
+      data-slot="dialog-maximize"
+      onClick={ctx.toggle}
+      aria-pressed={ctx.maximized}
+      aria-label={ctx.maximized ? "Restaurar janela" : "Maximizar janela"}
+      title={ctx.maximized ? "Restaurar janela" : "Maximizar janela"}
+      className={className}
+    >
+      {ctx.maximized ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+      <span className="sr-only">{ctx.maximized ? "Restaurar janela" : "Maximizar janela"}</span>
+    </button>
+  );
+}
+
 function DialogContent({
   className,
   children,
@@ -195,6 +221,12 @@ function DialogContent({
   const { offset, onDragStart, resetDrag } = useDraggable();
   // Rev. 3237 — maximizar/restaurar a janela (vale p/ TODOS os diálogos shadcn do app).
   const [maximized, setMaximized] = React.useState(false);
+  // Rev. 5127 — contexto p/ botão de maximizar customizado dentro de headers próprios
+  // (evita o botão flutuante sobrepor botões de "Fechar" custom, ex.: detalhe da OC)
+  const maximizeCtx = React.useMemo(
+    () => ({ maximized, toggle: () => setMaximized((v) => !v) }),
+    [maximized]
+  );
 
   const handleEscapeKeyDown = React.useCallback(
     (e: KeyboardEvent) => {
@@ -246,7 +278,9 @@ function DialogContent({
         onAnimationEnd={draggable ? resetDrag : undefined}
         {...restProps}
       >
-        {children}
+        <DialogMaximizeContext.Provider value={maximizeCtx}>
+          {children}
+        </DialogMaximizeContext.Provider>
         <div className="absolute top-4 right-4 flex items-center gap-1">
           {maximizable && (
             <button
@@ -354,6 +388,7 @@ export {
   DialogDescription,
   DialogFooter,
   DialogHeader,
+  DialogMaximizeButton,
   DialogOverlay,
   DialogPortal,
   DialogTitle,

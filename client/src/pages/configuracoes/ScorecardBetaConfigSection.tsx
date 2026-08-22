@@ -34,6 +34,25 @@ export function ScorecardBetaConfigSection() {
 
   const ativo = !!data?.ativo;
 
+  // Rev. 4867 — LGPD: modo "só total" nos Custos RH (Scorecard)
+  const { data: soTotalData, isLoading: soTotalLoading } = trpc.scorecard.getCustosSoTotal.useQuery(
+    { companyId },
+    { enabled: !!companyId }
+  );
+  const soTotalMut = trpc.scorecard.setCustosSoTotal.useMutation({
+    onSuccess: (_, vars) => {
+      utils.scorecard.getCustosSoTotal.invalidate({ companyId });
+      utils.scorecard.getCustosRH.invalidate();
+      toast.success(
+        vars.ativo
+          ? "Custos RH: gestores/engenheiros verão apenas o total da equipe."
+          : "Custos RH: gestores/engenheiros voltam a ver o custo agrupado por função."
+      );
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const soTotal = !!soTotalData?.ativo;
+
   return (
     <div className="border rounded-lg overflow-hidden border-amber-200">
       <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 text-xs font-bold text-amber-700 uppercase tracking-wider border-b border-amber-200">
@@ -75,6 +94,29 @@ export function ScorecardBetaConfigSection() {
               <label htmlFor="scorecard-beta" className="text-sm font-medium text-gray-700 cursor-pointer select-none">
                 {ativo ? "Scorecard visível para todos os usuários" : "Scorecard visível apenas para Admin Master"}
               </label>
+            </div>
+
+            {/* Rev. 4867 — LGPD: visão de Custos RH p/ não-Admin Master */}
+            <div className="space-y-2">
+              <p className="text-xs text-gray-600 leading-relaxed">
+                <strong>Privacidade dos Custos RH (LGPD):</strong> o Admin Master sempre vê o custo
+                individual por funcionário. Para os demais usuários (gestor de obra, engenheiro de campo),
+                escolha o nível de detalhe: agrupado por função (padrão) ou{" "}
+                <strong>apenas o efetivo total e o custo total</strong> — sem nenhum valor isolado.
+              </p>
+              <div className="flex items-center gap-3 p-3 bg-white rounded-lg border border-amber-200">
+                <Switch
+                  id="scorecard-custos-so-total"
+                  checked={soTotal}
+                  disabled={soTotalLoading || soTotalMut.isPending || !companyId}
+                  onCheckedChange={(v) => soTotalMut.mutate({ companyId, ativo: v })}
+                />
+                <label htmlFor="scorecard-custos-so-total" className="text-sm font-medium text-gray-700 cursor-pointer select-none">
+                  {soTotal
+                    ? "Custos RH: demais usuários veem apenas o total da equipe"
+                    : "Custos RH: demais usuários veem custo agrupado por função"}
+                </label>
+              </div>
             </div>
 
             {!ativo && (

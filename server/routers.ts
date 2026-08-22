@@ -74,9 +74,11 @@ import { goldenRulesRouter } from "./routers/goldenRules";
 import { visaoPanoramicaRouter } from "./routers/visaoPanoramica";
 import { datajudAutoCheckRouter, startAutoCheckJob } from "./routers/datajudAutoCheck";
 import { valeAlimentacaoRouter } from "./routers/valeAlimentacao";
+import { valeTransporteRouter } from "./routers/valeTransporte";
 import { notificationsRouter } from "./routers/notifications";
 import { recontratacaoRouter } from "./routers/recontratacao";
 import { avisoPrevioFeriasRouter } from "./routers/avisoPrevioFerias";
+import { planoDesligamentoRouter } from "./routers/planoDesligamento";
 import { cipaRouter } from "./routers/cipa";
 import { pjContractsRouter } from "./routers/pjContracts";
 import { insuranceRouter } from "./routers/insurance";
@@ -94,6 +96,10 @@ import { comunicadosCienciaRouter } from "./routers/comunicadosCiencia";
 import { curriculosRouter } from "./routers/curriculos";
 import { employeeDocumentsRouter } from "./routers/employeeDocuments";
 import { pjMedicoesRouter } from "./routers/pjMedicoes";
+import { reembolsosRouter } from "./routers/reembolsos";
+import { patrimonioRouter } from "./routers/patrimonio";
+import { telefonesCorporativosRouter } from "./routers/telefonesCorporativos";
+import { contratosServicoRouter } from "./routers/contratosServico";
 import { pjConformidadeRouter } from "./routers/pjConformidade";
 import { dissidioRouter } from "./routers/dissidio";
 import { convencaoIARouter } from "./routers/convencaoIA";
@@ -129,6 +135,8 @@ import { medicaoRouter } from "./routers/medicao";
 import { iaCronogramaRouter } from "./routers/iaCronograma";
 import { aiConfigRouter } from "./routers/aiConfig";
 import { medicaoConfigRouter } from "./routers/medicaoConfig";
+import { medicaoCriteriosRouter } from "./routers/medicaoCriterios";
+import { apontamentoCampoRouter } from "./routers/apontamentoCampo";
 import { comprasRouter } from "./routers/compras";
 import { purchaseRouter } from "./routers/purchaseRouter";
 import { warehouseRouter } from "./routers/warehouse";
@@ -173,8 +181,10 @@ import { efdIcmsIpiRouter } from "./routers/efdIcmsIpi";
 import { efdContribuicoesRouter } from "./routers/efdContribuicoes";
 import { spedEcfRouter } from "./routers/spedEcf";
 import { spedEcdRouter } from "./routers/spedEcd";
+import { gestaoInternaRouter } from "./routers/gestaoInterna";
 import { storagePut } from "./storage";
 import { dispararNotificacao, mapStatusToTipoMovimentacao, getMotivoAfastamento } from "./services/emailNotification";
+import { assertRaioXAccess, assertFullRaioXAccess, assertEmployeeInCompany } from "./raioXGuard";
 
 // Helper: generic CRUD builder
 function crudRouter(opts: {
@@ -208,6 +218,7 @@ async function assertAdmClienteTargetScope(callerId: number, targetUserId: numbe
 }
 
 export const appRouter = router({
+  gestaoInterna: gestaoInternaRouter,
   billing: billingRouter,
   saasAdmin: saasAdminRouter,
   system: systemRouter,
@@ -236,6 +247,8 @@ export const appRouter = router({
   iaCronograma: iaCronogramaRouter,
   aiConfig: aiConfigRouter,
   medicaoConfig: medicaoConfigRouter,
+  medicaoCriterios: medicaoCriteriosRouter,
+  apontamentoCampo: apontamentoCampoRouter,
   compras: comprasRouter,
   purchase: purchaseRouter,
   warehouse: warehouseRouter,
@@ -334,6 +347,34 @@ export const appRouter = router({
   // ============================================================
   companies: router({
     list: protectedProcedure.query(async ({ ctx }) => getCompaniesForUser(ctx.user.id, ctx.user.role)),
+    // Rev. 4984 — dados cadastrais do empregador documental "JF" (Julio Ferraz)
+    // p/ documentos gerados no client. Retorna SÓ o subset de exibição (a empresa
+    // pode estar soft-deletada e fora das listas normais).
+    empregadorJf: protectedProcedure.query(async ({ ctx }) => {
+      const db = await getDb();
+      if (!db) return null;
+      const [jf] = await db.select().from(companies)
+        .where(sql`${companies.cnpj} LIKE '03.426.403%'`)
+        .orderBy(sql`(${companies.deletedAt} IS NULL) DESC, ${companies.id} ASC`)
+        .limit(1);
+      if (!jf) return null;
+      // Rev. 4986 — tenant guard: só usuários com acesso a alguma empresa do MESMO
+      // grupo empresarial da JF podem ler estes dados (JF é soft-deletada e não
+      // aparece nas listas normais; sem este guard vazaria cross-tenant).
+      if (ctx.user.role !== "admin" && ctx.user.role !== "admin_master") {
+        const acessiveis = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+        const grupos = new Set((acessiveis as any[]).map((c: any) => c.grupoEmpresarial ?? null));
+        if (!grupos.has((jf as any).grupoEmpresarial ?? null)) return null;
+      }
+      return {
+        id: jf.id, razaoSocial: jf.razaoSocial, nomeFantasia: jf.nomeFantasia,
+        cnpj: jf.cnpj, endereco: (jf as any).endereco, cidade: (jf as any).cidade,
+        estado: (jf as any).estado, cep: (jf as any).cep, logoUrl: (jf as any).logoUrl,
+        // Rev. — necessário p/ o client decidir se o toggle FC/JF aparece
+        // (comparação de grupo empresarial em empregadorToggleVisivel).
+        grupoEmpresarial: (jf as any).grupoEmpresarial ?? null,
+      };
+    }),
     // Listar empresas que compartilham recursos ("Construtoras")
     construtoras: protectedProcedure.query(async () => getConstrutoras()),
     construtorasIds: protectedProcedure.query(async () => getConstrutorasIds()),
@@ -1815,7 +1856,9 @@ export const appRouter = router({
 
     getTerminationChecklist: protectedProcedure
       .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), employeeId: z.number() }))
-      .query(async ({ input }) => {
+      .query(async ({ input, ctx }) => {
+        // Rev. 5193 — Raio-X guard.
+        await assertRaioXAccess(ctx as any, input.employeeId);
         const db = (await getDb())!;
         const ids = input.companyIds?.length ? input.companyIds : [input.companyId];
         return db.select().from(employeeTerminationChecklist)
@@ -1829,6 +1872,11 @@ export const appRouter = router({
     initTerminationChecklist: protectedProcedure
       .input(z.object({ companyId: z.number(), employeeId: z.number() }))
       .mutation(async ({ input, ctx }) => {
+        // Rev. 5195 — management mutation (init termination checklist, sets
+        // status to Aviso): full access only, scoped to the target company,
+        // plus target-employee scope. Self users can never initiate.
+        await assertFullRaioXAccess(ctx as any, input.companyId);
+        await assertRaioXAccess(ctx as any, input.employeeId);
         const db = (await getDb())!;
         const existing = await db.select({ id: employeeTerminationChecklist.id })
           .from(employeeTerminationChecklist)
@@ -1867,6 +1915,19 @@ export const appRouter = router({
       .input(z.object({ id: z.number(), concluido: z.boolean(), observacoes: z.string().optional() }))
       .mutation(async ({ input, ctx }) => {
         const db = (await getDb())!;
+        // Rev. 5195 — management mutation (toggle termination checklist item):
+        // derive record employee/company server-side, then require full access.
+        // Self users can never toggle.
+        const [item] = await db.select({
+          employeeId: employeeTerminationChecklist.employeeId,
+          companyId:  employeeTerminationChecklist.companyId,
+        })
+          .from(employeeTerminationChecklist)
+          .where(eq(employeeTerminationChecklist.id, input.id))
+          .limit(1);
+        if (!item) throw new TRPCError({ code: "NOT_FOUND", message: "Item não encontrado." });
+        await assertFullRaioXAccess(ctx as any, item.companyId);
+        await assertRaioXAccess(ctx as any, item.employeeId);
         await db.update(employeeTerminationChecklist).set({
           concluido: input.concluido ? 1 : 0,
           concluidoEm: input.concluido ? new Date().toISOString() : null,
@@ -1879,12 +1940,18 @@ export const appRouter = router({
 
     checkTerminationReady: protectedProcedure
       .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), employeeId: z.number() }))
-      .query(async ({ input }) => {
+      .query(async ({ input, ctx }) => {
+        // Rev. 5196 — auxiliary read must be guarded. Central Raio-X guard on the
+        // target employee, then verify the employee's ACTUAL company (derived
+        // server-side) equals input.companyId. The checklist query is scoped to
+        // that derived company only — the client-supplied companyIds list is not
+        // trusted for authorization.
+        await assertRaioXAccess(ctx as any, input.employeeId);
+        const realCompanyId = await assertEmployeeInCompany(input.employeeId, input.companyId);
         const db = (await getDb())!;
-        const ids = input.companyIds?.length ? input.companyIds : [input.companyId];
         const items = await db.select().from(employeeTerminationChecklist)
           .where(and(
-            sql`${employeeTerminationChecklist.companyId} IN (${sql.join(ids.map(id => sql`${id}`), sql`, `)})`,
+            eq(employeeTerminationChecklist.companyId, realCompanyId),
             eq(employeeTerminationChecklist.employeeId, input.employeeId)
           ));
         if (items.length === 0) return { hasChecklist: false, ready: true, pending: [], total: 0, done: 0 };
@@ -2268,8 +2335,26 @@ export const appRouter = router({
       terceiroDiaPagamento: z.number().min(1).max(31).nullable().optional(),
       terceiroPrazoAprovacaoDias: z.number().min(1).max(60).nullable().optional(),
       terceiroPagamentoConformeRecebimento: z.number().min(0).max(1).optional(),
+      terceiroCriterioMedicao: z.string().nullable().optional(),
     })).mutation(async ({ input, ctx }) => {
       const { sns, ...obraData } = input;
+      // Rev. 5002/5003 — obra nova herda o Critério de Medição padrão da empresa
+      // (Configurações), incluindo as datas do fluxo (dia medição/aprovação/pagamento).
+      try {
+        const { getDb } = await import("./db");
+        const _db = await getDb();
+        const { _criterioMedicaoPadraoEmpresa } = await import("./routers/terceiroContratos");
+        const padrao = _db ? await _criterioMedicaoPadraoEmpresa(_db, input.companyId) : null;
+        if (padrao) {
+          if (!obraData.terceiroCriterioMedicao) (obraData as any).terceiroCriterioMedicao = padrao;
+          try {
+            const pj = JSON.parse(padrao);
+            if (obraData.terceiroDiaMedicao == null && pj?.diaMedicao) (obraData as any).terceiroDiaMedicao = pj.diaMedicao;
+            if (obraData.terceiroPrazoAprovacaoDias == null && pj?.prazoAprovacaoDias) (obraData as any).terceiroPrazoAprovacaoDias = pj.prazoAprovacaoDias;
+            if (obraData.terceiroDiaPagamento == null && pj?.diaPagamento) (obraData as any).terceiroDiaPagamento = pj.diaPagamento;
+          } catch { /* JSON inválido: segue sem datas */ }
+        }
+      } catch (e) { console.warn("[obras.create] falha ao herdar critério de medição padrão:", e); }
       const result = await createObra(obraData as any);
       // Auto-link SNs if provided
       if (sns && sns.length > 0 && result?.id) {
@@ -2377,6 +2462,9 @@ export const appRouter = router({
       terceiroDiaPagamento: z.number().min(1).max(31).nullable().optional(),
       terceiroPrazoAprovacaoDias: z.number().min(1).max(60).nullable().optional(),
       terceiroPagamentoConformeRecebimento: z.number().min(0).max(1).optional(),
+      terceiroCriterioMedicao: z.string().nullable().optional(),
+      contratoAssinadoUrl: z.string().nullable().optional(),
+      contratoAssinadoKey: z.string().nullable().optional(),
     })).mutation(async ({ input, ctx }) => {
       const { id, responsavelId, ...data } = input;
       // Rev. 2391 — Guard server-side: não permitir TRANSITAR obra pra status encerrador
@@ -2451,6 +2539,79 @@ export const appRouter = router({
       }
       return result;
     }),
+    // Rev. 5152 — Upload do contrato assinado da obra (PDF → S3/local storage)
+    uploadContrato: protectedProcedure
+      .input(z.object({
+        obraId: z.number(),
+        companyId: z.number(),
+        fileBase64: z.string(),
+        mimeType: z.enum(["application/pdf"]),
+        fileName: z.string().max(200),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        await guardCompanyIds(ctx, { companyId: input.companyId });
+        const buffer = Buffer.from(input.fileBase64, "base64");
+        if (!buffer.length) throw new TRPCError({ code: "BAD_REQUEST", message: "Arquivo vazio." });
+        if (buffer.length > 30 * 1024 * 1024) throw new TRPCError({ code: "BAD_REQUEST", message: "Arquivo muito grande (máx 30 MB)." });
+        const ts = Date.now();
+        const fileKey = `obras/${input.companyId}/${input.obraId}/contrato-assinado-${ts}.pdf`;
+        const { storagePut } = await import("./storage");
+        const { url } = await storagePut(fileKey, buffer, "application/pdf");
+        const db = (await getDb())!;
+        await db.execute(sql`UPDATE obras SET contrato_assinado_url = ${url}, contrato_assinado_key = ${fileKey} WHERE id = ${input.obraId}`);
+        return { success: true, url, key: fileKey };
+      }),
+
+    // Rev. 5152 — Leitura do contrato assinado pela IA (extrai campos e retorna JSON)
+    lerContratoIA: protectedProcedure
+      .input(z.object({
+        obraId: z.number(),
+        companyId: z.number(),
+        fileBase64: z.string(),
+        mimeType: z.enum(["application/pdf"]),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        await guardCompanyIds(ctx, { companyId: input.companyId });
+        const { invokeAnthropicVision } = await import("./_core/llm");
+        const rawText = await invokeAnthropicVision({
+          base64: input.fileBase64,
+          mimeType: "application/pdf",
+          maxTokens: 2000,
+          systemPrompt: "Você é um assistente especializado em contratos de construção civil brasileiros. Extraia informações objetivas do documento.",
+          prompt: `Leia este contrato assinado e extraia as seguintes informações em JSON (use null para campos não encontrados):
+{
+  "nome": "objeto/nome da obra conforme contrato",
+  "numeroContrato": "número do contrato (ex: CT-2026-001)",
+  "cliente": "razão social ou nome do cliente/contratante",
+  "dataInicio": "data de início no formato YYYY-MM-DD",
+  "dataPrevisaoFim": "data de término/prazo no formato YYYY-MM-DD",
+  "valorContrato": "valor total do contrato em reais (só número com ponto decimal, ex: 1250000.00)",
+  "endereco": "endereço/localização da obra",
+  "tipoContrato": "global, mdo, adm ou projeto (identifique pelo escopo descrito)",
+  "observacoes": "informações relevantes não cobertas pelos campos acima (máx 300 caracteres)"
+}
+Responda APENAS com o JSON válido, sem nenhum texto adicional.`,
+        });
+        // Salvage JSON robusto
+        let extracted: Record<string, any> = {};
+        try {
+          const match = rawText.match(/\{[\s\S]*\}/);
+          if (match) extracted = JSON.parse(match[0]);
+        } catch { extracted = {}; }
+        const clean = (v: any) => (typeof v === "string" && v.trim() ? v.trim() : null);
+        return {
+          nome: clean(extracted.nome),
+          numeroContrato: clean(extracted.numeroContrato),
+          cliente: clean(extracted.cliente),
+          dataInicio: clean(extracted.dataInicio),
+          dataPrevisaoFim: clean(extracted.dataPrevisaoFim),
+          valorContrato: clean(extracted.valorContrato),
+          endereco: clean(extracted.endereco),
+          tipoContrato: ["global","mdo","adm","projeto"].includes(extracted.tipoContrato) ? extracted.tipoContrato : null,
+          observacoes: clean(extracted.observacoes),
+        };
+      }),
+
     delete: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ input, ctx }) => {
       await deleteObra(input.id, ctx.user.id, ctx.user.name ?? "Sistema");
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "DELETE", module: "obras", entityType: "obra", entityId: input.id, details: `Obra excluída (lixeira)` });
@@ -3129,9 +3290,13 @@ export const appRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
       const { users } = await import("../drizzle/schema");
-      const { eq } = await import("drizzle-orm");
-      const existing = await db.select().from(users).where(eq(users.username, input.username));
+      const { eq, and, isNull, sql } = await import("drizzle-orm");
+      // Rev. 4991 — usuário EXCLUÍDO (lixeira) não bloqueia reutilizar o username;
+      // só conflita com usuário ativo. (Camila: user antigo excluído travava o novo.)
+      const existing = await db.select().from(users).where(and(eq(users.username, input.username), isNull(users.deletedAt)));
       if (existing.length > 0) throw new TRPCError({ code: "CONFLICT", message: "Username já existe" });
+      // Libera o username do registro na lixeira p/ evitar ambiguidade no login
+      await db.update(users).set({ username: sql`${users.username} || '_excluido_' || ${users.id}` } as any).where(and(eq(users.username, input.username), sql`${users.deletedAt} IS NOT NULL`));
       const defaultPwd = input.password || "asdf1020";
       const hashed = bcrypt.hashSync(defaultPwd, 10);
       const openId = `local_${Date.now()}_${Math.random().toString(36).slice(2)}`;
@@ -3296,6 +3461,7 @@ export const appRouter = router({
       email: z.string().email().optional(),
       username: z.string().min(3).optional(),
       newPassword: z.string().min(6).optional(),
+      cpf: z.string().max(14).optional(), // Rev. 5047 — CPF p/ match de signatário FCSign
       role: z.enum(["admin", "user", "admin_master", "adm_cliente"]).optional(),
     })).mutation(async ({ input, ctx }) => {
       if (ctx.user.role !== "admin" && ctx.user.role !== "admin_master" && ctx.user.role !== "adm_cliente") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas admin pode editar usuários" });
@@ -3314,6 +3480,7 @@ export const appRouter = router({
       if (input.name) updateData.name = input.name;
       if (input.email) updateData.email = input.email;
       if (input.username) updateData.username = input.username;
+      if (input.cpf !== undefined) updateData.cpf = input.cpf.trim() || null;
       if (input.role) {
         // Admin Master pode definir qualquer perfil; Admin pode definir user, admin ou adm_cliente (não admin_master)
         if (ctx.user.role === "admin_master") {
@@ -4021,6 +4188,7 @@ export const appRouter = router({
   }),
 
   avisoPrevio: avisoPrevioFeriasRouter,
+  planoDesligamento: planoDesligamentoRouter,
   cipa: cipaRouter,
   pj: pjContractsRouter,
   feriados: feriadosRouter,
@@ -4029,6 +4197,10 @@ export const appRouter = router({
   curriculos: curriculosRouter,
   employeeDocuments: employeeDocumentsRouter,
   pjMedicoes: pjMedicoesRouter,
+  reembolsos: reembolsosRouter,
+  patrimonio: patrimonioRouter,
+  telefonesCorporativos: telefonesCorporativosRouter,
+  contratosServico: contratosServicoRouter,
   pjConformidade: pjConformidadeRouter,
   dissidio: dissidioRouter,
   convencaoIA: convencaoIARouter,
@@ -4036,6 +4208,7 @@ export const appRouter = router({
   seguroVida: seguroVidaRouter,
   datajudAutoCheck: datajudAutoCheckRouter,
   valeAlimentacao: valeAlimentacaoRouter,
+  valeTransporte: valeTransporteRouter,
   // ============================================================
   // LIXEIRA (TRASH) - Listar e restaurar itens excluídos
   // ============================================================
@@ -4470,7 +4643,7 @@ export const appRouter = router({
       const { eq } = await import("drizzle-orm");
       const rows = await db.select().from(moduleConfig).where(companyFilter(moduleConfig.companyId, input));
       // Módulos padrão - todos habilitados por default
-      const ALL_MODULES = ["rh", "sst", "juridico", "avaliacao", "terceiros", "parceiros", "orcamento", "planejamento", "medicao", "medicao-terceiros", "cadastro", "compras", "almoxarifado", "financeiro", "gestao-documentos", "operacional", "frotas", "comunicados-internos", "curriculos", "oraculo", "portal-cliente", "fcsign"];
+      const ALL_MODULES = ["rh", "sst", "juridico", "avaliacao", "terceiros", "parceiros", "orcamento", "planejamento", "medicao", "medicao-terceiros", "apontamento", "cadastro", "compras", "almoxarifado", "financeiro", "gestao-documentos", "operacional", "frotas", "comunicados-internos", "curriculos", "oraculo", "portal-cliente", "fcsign", "reembolso", "gestao-interna", "telefones-corporativos"];
       const moduleMap: Record<string, any> = {};
       for (const row of rows) moduleMap[row.moduleKey] = row;
       return ALL_MODULES.map(key => ({

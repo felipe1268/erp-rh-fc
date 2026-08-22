@@ -2,11 +2,23 @@ import { router, protectedProcedure } from "../_core/trpc";
 import { z } from "zod";
 import { getDb } from "../db";
 import { comunicadosInternos, comunicadoAssinaturas, comunicadoLeituras, employees, obraFuncionarios, obras, integrasignEnvelopes, integrasignSignatarios, jobFunctions } from "../../drizzle/schema";
-import { eq, and, sql, desc, isNull, asc, inArray, count } from "drizzle-orm";
+import { eq, and, sql, desc, isNull, asc, inArray, notInArray, count } from "drizzle-orm";
+import { EMPLOYEE_STATUS_DESLIGADOS } from "../../shared/modules";
 import { storagePut } from "../storage";
 import { TRPCError } from "@trpc/server";
 import crypto from "crypto";
 import { enviarConviteAssinatura } from "../services/integrasignEmail";
+import { getCompaniesForUser } from "../db";
+
+// Rev. — tenant guard: o caller precisa ter acesso à empresa do comunicado
+// (ensureOwnership só valida comunicado↔companyId, não o USUÁRIO).
+async function assertCallerCompanyAccess(user: { id: number; role: string }, companyId: number) {
+  if (user.role === "admin" || user.role === "admin_master") return;
+  const acessiveis = await getCompaniesForUser(user.id, user.role);
+  if (!(acessiveis as any[]).some((c: any) => Number(c.id) === Number(companyId))) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para esta empresa" });
+  }
+}
 
 async function extractTextFromBuffer(buffer: Buffer, ext: string): Promise<string | null> {
   try {
@@ -89,7 +101,7 @@ export const comunicadosInternosRouter = router({
       const ativosEmpresa = await db
         .select({ id: employees.id, dataAdmissao: employees.dataAdmissao })
         .from(employees)
-        .where(and(eq(employees.companyId, input.companyId), eq(employees.status, "Ativo")));
+        .where(and(eq(employees.companyId, input.companyId), notInArray(employees.status, EMPLOYEE_STATUS_DESLIGADOS)));
       const normDate = (v: any): string | null => {
         if (!v) return null;
         if (v instanceof Date) return v.toISOString().slice(0, 10);
@@ -106,7 +118,7 @@ export const comunicadosInternosRouter = router({
           .from(employees)
           .where(and(
             inArray(employees.id, Array.from(allDestIds)),
-            eq(employees.status, "Ativo"),
+            notInArray(employees.status, EMPLOYEE_STATUS_DESLIGADOS),
             eq(employees.companyId, input.companyId),
           ));
         activeRows.forEach(e => { activeDestSet.add(e.id); if (!admissaoMap.has(e.id)) admissaoMap.set(e.id, normDate(e.dataAdmissao)); });
@@ -196,7 +208,7 @@ export const comunicadosInternosRouter = router({
         .from(employees)
         .where(and(
           eq(employees.companyId, input.companyId),
-          eq(employees.status, "Ativo"),
+          notInArray(employees.status, EMPLOYEE_STATUS_DESLIGADOS),
         ))
         .orderBy(asc(employees.nomeCompleto));
 
@@ -330,19 +342,27 @@ export const comunicadosInternosRouter = router({
 
   // Rev. 4264 — Solicita assinatura formal do emissor responsável via FCSign (integrasign).
   // Cria envelope com 1 signatário (o emissor/responsável). Email obrigatório no input.
+  // Rev. — agora suporta 2 signatários: EMISSOR responsável + DIRETORIA (opcional).
+  // Devolve os links de assinatura de ambos para cópia/compartilhamento direto.
   solicitarAssinaturaFCSign: protectedProcedure
     .input(z.object({
       id: z.number().int().positive(),
       companyId: z.number().int().positive(),
-      emissorEmail: z.string().email({ message: "E-mail do emissor obrigatório para assinatura FCSign" }),
+      // E-mail agora é opcional — o link também pode ser enviado por WhatsApp (celular) direto da UI
+      emissorEmail: z.string().email({ message: "E-mail do emissor inválido" }).optional(),
+      diretoriaNome: z.string().trim().max(200).optional(),
+      diretoriaEmail: z.string().email({ message: "E-mail da diretoria inválido" }).optional(),
+      incluirDiretoria: z.boolean().optional(),
+      // Rev. — Diretor da JF (empregador documental Julio Ferraz), opcional:
+      // quando o comunicado tem colaboradores JF, colhe-se também a assinatura dele.
+      diretoriaJfNome: z.string().trim().max(200).optional(),
+      diretoriaJfEmail: z.string().email({ message: "E-mail do diretor JF inválido" }).optional(),
+      incluirDiretoriaJf: z.boolean().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
+      await assertCallerCompanyAccess(ctx.user as any, input.companyId);
       const row = await ensureOwnership(db, input.id, input.companyId);
-
-      if (row.fcsignEnvelopeId) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "Este comunicado já possui um envelope FCSign ativo." });
-      }
 
       const emissorNome = row.emissorNome || row.criadoPor || ctx.user.name || "Responsável";
       const emissorCargo = row.emissorCargo || "Responsável";
@@ -351,7 +371,11 @@ export const comunicadosInternosRouter = router({
         ? String(row.conteudo).replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().substring(0, 5000)
         : `Comunicado Interno Nº ${row.numero}: ${row.titulo}`;
 
-      const token = crypto.randomBytes(48).toString("hex");
+      const incluirDiretoria = !!(input.incluirDiretoria || input.diretoriaEmail) && !!(input.diretoriaNome || "").trim();
+      const incluirDiretoriaJf = !!(input.incluirDiretoriaJf || input.diretoriaJfEmail) && !!(input.diretoriaJfNome || "").trim();
+      const tokenEmissor = crypto.randomBytes(48).toString("hex");
+      const tokenDiretoria = incluirDiretoria ? crypto.randomBytes(48).toString("hex") : null;
+      const tokenDiretoriaJf = incluirDiretoriaJf ? crypto.randomBytes(48).toString("hex") : null;
       const tokenExpira = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 dias
 
       const [envelope] = await db.insert(integrasignEnvelopes).values({
@@ -360,7 +384,7 @@ export const comunicadosInternosRouter = router({
         descricao: `Assinatura formal de Comunicado Interno — módulo RH/Comunicados.`,
         textoContrato,
         status: "pendente",
-        totalSignatariosObrigatorios: 1,
+        totalSignatariosObrigatorios: 1 + (incluirDiretoria ? 1 : 0) + (incluirDiretoriaJf ? 1 : 0),
         criadoPorId: ctx.user.id,
         criadoPorNome: ctx.user.name ?? "Sistema",
         dataEnvio: sql`NOW()`,
@@ -369,35 +393,90 @@ export const comunicadosInternosRouter = router({
       await db.insert(integrasignSignatarios).values({
         companyId: input.companyId,
         envelopeId: envelope.id,
-        papel: "diretor",
+        papel: "emissor",
         ordemAssinatura: 1,
         nome: emissorNome,
-        email: input.emissorEmail,
+        email: input.emissorEmail || "",
         cargo: emissorCargo,
-        token,
+        token: tokenEmissor,
         tokenExpiraEm: tokenExpira.toISOString(),
         status: "pendente",
       } as any).returning();
 
-      // Salva o id do envelope no comunicado
+      if (incluirDiretoria && tokenDiretoria) {
+        await db.insert(integrasignSignatarios).values({
+          companyId: input.companyId,
+          envelopeId: envelope.id,
+          papel: "diretor",
+          ordemAssinatura: 2,
+          nome: (input.diretoriaNome || "").trim(),
+          email: input.diretoriaEmail || "",
+          cargo: "Diretoria",
+          token: tokenDiretoria,
+          tokenExpiraEm: tokenExpira.toISOString(),
+          status: "pendente",
+        } as any).returning();
+      }
+
+      if (incluirDiretoriaJf && tokenDiretoriaJf) {
+        await db.insert(integrasignSignatarios).values({
+          companyId: input.companyId,
+          envelopeId: envelope.id,
+          papel: "diretor_jf",
+          ordemAssinatura: incluirDiretoria ? 3 : 2,
+          nome: (input.diretoriaJfNome || "").trim(),
+          email: input.diretoriaJfEmail || "",
+          cargo: "Diretoria — Julio Ferraz",
+          token: tokenDiretoriaJf,
+          tokenExpiraEm: tokenExpira.toISOString(),
+          status: "pendente",
+        } as any).returning();
+      }
+
+      // Salva o id do envelope no comunicado (reenvio substitui o envelope de referência)
       await db.update(comunicadosInternos)
         .set({ fcsignEnvelopeId: envelope.id } as any)
         .where(eq(comunicadosInternos.id, input.id));
 
-      // Envia convite (try/catch não-bloqueante — não falha a mutation se email cair)
+      // Envia convites por e-mail SE informado (link também pode ser enviado por WhatsApp pela UI)
       try {
-        await enviarConviteAssinatura({
-          email: input.emissorEmail,
-          nome: emissorNome,
-          papel: "diretor",
-          titulo,
-          token,
-        });
+        if (input.emissorEmail) {
+          await enviarConviteAssinatura({
+            email: input.emissorEmail,
+            nome: emissorNome,
+            papel: "emissor",
+            titulo,
+            token: tokenEmissor,
+          });
+        }
+        if (incluirDiretoria && tokenDiretoria && input.diretoriaEmail) {
+          await enviarConviteAssinatura({
+            email: input.diretoriaEmail,
+            nome: (input.diretoriaNome || "").trim(),
+            papel: "diretor",
+            titulo,
+            token: tokenDiretoria,
+          });
+        }
+        if (incluirDiretoriaJf && tokenDiretoriaJf && input.diretoriaJfEmail) {
+          await enviarConviteAssinatura({
+            email: input.diretoriaJfEmail,
+            nome: (input.diretoriaJfNome || "").trim(),
+            papel: "diretor",
+            titulo,
+            token: tokenDiretoriaJf,
+          });
+        }
       } catch (emailErr: any) {
         console.warn(`[ComunicadosInternos] FCSign criado (id=${envelope.id}), falha no email:`, emailErr?.message || emailErr);
       }
 
-      return { envelopeId: envelope.id };
+      return {
+        envelopeId: envelope.id,
+        linkEmissor: `/integrasign/assinar/${tokenEmissor}`,
+        linkDiretoria: tokenDiretoria ? `/integrasign/assinar/${tokenDiretoria}` : null,
+        linkDiretoriaJf: tokenDiretoriaJf ? `/integrasign/assinar/${tokenDiretoriaJf}` : null,
+      };
     }),
 
   // Rev. 4542 — Gera (ou devolve) o link público de leitura/ciência do comunicado.
@@ -551,7 +630,7 @@ export const comunicadosInternosRouter = router({
 
       const baseConds: any[] = [
         eq(employees.companyId, input.companyId),
-        eq(employees.status, "Ativo"),
+        notInArray(employees.status, EMPLOYEE_STATUS_DESLIGADOS),
       ];
       if (input.lista === "complementar") {
         // Rev. 4546 — lista complementar: apenas admitidos APÓS a data de emissão
@@ -581,6 +660,9 @@ export const comunicadosInternosRouter = router({
         funcao: employees.funcao,
         setor: employees.setor,
         fotoUrl: employees.fotoUrl,
+        // Rev. 4985 — empregador documental (FC/JF): a lista de ciência é
+        // separada por empregador quando há colaboradores JF.
+        empregadorDocumentos: (employees as any).empregadorDocumentos,
       })
         .from(employees)
         .where(and(...baseConds))

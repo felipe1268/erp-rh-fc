@@ -8,6 +8,7 @@ import {
   Percent, Banknote, CalendarDays, KeyRound, Users,
 } from "lucide-react";
 import { toast } from "sonner";
+import { EmpregadorAssinaturaSection } from "./EmpregadorAssinaturaSection";
 
 function fmtCpf(cpf?: string | null) {
   if (!cpf) return "";
@@ -254,7 +255,7 @@ export function SociosAdministradorSection({ companyId, isAdmin }: { companyId: 
                       />
                     </div>
                   </div>
-                  {isAdmin && (
+                {isAdmin && (
                     <div className="flex flex-wrap items-center justify-between gap-2 mt-3">
                       {isAdminCurrent ? (
                         <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
@@ -290,6 +291,16 @@ export function SociosAdministradorSection({ companyId, isAdmin }: { companyId: 
                     </div>
                   )}
                 </div>
+                {/* Assinatura institucional — só para o sócio administrador atual */}
+                {isAdminCurrent && isAdmin && (
+                  <div className="px-4 pb-4">
+                    <EmpregadorAssinaturaSection
+                      companyId={companyId}
+                      socioAdminEmployeeId={s.employeeId}
+                      isCurrentAdmin={true}
+                    />
+                  </div>
+                )}
               </div>
             );
           })}

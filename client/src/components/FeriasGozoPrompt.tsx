@@ -5,6 +5,7 @@ import PersonPhoto from "@/components/PersonPhoto";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
 import {
   Palmtree, X, Loader2, PenLine, Undo2,
@@ -35,7 +36,9 @@ export default function FeriasGozoPrompt({ informativo = false }: { informativo?
     { enabled, refetchOnWindowFocus: false },
   );
 
-  const skipKey = `feriasGozoSkip:${companyId}`;
+  const { user } = useAuth();
+  // Rev. 4977 — chave POR USUÁRIO: cada usuário de RH/master vê e resolve o seu
+  const skipKey = `feriasGozoSkip:${user?.id ?? "anon"}:${companyId}`;
   const getSkipped = (): Set<string> => {
     try {
       const raw = sessionStorage.getItem(skipKey);
@@ -107,7 +110,10 @@ export default function FeriasGozoPrompt({ informativo = false }: { informativo?
 
   return (
     <Dialog open={!!promptItem} onOpenChange={(o) => { if (!o) fechar(true); }}>
-      <DialogContent className="max-w-lg p-0 overflow-hidden border-0 shadow-2xl">
+      {/* Rev. 4977 — z-[80]: fica ACIMA do overlay de locações (z-70); clique fora/esc não fecha
+          (antes, tocar no alerta de locação "engolia" este alerta e marcava como visto) */}
+      <DialogContent className="max-w-lg p-0 overflow-hidden border-0 shadow-2xl z-[80]"
+        onInteractOutside={(e) => e.preventDefault()} onEscapeKeyDown={(e) => e.preventDefault()}>
         {/* Header gradient — regra de ouro */}
         <div className="relative bg-gradient-to-br from-blue-600 via-sky-600 to-cyan-600 px-6 py-5 text-white">
           <button

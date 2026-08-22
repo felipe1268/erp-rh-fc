@@ -171,7 +171,10 @@ export function parseDocNumero(descricao: any): string | null {
 export function parseChequeNumero(descricao: any): string | null {
   const s = String(descricao ?? "");
   // Formato padrão: "CHEQUE Nº 001037" ou "CHEQUE 001037"
-  const m = s.match(/cheque\s*n?[ºo°.]*\s*0*(\d{1,12})/i);
+  // Rev. 5024 — (?![\d\/.-]\d? ...) rejeita número seguido de data: em
+  // "TARIFA TRANSACAO COM CHEQUE 30/07/2026" o "30" é o DIA, não o nº do cheque
+  // (esse falso positivo travava o cheque nº 30 real na anti-duplicidade).
+  const m = s.match(/cheque\s*n?[ºo°.]*\s*0*(\d{1,12})(?!\d|\s*[\/.-]\s*\d)/i);
   if (m && m[1]) return m[1].replace(/^0+/, "") || m[1];
   // Formato Santander: "CHEQUE EMITIDO/DEBITADO 001393" ou "CHEQUE DEVOLVIDO MOTIVO 001393 ..."
   // ≥4 dígitos p/ não confundir com código de motivo (1–3 dígitos)

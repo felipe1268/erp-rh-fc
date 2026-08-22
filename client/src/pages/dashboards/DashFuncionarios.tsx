@@ -608,6 +608,9 @@ export default function DashFuncionarios() {
                           <div className="min-w-0">
                             <p className="text-sm font-medium truncate max-w-[140px] sm:max-w-[180px]">{r.nome}</p>
                             <p className="text-xs text-muted-foreground truncate max-w-[140px] sm:max-w-[180px]">{r.funcao}</p>
+                            {(r as any).obraAtual && (
+                              <p className="text-xs text-blue-600 truncate max-w-[140px] sm:max-w-[180px]">{(r as any).obraAtual}</p>
+                            )}
                           </div>
                         </div>
                         <span className="text-sm font-bold text-red-600 shrink-0">{r.total}</span>
@@ -651,6 +654,9 @@ export default function DashFuncionarios() {
                           <div className="min-w-0">
                             <p className="text-sm font-medium truncate max-w-[120px] sm:max-w-[160px]">{r.nome}</p>
                             <p className="text-xs text-muted-foreground truncate max-w-[120px] sm:max-w-[160px]">{r.funcao}</p>
+                            {(r as any).obraAtual && (
+                              <p className="text-xs text-blue-600 truncate max-w-[120px] sm:max-w-[160px]">{(r as any).obraAtual}</p>
+                            )}
                           </div>
                         </div>
                         <div className="text-right shrink-0">

@@ -52,7 +52,8 @@ const STATUS_COLORS: Record<string, string> = {
 const STATUS_LABELS: Record<string, string> = {
   pendente: "Pendente",
   aprovado: "Aprovado",
-  pago: "Pago",
+  // Rev. 5044 — RH só aprova; quem paga é o Financeiro. 'pago' (legado) exibe como Aprovado.
+  pago: "Aprovado",
   cancelado: "Cancelado",
 };
 
@@ -272,8 +273,20 @@ export default function ValeAlimentacao() {
     onError: (e) => toast.error(e.message),
   });
   const aprovarMut = trpc.valeAlimentacao.aprovarLote.useMutation({
-    onSuccess: (data) => {
-      toast.success(`${data.aprovados} lançamentos aprovados!`);
+    onSuccess: (data: any) => {
+      const fin = data?.financeiro;
+      if (fin?.aviso) toast.warning(fin.aviso);
+      if (fin?.entryId) toast.success(`${data.aprovados} lançamento(s) aprovado(s) — título de ${fmtBRL(fin.valor)} enviado ao Contas a Pagar!`);
+      else toast.success(`${data.aprovados} lançamentos aprovados!`);
+      lancamentosQ.refetch();
+      statsQ.refetch();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const reverterAprovacaoMut = trpc.valeAlimentacao.reverterAprovacao.useMutation({
+    onSuccess: (data: any) => {
+      if (data?.financeiro?.aviso) toast.warning(data.financeiro.aviso);
+      toast.success(`${data.revertidos} lançamento(s) revertido(s) para Pendente.`);
       lancamentosQ.refetch();
       statsQ.refetch();
     },
@@ -481,22 +494,14 @@ export default function ValeAlimentacao() {
                         <CheckCircle className="h-3.5 w-3.5" /> Aprovar Todos ({stats.pendentes})
                       </Button>
                     )}
-                    {stats && stats.aprovados > 0 && (
-                      <Button size="sm" className="gap-1.5 text-xs bg-green-600 hover:bg-green-700 text-white" onClick={() => {
-                        if (confirm(`Marcar ${stats.aprovados} lançamentos como pagos?`)) {
-                          pagarMut.mutate({ companyId, companyIds, mesReferencia: mesStr });
-                        }
-                      }} disabled={pagarMut.isPending}>
-                        <DollarSign className="h-3.5 w-3.5" /> Marcar Pagos ({stats.aprovados})
-                      </Button>
-                    )}
-                    {stats && stats.pagos > 0 && (
+                    {stats && (stats.aprovados > 0 || stats.pagos > 0) && (
                       <Button size="sm" variant="outline" className="gap-1.5 text-xs text-amber-700 border-amber-300 hover:bg-amber-50" onClick={() => {
-                        if (confirm(`Reverter ${stats.pagos} lançamento(s) de 'Pago' para 'Aprovado'?`)) {
-                          reverterPagoMut.mutate({ companyId, companyIds, mesReferencia: mesStr });
+                        const n = (stats.aprovados || 0) + (stats.pagos || 0);
+                        if (confirm(`Reverter ${n} lançamento(s) aprovado(s) para 'Pendente'? O título no Contas a Pagar será cancelado (se ainda não pago pelo Financeiro).`)) {
+                          reverterAprovacaoMut.mutate({ companyId, companyIds, mesReferencia: mesStr });
                         }
-                      }} disabled={reverterPagoMut.isPending}>
-                        <RefreshCw className="h-3.5 w-3.5" /> Reverter Pagos ({stats.pagos})
+                      }} disabled={reverterAprovacaoMut.isPending}>
+                        <RefreshCw className="h-3.5 w-3.5" /> Reverter Aprovados ({(stats.aprovados || 0) + (stats.pagos || 0)})
                       </Button>
                     )}
                   </>
@@ -553,7 +558,7 @@ export default function ValeAlimentacao() {
                     </div>
                     <div>
                       <p className="text-2xl font-bold">{fmtNum((stats?.aprovados || 0) + (stats?.pagos || 0))}</p>
-                      <p className="text-xs text-muted-foreground">Aprovados/Pagos</p>
+                      <p className="text-xs text-muted-foreground">Aprovados</p>
                     </div>
                   </div>
                 </CardContent>
@@ -608,7 +613,7 @@ export default function ValeAlimentacao() {
                   <SelectItem value="all">Todos</SelectItem>
                   <SelectItem value="pendente">Pendente</SelectItem>
                   <SelectItem value="aprovado">Aprovado</SelectItem>
-                  <SelectItem value="pago">Pago</SelectItem>
+                  <SelectItem value="pago">Aprovado (legado)</SelectItem>
                   <SelectItem value="cancelado">Cancelado</SelectItem>
                 </SelectContent>
               </Select>
@@ -780,17 +785,10 @@ export default function ValeAlimentacao() {
                                     </Button>
                                   </>
                                 )}
-                                {l.status === "aprovado" && (
-                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-green-600" title="Marcar como pago" onClick={() => {
-                                    pagarMut.mutate({ companyId, companyIds, mesReferencia: mesStr, ids: [l.id] });
-                                  }}>
-                                    <DollarSign className="h-3.5 w-3.5" />
-                                  </Button>
-                                )}
-                                {l.status === "pago" && (
-                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-amber-600" title="Reverter para Aprovado" onClick={() => {
-                                    if (confirm("Reverter este lançamento de 'Pago' para 'Aprovado'?")) {
-                                      reverterPagoMut.mutate({ companyId, companyIds, mesReferencia: mesStr, ids: [l.id] });
+                                {(l.status === "aprovado" || l.status === "pago") && (
+                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-amber-600" title="Reverter aprovação (volta p/ Pendente)" onClick={() => {
+                                    if (confirm("Reverter a aprovação deste lançamento? O total do título no Contas a Pagar será atualizado.")) {
+                                      reverterAprovacaoMut.mutate({ companyId, companyIds, mesReferencia: mesStr, ids: [l.id] });
                                     }
                                   }}>
                                     <RefreshCw className="h-3.5 w-3.5" />

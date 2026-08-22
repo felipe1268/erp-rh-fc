@@ -6,7 +6,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { useState, useMemo } from "react";
 import { Input } from "@/components/ui/input";
 import { formatCPF } from "@/lib/formatters";
-import { Search, UserSearch, Users, UserCheck, UserX, Clock, Shield, Ban, AlertTriangle, Palmtree, FileWarning } from "lucide-react";
+import { Search, UserSearch, Users, UserCheck, UserX, Clock, Shield, Ban, AlertTriangle, Palmtree, FileWarning, Lock } from "lucide-react";
 import { removeAccents } from "@/lib/searchUtils";
 import { usePermissions } from "@/contexts/PermissionsContext";
 import { PersonPhoto } from "@/components/PersonPhoto";
@@ -47,6 +47,23 @@ const STATUS_AVATAR_COLORS: Record<string, string> = {
 export default function RaioXPage() {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
   const { isAdminMaster, isModuleAdmin, canAccessObra } = usePermissions();
+
+  // ── Controle de acesso backend ────────────────────────────────────────────
+  // docs.raioXAccessStatus retorna { mode: 'full' | 'self' | 'none', employeeId? }
+  // full → Admin Master ou RH/DP: UI completa com lista, busca, filtros e cards.
+  // self → usuário vinculado ao próprio funcionário: abre direto a própria ficha.
+  // none → sem acesso: exibe mensagem de bloqueio.
+  // FAIL-CLOSED: enquanto o status não resolve, accessMode fica "unresolved" e
+  // NENHUMA lista/consulta é liberada. Erro na consulta → tratado como "none".
+  const { data: accessStatus, isLoading: accessLoading, error: accessError } = trpc.docs.raioXAccessStatus.useQuery(
+    undefined,
+    { retry: false }
+  );
+  const accessMode: "full" | "self" | "none" | "unresolved" =
+    accessError ? "none" : (accessStatus?.mode ?? "unresolved");
+  const accessResolved = accessMode !== "unresolved";
+  const selfEmployeeId = accessStatus?.employeeId ?? null;
+
   // RH (admin do módulo rh-dp) e Admin Master enxergam tudo.
   // Demais usuários: só veem funcionários alocados nas obras liberadas (users.allowed_obra_ids).
   const isRhOrAdmin = isAdminMaster || isModuleAdmin("rh-dp");
@@ -65,15 +82,16 @@ export default function RaioXPage() {
     [canSeeRestricted]
   );
 
+  // Lista de funcionários — só carrega para mode=full (acesso completo)
   const { data: allEmployeesRaw = [] } = trpc.employees.list.useQuery(
     { companyId: isConstrutoras ? (companyIds[0] || 0) : companyId, companyIds: isConstrutoras ? companyIds : undefined },
-    { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
+    { enabled: accessMode === "full" && (isConstrutoras ? companyIds.length > 0 : companyId > 0) }
   );
 
   // Buscar avisos prévios em andamento para identificar quem está em aviso prévio
   const { data: avisosAtivos = [] } = trpc.avisoPrevio.avisoPrevio.list.useQuery(
     { companyId: isConstrutoras ? (companyIds[0] || 0) : companyId },
-    { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
+    { enabled: accessMode === "full" && (isConstrutoras ? companyIds.length > 0 : companyId > 0) }
   );
 
   // Funcionários visíveis:
@@ -145,6 +163,65 @@ export default function RaioXPage() {
     );
   }, [statusFiltered, search]);
 
+  // ── Renderização condicional por modo de acesso ───────────────────────────
+
+  // Carregando status de acesso
+  // FAIL-CLOSED: só renderizamos a UI depois que o status resolve. Enquanto
+  // isso, mostramos loading e nenhuma lista/consulta é liberada.
+  if (accessLoading || !accessResolved) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center py-24">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  // mode === 'none': sem acesso algum
+  if (accessMode === "none") {
+    return (
+      <DashboardLayout>
+        <div className="flex flex-col items-center justify-center py-24 gap-4">
+          <div className="h-16 w-16 rounded-full bg-slate-100 flex items-center justify-center">
+            <Lock className="h-8 w-8 text-slate-400" />
+          </div>
+          <p className="text-lg font-semibold text-slate-700">Você não tem autorização pra isso</p>
+          <p className="text-sm text-slate-500 text-center max-w-sm">
+            Seu perfil não tem permissão para acessar o Raio-X de funcionários.
+          </p>
+        </div>
+        <PrintFooterLGPD />
+      </DashboardLayout>
+    );
+  }
+
+  // mode === 'self': abre direto a própria ficha, sem lista/busca/filtros
+  if (accessMode === "self") {
+    return (
+      <DashboardLayout>
+        <RaioXFuncionario
+          employeeId={selfEmployeeId}
+          open={!!selfEmployeeId}
+          onClose={() => {}} // no-op: self-only users have no list to return to
+        />
+        {!selfEmployeeId && (
+          <div className="flex flex-col items-center justify-center py-24 gap-4">
+            <div className="h-16 w-16 rounded-full bg-slate-100 flex items-center justify-center">
+              <Lock className="h-8 w-8 text-slate-400" />
+            </div>
+            <p className="text-lg font-semibold text-slate-700">Você não tem autorização pra isso</p>
+            <p className="text-sm text-slate-500 text-center max-w-sm">
+              Nenhum funcionário vinculado ao seu perfil foi encontrado.
+            </p>
+          </div>
+        )}
+        <PrintFooterLGPD />
+      </DashboardLayout>
+    );
+  }
+
+  // mode === 'full': UI completa com lista, busca, filtros e cards
   return (
     <DashboardLayout>
       <div className="space-y-4">

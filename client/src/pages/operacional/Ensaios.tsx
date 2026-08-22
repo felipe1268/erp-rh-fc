@@ -76,7 +76,7 @@ export default function Ensaios() {
     tipo: "concreto", subtipo: "", obraId: "", obraNome: "", dataColeta: new Date().toISOString().slice(0, 10),
     localColeta: "", elementoEstrutural: "", peca: "", fornecedorConcreto: "", notaFiscal: "",
     traco: "", fckProjeto: "", slumpPrevisto: "", slumpRealizado: "", temperatura: "", volumeM3: "",
-    laboratorio: "", responsavel: "", observacoes: "",
+    laboratorio: "", responsavel: "", observacoes: "", lancamentoId: "",
     cps: [
       { numeroCp: "CP-1", idadeDias: 7 },
       { numeroCp: "CP-2", idadeDias: 7 },
@@ -100,6 +100,11 @@ export default function Ensaios() {
   const obrasQuery = trpc.operacional.listarObrasUnificadas.useQuery(
     { companyId },
     { enabled: !!companyId }
+  );
+  // Caminhões (lançamentos de concreto) da obra — rastreabilidade CP ↔ caminhão ↔ trecho
+  const lancamentosQuery = trpc.operacional.listarLancamentosObra.useQuery(
+    { companyId, obraId: parseInt(form.obraId) || 0 },
+    { enabled: !!companyId && !!form.obraId && form.tipo === "concreto" && showForm }
   );
 
   const criarMut = trpc.operacional.criarEnsaio.useMutation({
@@ -130,7 +135,7 @@ export default function Ensaios() {
       tipo: "concreto", subtipo: "", obraId: "", obraNome: "", dataColeta: new Date().toISOString().slice(0, 10),
       localColeta: "", elementoEstrutural: "", peca: "", fornecedorConcreto: "", notaFiscal: "",
       traco: "", fckProjeto: "", slumpPrevisto: "", slumpRealizado: "", temperatura: "", volumeM3: "",
-      laboratorio: "", responsavel: "", observacoes: "",
+      laboratorio: "", responsavel: "", observacoes: "", lancamentoId: "",
       cps: [
         { numeroCp: "CP-1", idadeDias: 7 },
         { numeroCp: "CP-2", idadeDias: 7 },
@@ -186,6 +191,7 @@ export default function Ensaios() {
       laboratorio: form.laboratorio || undefined,
       responsavel: form.responsavel || undefined,
       observacoes: form.observacoes || undefined,
+      lancamentoId: form.lancamentoId ? parseInt(form.lancamentoId) : undefined,
       corposProva: form.cps.filter(c => c.numeroCp).map(c => ({
         numeroCp: c.numeroCp,
         idadeDias: c.idadeDias,
@@ -701,6 +707,33 @@ export default function Ensaios() {
 
               {form.tipo === 'concreto' && (
                 <>
+                  {!!form.obraId && (
+                    <div>
+                      <Label>Caminhão (lançamento do Mapa de Concretagem)</Label>
+                      <Select value={form.lancamentoId} onValueChange={v => {
+                        const l = (lancamentosQuery.data as any[])?.find((x: any) => String(x.id) === v);
+                        setForm(p => ({
+                          ...p, lancamentoId: v,
+                          fornecedorConcreto: l?.fornecedor || p.fornecedorConcreto,
+                          notaFiscal: l?.nota_fiscal || p.notaFiscal,
+                          fckProjeto: l?.fck_elemento != null ? String(l.fck_elemento) : p.fckProjeto,
+                          slumpPrevisto: l?.slump_previsto != null ? String(l.slump_previsto) : p.slumpPrevisto,
+                          volumeM3: l?.volume_entregue != null ? String(l.volume_entregue) : p.volumeM3,
+                          elementoEstrutural: p.elementoEstrutural || [l?.pavimento, l?.elemento].filter(Boolean).join(" — "),
+                        }));
+                      }}>
+                        <SelectTrigger><SelectValue placeholder={(lancamentosQuery.data as any[])?.length ? "Vincular ao caminhão…" : "Nenhum lançamento nesta obra"} /></SelectTrigger>
+                        <SelectContent>
+                          {((lancamentosQuery.data as any[]) || []).map((l: any) => (
+                            <SelectItem key={l.id} value={String(l.id)}>
+                              {new Date(String(l.data_lancamento).slice(0, 10) + "T12:00:00").toLocaleDateString("pt-BR")} — {[l.pavimento, l.elemento].filter(Boolean).join(" ")} • {l.fornecedor || "s/ fornecedor"} {l.nota_fiscal ? `• NF ${l.nota_fiscal}` : ""} • {l.volume_entregue} m³
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-[11px] text-muted-foreground mt-1">Vincular o caminhão preenche fornecedor, NF, fck e volume — e o resultado do ensaio aparece no Mapa de Concretagem e na planta.</p>
+                    </div>
+                  )}
                   <div className="grid grid-cols-3 gap-4">
                     <div>
                       <Label>fck Projeto (MPa)</Label>

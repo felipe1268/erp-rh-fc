@@ -87,6 +87,9 @@ export default function TermosResponsabilidadePanel({ companyId, companyIds, onC
   // Empresas (pra montar `comp` passado ao TermoResponsabilidadeDialog)
   const { data: companies = [] } = trpc.companies.list.useQuery();
   const compAtiva = useMemo(() => (companies as any[]).find((c: any) => c.id === companyId), [companies, companyId]);
+  // Rev. 4984 — colaborador marcado como "JF": o termo sai com os dados do
+  // empregador Julio Ferraz (logo, razão social, CNPJ) no lugar da empresa FC.
+  const { data: jfCompany } = trpc.companies.empregadorJf.useQuery(undefined, { staleTime: 5 * 60 * 1000 });
 
   // Colaboradores ativos da empresa (pra "Novo Termo")
   const { data: empsRaw = [] } = trpc.employees.list.useQuery({ companyId }, { enabled: !!companyId });
@@ -521,7 +524,7 @@ export default function TermosResponsabilidadePanel({ companyId, companyIds, onC
           empCpf={empNovo.cpf}
           empRg={empNovo.rg}
           empFuncao={empNovo.funcao}
-          comp={compAtiva}
+          comp={(empNovo as any).empregadorDocumentos === "JF" && jfCompany ? jfCompany : compAtiva}
           geradoPor={userName}
           isAdminMaster={isAdminMaster}
           onSendToFcSign={(payload: any) => {

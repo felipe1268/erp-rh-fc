@@ -131,6 +131,9 @@ function getDayStatus(dateStr: string, rec: any | null, feriasDates?: Set<string
   }
   if (parseHHMM(rec.horasExtras) > 0) return isCargoConfianca ? "cargo_confianca" : "he";
   if (parseHHMM(rec.atrasos) > 0) return isCargoConfianca ? "cargo_confianca" : "atraso";
+  // Rev. 5045 — falta parcial (saída antecipada convertida em falta pelo fechamento):
+  // o servidor projeta deficitMins; sem isso o dia aparecia "Normal" só com horas positivas.
+  if (Number(rec.deficitMins || 0) > 0) return isCargoConfianca ? "cargo_confianca" : "atraso";
   return isCargoConfianca ? "cargo_confianca" : "normal";
 }
 
@@ -721,7 +724,7 @@ export default function EspelhoPonto() {
       const isAbonado = isAbonadoManual || isFeriadoNacAbonado;
       // Rev. 1877 (fix SEV) — date-aware: dia isento (Art. 62) não soma HE/atraso/falta.
       const isCcDia = cargoConfiancaAtivoEm(d);
-      if (r && !isFerias && !isAbonado && !isCcDia) { totalHEMins += parseHHMM(r.horasExtras); totalAtrasoMins += parseHHMM(r.atrasos); }
+      if (r && !isFerias && !isAbonado && !isCcDia) { totalHEMins += parseHHMM(r.horasExtras); totalAtrasoMins += parseHHMM(r.atrasos) + Number(r.deficitMins || 0); }
       if (isWeekendDay) continue;
       if (isFerias) { diasFerias++; continue; }
       // Dias abonados (feriado/atestado manual OU feriado nacional sem batida)
@@ -1200,7 +1203,8 @@ export default function EspelhoPonto() {
                 const blockEdit = isFerias && !hasRec;
                 const isWeekend = isSun || isSat;
                 const heM = rec ? parseHHMM(rec.horasExtras) : 0;
-                const atrasM = rec ? parseHHMM(rec.atrasos) : 0;
+                // Rev. 5045 — inclui déficit de jornada (falta parcial/saída antecipada)
+                const atrasM = rec ? (parseHHMM(rec.atrasos) || Number(rec.deficitMins || 0)) : 0;
 
                 // Rev. 1877 — Cargo de Confiança (Art. 62 CLT) sem batida: linha
                 // compacta com a mensagem legal cobrindo as colunas de batida,
@@ -1536,7 +1540,7 @@ export default function EspelhoPonto() {
                   const cfg = STATUS_STYLE[s];
                   const isWeekend = isSun || isSat;
                   const heM = rec ? parseHHMM(rec.horasExtras) : 0;
-                  const atrasM = rec ? parseHHMM(rec.atrasos) : 0;
+                  const atrasM = rec ? (parseHHMM(rec.atrasos) || Number(rec.deficitMins || 0)) : 0;
                   const rowBg = isWeekend ? "#f8fafc" : (s === "falta" ? "#fef2f2" : s === "ferias" ? "#ecfeff" : s === "feriado" ? "#fefce8" : "white");
                   const cellBase: React.CSSProperties = { border: "1px solid #ddd", padding: "3px 4px", textAlign: "center", WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" };
                   if (s === "cargo_confianca" && !rec) {

@@ -35,6 +35,194 @@ import {
   comprasSolicitacoesItens,
 } from "../../drizzle/schema";
 import { onOCEmitida, onOCCancelada, onRecebimentoConfirmado, onComissaoAprovada } from "../services/purchaseFinancialBridge";
+
+// ── Rev. 5104 — Regras de Comissão de Compras (documento versionado) ──
+let _comissaoRegrasTablesOk = false;
+async function ensureComissaoRegrasTables(db: any) {
+  if (_comissaoRegrasTablesOk) return;
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS compras_comissao_regras (
+      id SERIAL PRIMARY KEY,
+      company_id INTEGER NOT NULL,
+      versao INTEGER NOT NULL,
+      percentual NUMERIC(6,2) NOT NULL DEFAULT 10,
+      gatilho_min_pct NUMERIC(6,2) NOT NULL DEFAULT 0,
+      teto_valor NUMERIC(14,2) NOT NULL DEFAULT 0,
+      antecipacao_max_pct NUMERIC(6,2) NOT NULL DEFAULT 40,
+      texto_complementar TEXT NOT NULL DEFAULT '',
+      criado_por_id INTEGER NOT NULL DEFAULT 0,
+      criado_por_nome TEXT NOT NULL DEFAULT '',
+      vigente INTEGER NOT NULL DEFAULT 1,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      encerrado_em TIMESTAMPTZ
+    )`);
+  // Garantias de integridade do versionamento (corrida entre saves simultâneos)
+  await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uniq_comissao_regras_company_versao ON compras_comissao_regras (company_id, versao)`);
+  await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uniq_comissao_regras_vigente ON compras_comissao_regras (company_id) WHERE vigente = 1`);
+  // Rev. 5105 — scorecard de KPIs ponderados (soma 100%)
+  await db.execute(sql`ALTER TABLE compras_comissao_regras ADD COLUMN IF NOT EXISTS kpis_json TEXT NOT NULL DEFAULT ''`);
+  // Rev. 5108 — prêmio escalonado progressivo por faixas de economia
+  await db.execute(sql`ALTER TABLE compras_comissao_regras ADD COLUMN IF NOT EXISTS faixas_json TEXT NOT NULL DEFAULT ''`);
+  // Rev. 5107 — adesões ao programa (termo assinado online via IntegraSign)
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS compras_premio_adesoes (
+      id SERIAL PRIMARY KEY,
+      company_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      user_nome TEXT NOT NULL DEFAULT '',
+      regra_versao INTEGER NOT NULL DEFAULT 1,
+      envelope_id INTEGER,
+      status TEXT NOT NULL DEFAULT 'pendente',
+      aceite_ciencia_em TIMESTAMPTZ,
+      concluido_em TIMESTAMPTZ,
+      employee_doc_id INTEGER,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )`);
+  await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uniq_premio_adesao_ativa ON compras_premio_adesoes (company_id, user_id) WHERE status IN ('pendente','concluido')`);
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS compras_comissao_antecipacoes (
+      id SERIAL PRIMARY KEY,
+      company_id INTEGER NOT NULL,
+      obra_id INTEGER NOT NULL,
+      comprador_nome TEXT NOT NULL,
+      valor NUMERIC(14,2) NOT NULL,
+      observacao TEXT NOT NULL DEFAULT '',
+      criado_por_id INTEGER NOT NULL DEFAULT 0,
+      criado_por_nome TEXT NOT NULL DEFAULT '',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )`);
+  _comissaoRegrasTablesOk = true;
+}
+
+// Rev. 5107 — HTML do Termo de Adesão (consome template ISO vigente com fallback ao seed)
+async function buildTermoAdesaoHtml(db: any, companyId: number, opts: { participanteNome: string; participanteCpf?: string; participanteFuncao?: string }) {
+  const { getSeedTemplate } = await import("../../shared/documentTemplates");
+  const regraRow: any = await db.execute(sql`SELECT * FROM compras_comissao_regras WHERE company_id = ${companyId} AND vigente = 1 LIMIT 1`);
+  const regra = ((regraRow.rows || regraRow) as any[])[0] || {};
+  const kpis = parseKpis(regra.kpis_json);
+  const compRow: any = await db.execute(sql`SELECT "razaoSocial" AS name, cnpj, endereco, cidade, estado FROM companies WHERE id = ${companyId} LIMIT 1`);
+  const comp = ((compRow.rows || compRow) as any[])[0] || {};
+  const esc = (s: any) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const kpisTabela = `<table style="width:100%;border-collapse:collapse;table-layout:fixed;margin:6px 0;font-size:11px">
+    <thead><tr><th style="background:#0f172a;color:#fff;text-transform:uppercase;font-size:9px;padding:5px 6px;text-align:left">Indicador — definição, fórmula e régua de pontuação</th><th style="background:#0f172a;color:#fff;font-size:9px;padding:5px 6px;text-align:right;width:56px">Peso</th></tr></thead>
+    <tbody>${kpis.map((k: any, i: number) => `<tr${i % 2 ? ' style="background:#f8fafc"' : ""}>
+      <td style="border-bottom:1px solid #e2e8f0;padding:6px;vertical-align:top"><b>${esc(k.label)}</b><br/><span style="color:#64748b;font-size:9.5px">${esc(k.como)}</span>
+      ${k.formula ? `<br/><span style="color:#64748b;font-size:9.5px"><b>Fórmula:</b> ${esc(k.formula)}</span>` : ""}
+      ${(k.regua || []).length ? `<br/><span style="color:#64748b;font-size:9.5px"><b>Régua:</b> ${(k.regua || []).map((r: string) => esc(r)).join(" · ")}</span>` : ""}</td>
+      <td style="border-bottom:1px solid #e2e8f0;padding:6px;text-align:right;font-weight:bold">${esc(k.peso)}%</td></tr>`).join("")}</tbody></table>`;
+  // Template ISO vigente (Central de Documentos) com fallback ao seed institucional
+  let corpo = "";
+  try {
+    const t: any = await db.execute(sql`SELECT conteudo_html FROM system_document_templates WHERE tipo = 'termo_adesao_premio' AND status = 'vigente' AND ativo = 1 AND deleted_at IS NULL LIMIT 1`);
+    corpo = ((t.rows || t) as any[])[0]?.conteudo_html || "";
+  } catch (_) {}
+  if (!corpo) corpo = getSeedTemplate("termo_adesao_premio").conteudoHtml;
+  const vals: Record<string, string> = {
+    empNome: esc(opts.participanteNome), empCpf: esc(opts.participanteCpf || "____________________"),
+    empRg: "____________________", empFuncao: esc(opts.participanteFuncao || "Comprador(a)"),
+    empresaRazaoSocial: esc(comp.name || ""), empresaCnpj: esc(comp.cnpj || ""),
+    empresaEndereco: esc([comp.endereco, comp.cidade, comp.estado].filter(Boolean).join(" - ")),
+    docNumero: `ADESAO-${companyId}`, docData: new Date().toLocaleDateString("pt-BR"),
+    docLocal: esc([comp.cidade, comp.estado].filter(Boolean).join(" - ") || ""),
+    pctPremio: String(Number(regra.percentual ?? 10)), gatilhoMin: String(Number(regra.gatilho_min_pct ?? 2)),
+    antecMax: String(Number(regra.antecipacao_max_pct ?? 40)), versaoRegra: String(Number(regra.versao ?? 1)),
+    kpisTabela,
+    faixasTexto: esc((await import("../../shared/premioFaixas")).faixasTexto((await import("../../shared/premioFaixas")).resolveFaixasRegra(regra.faixas_json, Number(regra.percentual ?? 10)))),
+  };
+  const html = corpo.replace(/\{\{(\w+)\}\}/g, (_m: string, ch: string) => vals[ch] ?? "");
+  return { html, regraVersao: Number(regra.versao ?? 1) };
+}
+
+/** Rev. 5108 — faixas escalonadas + gatilho da regra vigente da empresa (fallback: percentual único legado). */
+async function getFaixasVigentes(db: any, companyId: number) {
+  const { resolveFaixasRegra, faixasFromLegacyPct } = await import("../../shared/premioFaixas");
+  try {
+    const r: any = await db.execute(sql`SELECT faixas_json, percentual, gatilho_min_pct FROM compras_comissao_regras WHERE company_id = ${companyId} AND vigente = 1 LIMIT 1`);
+    const regra = ((r.rows || r) as any[])[0];
+    if (regra) return { faixas: resolveFaixasRegra(regra.faixas_json, Number(regra.percentual ?? 10)), gatilho: Number(regra.gatilho_min_pct ?? 0) };
+  } catch (_) {}
+  const cfg = await db.select().from(ocNumberConfig).where(eq(ocNumberConfig.companyId, companyId)).limit(1);
+  const pct = cfg.length ? Number(cfg[0].comissaoPercentual ?? 10) : 10;
+  return { faixas: faixasFromLegacyPct(pct), gatilho: 0 };
+}
+
+/** Guard estrito de empresa (deny-by-default): companyId precisa estar entre as
+ * empresas do usuário via getCompaniesForUser — sem fail-open p/ user sem vínculo. */
+async function assertCompanyStrict(ctxUser: any, companyId: number) {
+  if (!ctxUser?.id) throw new TRPCError({ code: "UNAUTHORIZED", message: "Sessão inválida." });
+  const { getCompaniesForUser } = await import("../db");
+  const companies = await getCompaniesForUser(ctxUser.id, ctxUser.role);
+  if (!(companies as any[]).some((c: any) => Number(c.id) === companyId)) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+  }
+}
+
+// Rev. 5105 — Scorecard padrão (literatura: McKinsey procurement incentive model +
+// KPIs clássicos de suprimentos). Preço e tempo com os maiores pesos (60% juntos).
+export const COMISSAO_KPIS_DEFAULT = [
+  {
+    chave: "saving", label: "Saving vs. orçamento (preço)", peso: 35,
+    como: "Economia real: meta do orçamento − valor comprado em OCs entregues, por obra.",
+    formula: "% saving = (Meta da obra − Total comprado) ÷ Meta da obra × 100. Só OCs entregues e com preço meta.",
+    regua: ["Saving ≥ 5% da meta → 100 pontos", "Entre 2% e 5% → proporcional (ex.: 3,5% = 70 pts)", "Abaixo do gatilho de 2% → 0 ponto", "Obra estourada (saving negativo) → 0 ponto no KPI e sem prêmio na obra"],
+    fonte: "Painel Análise de Prêmios — Meta × Comprado por obra (automático).",
+  },
+  {
+    chave: "ciclo", label: "Tempo de ciclo SC → OC (agilidade)", peso: 25,
+    como: "Dias corridos entre a aprovação da Solicitação de Compra e a emissão da OC. Média das compras do período.",
+    formula: "Média de dias = Σ (data emissão OC − data aprovação SC) ÷ nº de OCs do comprador.",
+    regua: ["Média ≤ 3 dias → 100 pontos", "4 a 5 dias → 80 pontos", "6 a 7 dias → 60 pontos", "8 a 10 dias → 40 pontos", "11 a 15 dias → 20 pontos", "Acima de 15 dias → 0 ponto", "Compra emergencial aprovada pela diretoria fica fora da média"],
+    fonte: "Datas registradas na SC e na OC dentro do sistema (automático).",
+  },
+  {
+    chave: "otif", label: "Entrega no prazo do fornecedor (OTIF)", peso: 15,
+    como: "% de OCs entregues completas E dentro do prazo combinado com o fornecedor escolhido pelo comprador.",
+    formula: "OTIF = OCs entregues completas e no prazo ÷ OCs entregues × 100.",
+    regua: ["OTIF ≥ 95% → 100 pontos", "90% a 94,9% → 80 pontos", "85% a 89,9% → 60 pontos", "80% a 84,9% → 40 pontos", "Abaixo de 80% → 0 ponto", "Atraso comprovadamente causado pela obra (ex.: frente não liberada) não conta contra"],
+    fonte: "Status e datas de entrega das OCs no sistema (automático).",
+  },
+  {
+    chave: "qualidade", label: "Qualidade do fornecedor", peso: 15,
+    como: "% de entregas sem devolução, troca ou não-conformidade registrada no recebimento.",
+    formula: "Qualidade = entregas sem ocorrência ÷ total de entregas × 100.",
+    regua: ["≥ 98% sem ocorrência → 100 pontos", "95% a 97,9% → 80 pontos", "90% a 94,9% → 50 pontos", "Abaixo de 90% → 0 ponto", "Material devolvido sai também da base de saving (não conta economia de material que voltou)"],
+    fonte: "Ocorrências de devolução/troca registradas no recebimento (Almoxarifado).",
+  },
+  {
+    chave: "conformidade", label: "Conformidade e alimentação do sistema", peso: 10,
+    como: "Disciplina de processo: cotações mínimas, nada comprado por fora do sistema (maverick buying) e lançamentos corretos, na hora certa — quem alimenta certinho pontua, quem lança errado de última hora perde ponto.",
+    formula: "Conformidade = compras com ≥ 3 cotações válidas, fluxo completo no sistema e lançamento correto (sem retificação por erro) ÷ total de compras × 100.",
+    regua: ["≥ 95% conformes → 100 pontos", "90% a 94,9% → 70 pontos", "85% a 89,9% → 40 pontos", "Abaixo de 85% → 0 ponto", "Lançamento fora do fluxo ou corrigido de última hora por erro do comprador conta como NÃO conforme", "Fornecedor exclusivo/monopólio documentado na cotação não penaliza", "QUALQUER compra por fora do sistema sem aprovação → 0 ponto no KPI no período"],
+    fonte: "Nº de propostas por cotação, origem das OCs e retificações de lançamento (automático).",
+  },
+];
+
+function parseKpis(raw: any): any[] {
+  try {
+    const arr = JSON.parse(String(raw || ""));
+    if (Array.isArray(arr) && arr.length) {
+      // Enriquece KPIs salvos antes da Rev. 5106 com fórmula/régua/fonte do padrão
+      return arr.map((k: any) => {
+        const def = COMISSAO_KPIS_DEFAULT.find(d => d.chave === k.chave);
+        return { ...(def || {}), ...k, formula: k.formula || def?.formula || "", regua: k.regua?.length ? k.regua : (def?.regua || []), fonte: k.fonte || def?.fonte || "" };
+      });
+    }
+  } catch (_) {}
+  return COMISSAO_KPIS_DEFAULT;
+}
+
+/** Exige role admin_master + senha conferida no backend (bcrypt). */
+async function assertMasterComSenha(db: any, ctx: any, senha: string) {
+  if ((ctx.user as any)?.role !== "admin_master") {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Apenas o Administrador Master pode alterar as regras do prêmio." });
+  }
+  const [masterUser] = await db.select({ password: users.password }).from(users).where(eq(users.id, (ctx.user as any).id));
+  if (!masterUser?.password) throw new TRPCError({ code: "FORBIDDEN", message: "Usuário master não encontrado." });
+  const bcrypt = await import("bcryptjs");
+  if (!bcrypt.compareSync(senha, masterUser.password)) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Senha incorreta. Operação negada." });
+  }
+}
 import crypto from "crypto";
 
 const n = (v: any) => parseFloat(v ?? "0") || 0;
@@ -45,6 +233,7 @@ const n = (v: any) => parseFloat(v ?? "0") || 0;
 // duplicadas (218 vs 0218). Agora ambos compartilham a mesma função com advisory
 // lock + persistência atômica + padStart(4).
 import { gerarProximoNumeroOC } from "./compras";
+import { users } from "../../drizzle/schema";
 async function gerarNumeroOC(_db: any, companyId: number): Promise<string> {
   return await gerarProximoNumeroOC(companyId, "compra");
 }
@@ -545,9 +734,12 @@ export const purchaseRouter = router({
             const valorMeta = ocItens.reduce((s: number, i: any) => s + (n(i.quantidadePedida) * n(i.valorMetaUnitario)), 0);
             const economia = Math.max(0, valorMeta - valorComprado);
             if (economia > 0) {
-              const cfg = await db.select().from(ocNumberConfig).where(eq(ocNumberConfig.companyId, input.companyId)).limit(1);
-              const pct = cfg.length ? Number(cfg[0].comissaoPercentual ?? 10) : 10;
-              const comissao = economia * (pct / 100);
+              // Rev. 5108 — usa a regra vigente (faixas escalonadas + gatilho), não o percentual único legado
+              const { faixas, gatilho } = await getFaixasVigentes(db, input.companyId);
+              const { calcPremioProgressivo } = await import("../../shared/premioFaixas");
+              const calc = calcPremioProgressivo(economia, valorMeta, faixas, gatilho);
+              const pct = Math.round(calc.pctEfetivo * 100) / 100;
+              const comissao = calc.premio;
               await db.insert(buyerCommissions).values({
                 companyId: input.companyId, obraId, obraNome: (oc as any).obraNome,
                 compradorId, compradorNome: (oc as any).compradorNome,
@@ -794,6 +986,8 @@ export const purchaseRouter = router({
           id: oc.id,
           numeroOc: oc.numeroOc,
           fornecedorNome: oc.fornecedorNome,
+          compradorId: (oc as any).criadoPorId ?? null,
+          compradorNome: (oc as any).criadoPorNome || null,
           obraId: oc.obraId,
           status: oc.status,
           valorComprado,
@@ -813,11 +1007,6 @@ export const purchaseRouter = router({
     .input(z.object({ companyId: z.number(), obraId: z.number(), compradorId: z.number(), compradorNome: z.string().optional(), obraNome: z.string().optional(), percentualParticipacao: z.number().optional() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      let pct = input.percentualParticipacao;
-      if (pct === undefined || pct === null) {
-        const cfg = await db.select().from(ocNumberConfig).where(eq(ocNumberConfig.companyId, input.companyId)).limit(1);
-        pct = cfg.length ? Number(cfg[0].comissaoPercentual ?? 10) : 10;
-      }
       const ocs = await db.select().from(purchaseOrders)
         .where(and(eq(purchaseOrders.companyId, input.companyId), eq(purchaseOrders.obraId, input.obraId), eq(purchaseOrders.compradorId, input.compradorId)));
       const valorComprado = ocs.reduce((s: number, o: any) => s + n(o.valorTotal), 0);
@@ -825,7 +1014,19 @@ export const purchaseRouter = router({
         .where(and(eq(purchaseRequests.companyId, input.companyId), eq(purchaseRequests.obraId, input.obraId)));
       const valorMeta = scs.reduce((s: number, sc: any) => s + n(sc.valorMetaTotal), 0);
       const economia = Math.max(0, valorMeta - valorComprado);
-      const comissao = economia * (pct / 100);
+      // Rev. 5108 — override manual mantido; sem override, usa a regra vigente (faixas + gatilho)
+      let pct: number;
+      let comissao: number;
+      if (input.percentualParticipacao !== undefined && input.percentualParticipacao !== null) {
+        pct = input.percentualParticipacao;
+        comissao = economia * (pct / 100);
+      } else {
+        const { faixas, gatilho } = await getFaixasVigentes(db, input.companyId);
+        const { calcPremioProgressivo } = await import("../../shared/premioFaixas");
+        const calc = calcPremioProgressivo(economia, valorMeta, faixas, gatilho);
+        pct = Math.round(calc.pctEfetivo * 100) / 100;
+        comissao = calc.premio;
+      }
       const [c] = await db.insert(buyerCommissions).values({
         companyId: input.companyId, obraId: input.obraId, obraNome: input.obraNome,
         compradorId: input.compradorId, compradorNome: input.compradorNome,
@@ -834,6 +1035,372 @@ export const purchaseRouter = router({
         valorComissao: String(comissao.toFixed(2)), calculadoEm: new Date().toISOString(),
       } as any).returning();
       return c;
+    }),
+
+  // ── Rev. 5104 — Regras de Comissão (documento versionado, edição só ADM Master + senha) ──
+  regrasComissaoGet: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      await assertCompanyStrict(ctx.user, input.companyId);
+      const db = await getDb();
+      await ensureComissaoRegrasTables(db);
+      let rows: any = await db.execute(sql`SELECT * FROM compras_comissao_regras WHERE company_id = ${input.companyId} ORDER BY versao DESC`);
+      rows = (rows.rows || rows) as any[];
+      if (!rows.length) {
+        // Seed v1 com o percentual já configurado (Configurações → Compras).
+        // ON CONFLICT DO NOTHING: corrida de 2 primeiras leituras não duplica.
+        const cfg = await db.select().from(ocNumberConfig).where(eq(ocNumberConfig.companyId, input.companyId)).limit(1);
+        const pct = cfg.length ? Number(cfg[0].comissaoPercentual ?? 10) : 10;
+        await db.execute(sql`
+          INSERT INTO compras_comissao_regras (company_id, versao, percentual, gatilho_min_pct, teto_valor, antecipacao_max_pct, texto_complementar, criado_por_id, criado_por_nome, vigente, kpis_json)
+          VALUES (${input.companyId}, 1, ${pct}, 2, 0, 40, '', 0, 'Sistema (versão inicial)', 1, ${JSON.stringify(COMISSAO_KPIS_DEFAULT)})
+          ON CONFLICT (company_id, versao) DO NOTHING`);
+        rows = ((await db.execute(sql`SELECT * FROM compras_comissao_regras WHERE company_id = ${input.companyId} ORDER BY versao DESC`)) as any).rows;
+      }
+      const vigente = rows.find((r: any) => Number(r.vigente) === 1) || rows[0];
+      const { resolveFaixasRegra, DEFAULT_PREMIO_FAIXAS } = await import("../../shared/premioFaixas");
+      return { vigente, historico: rows, kpis: parseKpis(vigente?.kpis_json), kpisDefault: COMISSAO_KPIS_DEFAULT, faixas: resolveFaixasRegra(vigente?.faixas_json, Number(vigente?.percentual ?? 10)), faixasDefault: DEFAULT_PREMIO_FAIXAS };
+    }),
+
+  regrasComissaoSalvar: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      senhaMaster: z.string().min(1, "Senha do ADM Master obrigatória"),
+      percentual: z.number().min(0).max(100),
+      gatilhoMinPct: z.number().min(0).max(100),
+      tetoValor: z.number().min(0),
+      antecipacaoMaxPct: z.number().min(0).max(100),
+      textoComplementar: z.string().max(5000).optional(),
+      kpis: z.array(z.object({
+        chave: z.string().min(1).max(40),
+        label: z.string().min(1).max(120),
+        peso: z.number().min(0).max(100),
+        como: z.string().max(300).optional().default(""),
+        formula: z.string().max(400).optional().default(""),
+        regua: z.array(z.string().max(200)).max(10).optional().default([]),
+        fonte: z.string().max(200).optional().default(""),
+      })).min(1).max(10).optional(),
+      faixas: z.array(z.object({
+        atePct: z.number().positive().max(100).nullable(),
+        premioPct: z.number().min(0).max(100),
+      })).min(1).max(10).optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      await assertCompanyStrict(ctx.user, input.companyId);
+      const db = await getDb();
+      await assertMasterComSenha(db, ctx, input.senhaMaster);
+      await ensureComissaoRegrasTables(db);
+      // Scorecard: pesos precisam somar exatamente 100%
+      const kpis = input.kpis && input.kpis.length ? input.kpis : COMISSAO_KPIS_DEFAULT;
+      const somaPesos = kpis.reduce((s, k) => s + k.peso, 0);
+      if (Math.abs(somaPesos - 100) > 0.01) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `Os pesos dos KPIs devem somar 100% (soma atual: ${somaPesos}%).` });
+      }
+      const kpisJson = JSON.stringify(kpis);
+      // Faixas do prêmio escalonado: validação ESTRITA (última aberta, limites crescentes).
+      // Sem faixas no payload (cliente antigo) → preserva o comportamento legado: faixa única com o percentual.
+      const { faixasFromLegacyPct, validarFaixasEstrito } = await import("../../shared/premioFaixas");
+      let faixasNorm = faixasFromLegacyPct(input.percentual);
+      if (input.faixas && input.faixas.length) {
+        const erro = validarFaixasEstrito(input.faixas);
+        if (erro) throw new TRPCError({ code: "BAD_REQUEST", message: `Faixas inválidas: ${erro}` });
+        faixasNorm = input.faixas;
+      }
+      const faixasJson = JSON.stringify(faixasNorm);
+      // Vigência: encerra a versão atual e insere nova (nunca UPDATE in-place).
+      // Transação + advisory lock por empresa: saves concorrentes serializam,
+      // sem duplicar versão nem deixar 2 vigentes (índices únicos garantem).
+      let proxVersao = 0;
+      await db.transaction(async (tx: any) => {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(478009, ${input.companyId})`);
+        const atual: any = await tx.execute(sql`SELECT COALESCE(MAX(versao),0) AS v FROM compras_comissao_regras WHERE company_id = ${input.companyId}`);
+        proxVersao = Number(((atual.rows || atual) as any[])[0]?.v || 0) + 1;
+        await tx.execute(sql`UPDATE compras_comissao_regras SET vigente = 0, encerrado_em = now() WHERE company_id = ${input.companyId} AND vigente = 1`);
+        await tx.execute(sql`
+          INSERT INTO compras_comissao_regras (company_id, versao, percentual, gatilho_min_pct, teto_valor, antecipacao_max_pct, texto_complementar, criado_por_id, criado_por_nome, vigente, kpis_json, faixas_json)
+          VALUES (${input.companyId}, ${proxVersao}, ${input.percentual}, ${input.gatilhoMinPct}, ${input.tetoValor}, ${input.antecipacaoMaxPct}, ${input.textoComplementar || ""}, ${(ctx.user as any).id}, ${(ctx.user as any).name || (ctx.user as any).email || "ADM Master"}, 1, ${kpisJson}, ${faixasJson})`);
+      });
+      // Mantém o motor legado (ocNumberConfig.comissaoPercentual) sincronizado
+      const existing = await db.select().from(ocNumberConfig).where(eq(ocNumberConfig.companyId, input.companyId)).limit(1);
+      if (existing.length) {
+        await db.update(ocNumberConfig).set({ comissaoPercentual: String(input.percentual), updatedAt: new Date().toISOString() } as any).where(eq(ocNumberConfig.companyId, input.companyId));
+      } else {
+        await db.insert(ocNumberConfig).values({ companyId: input.companyId, comissaoPercentual: String(input.percentual) } as any);
+      }
+      return { ok: true, versao: proxVersao };
+    }),
+
+  comissaoAntecipacaoRegistrar: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      senhaMaster: z.string().min(1, "Senha do ADM Master obrigatória"),
+      obraId: z.number(),
+      compradorNome: z.string().min(1),
+      valor: z.number().positive(),
+      observacao: z.string().max(2000).optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      await assertCompanyStrict(ctx.user, input.companyId);
+      const db = await getDb();
+      await assertMasterComSenha(db, ctx, input.senhaMaster);
+      await ensureComissaoRegrasTables(db);
+      // Obra precisa pertencer à empresa (nada de FK cross-tenant)
+      const obraRow: any = await db.execute(sql`SELECT id FROM obras WHERE id = ${input.obraId} AND "companyId" = ${input.companyId} AND "deletedAt" IS NULL LIMIT 1`);
+      if (!((obraRow.rows || obraRow) as any[]).length) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Obra não pertence a esta empresa." });
+      }
+      // Limite server-side: acumulado de antecipações da obra ≤ antecipacao_max_pct
+      // do provisionado formalizado (buyerCommissions). Sem provisão formalizada,
+      // exige justificativa em observação (liberalidade consciente do Master).
+      const regraRow: any = await db.execute(sql`SELECT antecipacao_max_pct FROM compras_comissao_regras WHERE company_id = ${input.companyId} AND vigente = 1 LIMIT 1`);
+      const antecMaxPct = Number(((regraRow.rows || regraRow) as any[])[0]?.antecipacao_max_pct ?? 40);
+      const provRow: any = await db.execute(sql`SELECT COALESCE(SUM(valor_comissao::numeric),0) AS prov FROM buyer_commissions WHERE company_id = ${input.companyId} AND obra_id = ${input.obraId}`).catch(() => ({ rows: [{ prov: 0 }] }));
+      const provisionado = Number(((provRow.rows || provRow) as any[])[0]?.prov || 0);
+      const antRow: any = await db.execute(sql`SELECT COALESCE(SUM(valor),0) AS tot FROM compras_comissao_antecipacoes WHERE company_id = ${input.companyId} AND obra_id = ${input.obraId}`);
+      const jaAntecipado = Number(((antRow.rows || antRow) as any[])[0]?.tot || 0);
+      if (provisionado > 0) {
+        const limite = provisionado * (antecMaxPct / 100);
+        if (jaAntecipado + input.valor > limite + 0.005) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: `Limite de antecipação excedido: máx. ${antecMaxPct}% do provisionado (${limite.toFixed(2)}); já antecipado ${jaAntecipado.toFixed(2)}.` });
+        }
+      } else if (!input.observacao || input.observacao.trim().length < 10) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Sem prêmio formalizado nesta obra: informe uma justificativa (mín. 10 caracteres) para antecipar." });
+      }
+      await db.execute(sql`
+        INSERT INTO compras_comissao_antecipacoes (company_id, obra_id, comprador_nome, valor, observacao, criado_por_id, criado_por_nome)
+        VALUES (${input.companyId}, ${input.obraId}, ${input.compradorNome}, ${input.valor}, ${input.observacao || ""}, ${(ctx.user as any).id}, ${(ctx.user as any).name || (ctx.user as any).email || "ADM Master"})`);
+      return { ok: true };
+    }),
+
+  comissaoAntecipacoesListar: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      await assertCompanyStrict(ctx.user, input.companyId);
+      const db = await getDb();
+      await ensureComissaoRegrasTables(db);
+      const rows: any = await db.execute(sql`SELECT * FROM compras_comissao_antecipacoes WHERE company_id = ${input.companyId} ORDER BY created_at DESC`);
+      return (rows.rows || rows) as any[];
+    }),
+
+  // ── Rev. 5107 — Termo de Adesão com assinatura online (IntegraSign) ──────
+  // Fluxo: usuário clica "Estou ciente de tudo" → envelope com 2 signatários
+  // (participante + sócio administrador, nesta ordem) → participante assina →
+  // sócio assina → adesão concluída = habilitado no ranking + doc no dossiê RH.
+  termoAdesaoStatus: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      await assertCompanyStrict(ctx.user, input.companyId);
+      const db = await getDb();
+      await ensureComissaoRegrasTables(db);
+      const rows: any = await db.execute(sql`SELECT * FROM compras_premio_adesoes WHERE company_id = ${input.companyId} AND status IN ('pendente','concluido') ORDER BY id DESC`);
+      const adesoes = (rows.rows || rows) as any[];
+      // Sincroniza pendentes com o estado do envelope (concluído/recusado/excluído)
+      for (const a of adesoes.filter(x => x.status === "pendente" && x.envelope_id)) {
+        const envR: any = await db.execute(sql`SELECT id, status, excluido_em FROM integrasign_envelopes WHERE id = ${a.envelope_id} LIMIT 1`);
+        const env = ((envR.rows || envR) as any[])[0];
+        if (!env || env.excluido_em || env.status === "recusado" || env.status === "cancelado") {
+          await db.execute(sql`UPDATE compras_premio_adesoes SET status = 'cancelado' WHERE id = ${a.id}`);
+          a.status = "cancelado";
+          continue;
+        }
+        if (env.status === "concluido") {
+          await db.execute(sql`UPDATE compras_premio_adesoes SET status = 'concluido', concluido_em = now() WHERE id = ${a.id} AND status = 'pendente'`);
+          a.status = "concluido";
+          a.concluido_em = new Date().toISOString();
+          // Arquiva no dossiê RH (ficha de documentos) + Raio-X do funcionário
+          try {
+            const uR: any = await db.execute(sql`SELECT email, name FROM users WHERE id = ${a.user_id} LIMIT 1`);
+            const u = ((uR.rows || uR) as any[])[0];
+            if (u?.email) {
+              const eR: any = await db.execute(sql`SELECT id FROM employees WHERE "companyId" = ${a.company_id} AND LOWER(email) = LOWER(${u.email}) AND "deletedAt" IS NULL LIMIT 1`);
+              const emp = ((eR.rows || eR) as any[])[0];
+              if (emp && !a.employee_doc_id) {
+                const sR: any = await db.execute(sql`SELECT token FROM integrasign_signatarios WHERE envelope_id = ${a.envelope_id} ORDER BY ordem_assinatura ASC LIMIT 1`);
+                const token = ((sR.rows || sR) as any[])[0]?.token || "";
+                const dR: any = await db.execute(sql`
+                  INSERT INTO employee_documents ("companyId", "employeeId", tipo, nome, descricao, "fileUrl", "fileKey", "mimeType", "uploadPor", "uploadPorUserId")
+                  VALUES (${a.company_id}, ${emp.id}, 'termo_adesao_premio', ${`Termo de Adesão — Prêmio de Compras (regulamento v${a.regra_versao})`},
+                          ${"Assinado eletronicamente pelo participante e pelo sócio administrador (IntegraSign)."},
+                          ${token ? `/integrasign/assinar/${token}` : `/integrasign`}, ${`integrasign-envelope-${a.envelope_id}`}, 'text/html', 'Sistema (IntegraSign)', ${a.user_id})
+                  RETURNING id`);
+                const docId = ((dR.rows || dR) as any[])[0]?.id;
+                if (docId) await db.execute(sql`UPDATE compras_premio_adesoes SET employee_doc_id = ${docId} WHERE id = ${a.id}`);
+              }
+            }
+          } catch (err: any) {
+            console.error("[PremioCompras] falha ao arquivar termo no dossiê:", err?.message);
+          }
+        }
+      }
+      const ativos = adesoes.filter(a => a.status !== "cancelado");
+      const minha = ativos.find(a => a.user_id === (ctx.user as any).id) || null;
+      let meuToken: string | null = null;
+      let faltaSocio = false;
+      let socioToken: string | null = null;
+      let socioNome: string | null = null;
+      if (minha?.envelope_id && minha.status === "pendente") {
+        const sR: any = await db.execute(sql`SELECT token, status, ordem_assinatura, nome FROM integrasign_signatarios WHERE envelope_id = ${minha.envelope_id} ORDER BY ordem_assinatura ASC`);
+        const sigs = (sR.rows || sR) as any[];
+        const meu = sigs[0];
+        if (meu && meu.status !== "assinado") meuToken = meu.token;
+        faltaSocio = !!meu && meu.status === "assinado";
+        // Rev. 5110 — assinatura presencial em sequência (pedido do usuário): depois que o
+        // PARTICIPANTE assina, a própria tela Prêmios oferece a assinatura do sócio
+        // administrador no mesmo aparelho. O token do sócio só é exposto ao dono da
+        // adesão (minha) e somente após a 1ª assinatura (ordem do envelope preservada).
+        if (faltaSocio) {
+          const soc = sigs[1];
+          if (soc && soc.status !== "assinado") { socioToken = soc.token; socioNome = soc.nome || null; }
+        }
+      }
+      return {
+        minha: minha ? { status: minha.status, regraVersao: minha.regra_versao, meuToken, faltaSocio, socioToken, socioNome, concluidoEm: minha.concluido_em } : null,
+        habilitados: ativos.filter(a => a.status === "concluido").map(a => ({ userId: a.user_id, nome: a.user_nome })),
+        pendentes: ativos.filter(a => a.status === "pendente").map(a => ({ userId: a.user_id, nome: a.user_nome })),
+      };
+    }),
+
+  // Rev. 5111 — Ranking do processo: quantas SCs e cotações cada pessoa criou (por nome de login).
+  // OCs e prêmio a receber já são calculados no client a partir de analiseComissoesOCs.
+  rankingProcessoCounts: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      await assertCompanyStrict(ctx.user, input.companyId);
+      const db = await getDb();
+      const scR: any = await db.execute(sql`
+        SELECT UPPER(TRIM(criado_por_nome)) AS chave, MAX(criado_por_nome) AS nome, COUNT(*)::int AS qtd
+        FROM compras_solicitacoes
+        WHERE company_id = ${input.companyId} AND COALESCE(TRIM(criado_por_nome), '') <> ''
+        GROUP BY 1`);
+      const cotR: any = await db.execute(sql`
+        SELECT UPPER(TRIM(criado_por_nome)) AS chave, MAX(criado_por_nome) AS nome, COUNT(*)::int AS qtd
+        FROM compras_cotacoes
+        WHERE company_id = ${input.companyId} AND COALESCE(TRIM(criado_por_nome), '') <> ''
+        GROUP BY 1`);
+      // Rev. 5121 — colaboradores DESLIGADOS ficam fora do ranking, com casamento
+      // TOLERANTE de nome (login abreviado, acentos): resolve cada chave do ranking
+      // para o colaborador via (a) nome exato normalizado; (b) nome do user com
+      // e-mail casando com employee; (c) tokens do login todos contidos no nome
+      // completo (só quando o match é ÚNICO — ambíguo nunca derruba ninguém).
+      // Cadastro duplicado (mesmo nome, Ativo + Desligado): vale o registro mais
+      // recente (maior id) — cobre re-cadastros com status defasado.
+      const empR: any = await db.execute(sql`
+        SELECT e.id, e."nomeCompleto" AS nome, e.status, e."fotoUrl" AS foto
+        FROM employees e
+        WHERE e."companyId" = ${input.companyId} AND e."deletedAt" IS NULL
+          AND COALESCE(TRIM(e."nomeCompleto"), '') <> ''`);
+      const aliasR: any = await db.execute(sql`
+        SELECT u.name AS alias, e."nomeCompleto" AS nome
+        FROM employees e
+        JOIN users u ON e.email IS NOT NULL AND LOWER(u.email) = LOWER(e.email)
+        WHERE e."companyId" = ${input.companyId} AND e."deletedAt" IS NULL
+          AND COALESCE(TRIM(u.name), '') <> ''`);
+      const norm = (s: string) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/\s+/g, " ").trim();
+      // Por nome normalizado, fica o registro mais recente (maior id)
+      const porNome = new Map<string, { id: number; status: string; foto: string | null }>();
+      for (const r of ((empR.rows || empR) as any[])) {
+        const nk = norm(r.nome);
+        const atual = porNome.get(nk);
+        if (!atual || Number(r.id) > atual.id) porNome.set(nk, { id: Number(r.id), status: String(r.status || ""), foto: r.foto ? String(r.foto) : (atual?.foto ?? null) });
+        else if (!atual.foto && r.foto) atual.foto = String(r.foto);
+      }
+      const aliasMap = new Map<string, string>();
+      for (const r of ((aliasR.rows || aliasR) as any[])) {
+        const a = norm(r.alias), nk = norm(r.nome);
+        if (a && porNome.has(nk)) aliasMap.set(a, nk);
+      }
+      const STATUS_FORA = new Set(["DESLIGADO", "LISTA_NEGRA", "INATIVO"]);
+      const resolve = (chave: string): { status: string; foto: string | null } | null => {
+        const k = norm(chave);
+        if (!k) return null;
+        const direto = porNome.get(k) || (aliasMap.has(k) ? porNome.get(aliasMap.get(k)!) : undefined);
+        if (direto) return direto;
+        // Tokens do login todos contidos no nome completo — só com match único
+        const toks = k.split(" ").filter(Boolean);
+        if (toks.length < 2) return null;
+        let achado: string | null = null;
+        for (const nk of porNome.keys()) {
+          const nomeToks = new Set(nk.split(" "));
+          if (toks.every(t => nomeToks.has(t))) {
+            if (achado && achado !== nk) return null; // ambíguo: não mexe
+            achado = nk;
+          }
+        }
+        return achado ? porNome.get(achado)! : null;
+      };
+      const chaves = new Set<string>();
+      for (const r of ((scR.rows || scR) as any[])) chaves.add(String(r.chave));
+      for (const r of ((cotR.rows || cotR) as any[])) chaves.add(String(r.chave));
+      const desligados: string[] = [];
+      const fotos: Record<string, string> = {};
+      for (const chave of chaves) {
+        const emp = resolve(chave);
+        if (!emp) continue;
+        if (STATUS_FORA.has(norm(emp.status))) desligados.push(chave);
+        else if (emp.foto) fotos[chave] = emp.foto;
+      }
+      return {
+        scs: ((scR.rows || scR) as any[]).map(r => ({ chave: r.chave, nome: r.nome, qtd: Number(r.qtd) })),
+        cotacoes: ((cotR.rows || cotR) as any[]).map(r => ({ chave: r.chave, nome: r.nome, qtd: Number(r.qtd) })),
+        desligados,
+        fotos,
+      };
+    }),
+
+  termoAdesaoIniciar: protectedProcedure
+    .input(z.object({ companyId: z.number(), aceiteCiencia: z.literal(true) }))
+    .mutation(async ({ input, ctx }) => {
+      await assertCompanyStrict(ctx.user, input.companyId);
+      const db = await getDb();
+      await ensureComissaoRegrasTables(db);
+      const uid = (ctx.user as any).id;
+      const uNome = (ctx.user as any).name || (ctx.user as any).email || `Usuário ${uid}`;
+      // Idempotente: adesão ativa existente → devolve o link atual
+      const { html, regraVersao } = await buildTermoAdesaoHtml(db, input.companyId, { participanteNome: uNome });
+      // CLAIM ATÔMICO antes do side effect no IntegraSign: o índice único parcial
+      // (company_id, user_id) WHERE status IN ('pendente','concluido') decide a corrida.
+      // Quem perde o conflito reusa a adesão existente em vez de criar 2º envelope.
+      const insR: any = await db.execute(sql`
+        INSERT INTO compras_premio_adesoes (company_id, user_id, user_nome, regra_versao, status, aceite_ciencia_em)
+        VALUES (${input.companyId}, ${uid}, ${uNome}, ${regraVersao}, 'pendente', now())
+        ON CONFLICT DO NOTHING
+        RETURNING id`);
+      const claimId = ((insR.rows || insR) as any[])[0]?.id as number | undefined;
+      if (!claimId) {
+        // Perdeu a corrida ou já existia adesão ativa — devolve o estado atual
+        const exR: any = await db.execute(sql`SELECT * FROM compras_premio_adesoes WHERE company_id = ${input.companyId} AND user_id = ${uid} AND status IN ('pendente','concluido') LIMIT 1`);
+        const ex = ((exR.rows || exR) as any[])[0];
+        if (!ex) throw new TRPCError({ code: "CONFLICT", message: "Tente novamente." });
+        if (ex.status === "concluido") return { ok: true, jaHabilitado: true, token: null };
+        if (!ex.envelope_id) return { ok: true, jaHabilitado: false, token: null }; // envelope ainda sendo criado pela outra requisição
+        const sR: any = await db.execute(sql`SELECT token, status FROM integrasign_signatarios WHERE envelope_id = ${ex.envelope_id} ORDER BY ordem_assinatura ASC LIMIT 1`);
+        const meu = ((sR.rows || sR) as any[])[0];
+        return { ok: true, jaHabilitado: false, token: meu && meu.status !== "assinado" ? meu.token : null };
+      }
+      try {
+      const { resolveSocioAdministradorSigner } = await import("../services/signatariosContrato");
+      const socio = await resolveSocioAdministradorSigner(db, input.companyId);
+      const { integrasignRouter } = await import("./integrasign");
+      const caller = (integrasignRouter as any).createCaller({ user: ctx.user, session: { userId: uid, name: uNome } });
+      const envelope = await caller.criarEnvelope({
+        companyId: input.companyId,
+        titulo: `Termo de Adesão — Prêmio de Compras — ${uNome}`,
+        descricao: `Adesão ao Programa de Prêmio por Desempenho em Compras (regulamento v${regraVersao}). Aceite "Estou ciente de tudo" registrado em ${new Date().toLocaleString("pt-BR")}.`,
+        textoContrato: html,
+        signatarios: [
+          { papel: "gestor_projeto", ordemAssinatura: 1, nome: uNome, email: (ctx.user as any).email || "", cargo: "Participante" },
+          { papel: "diretor", ordemAssinatura: 2, nome: socio.nome, email: "", cpfCnpj: socio.cpfCnpj ?? undefined, cargo: "Sócio Administrador" },
+        ],
+      });
+      await caller.enviarParaAssinatura({ companyId: input.companyId, envelopeId: envelope.id, enviarEmail: false });
+      await db.execute(sql`UPDATE compras_premio_adesoes SET envelope_id = ${envelope.id} WHERE id = ${claimId}`);
+      const sR: any = await db.execute(sql`SELECT token FROM integrasign_signatarios WHERE envelope_id = ${envelope.id} ORDER BY ordem_assinatura ASC LIMIT 1`);
+      return { ok: true, jaHabilitado: false, token: ((sR.rows || sR) as any[])[0]?.token || null };
+      } catch (err) {
+        // Falha no IntegraSign: solta o claim para o usuário poder tentar de novo
+        await db.execute(sql`DELETE FROM compras_premio_adesoes WHERE id = ${claimId} AND envelope_id IS NULL`).catch(() => {});
+        throw err;
+      }
     }),
 
   aprovarComissao: protectedProcedure

@@ -5,6 +5,7 @@ import { skills, employeeSkills, employees, obras, obraFuncionarios } from "../.
 import { eq, and, sql, inArray, isNull, desc, asc, count } from "drizzle-orm";
 import { companyFilter, resolveCompanyIds } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
+import { assertRaioXAccess } from "../raioXGuard";
 
 async function getDb() {
   const db = await _getDb();
@@ -123,7 +124,9 @@ export const skillsRouter = router({
   // List skills for a specific employee
   employeeSkills: protectedProcedure
     .input(z.object({ employeeId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      // Rev. 5192 — Raio-X guard.
+      await assertRaioXAccess(ctx as any, input.employeeId);
       const db = await getDb();
       const rows = await db
         .select({

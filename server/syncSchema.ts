@@ -238,6 +238,28 @@ export async function syncSchema(): Promise<void> {
       console.warn("[SyncSchema+ Rev.4406] Backfill descrição PJ:", bfErr?.message ?? bfErr);
     }
 
+    // ── Rev.5091: imoveis — dimensões, imóvel averbado, renda mensal ───────────
+    try {
+      const stmts5091 = [
+        `ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS terreno_largura NUMERIC`,
+        `ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS terreno_comprimento NUMERIC`,
+        `ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS terreno_frentes INTEGER`,
+        `ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS imovel_averbado BOOLEAN DEFAULT false`,
+        `ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS area_averbada NUMERIC`,
+        `ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS ano_construcao INTEGER`,
+        `ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS gera_renda BOOLEAN DEFAULT false`,
+        `ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS renda_mensal NUMERIC`,
+        `ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS renda_locatario VARCHAR(200)`,
+        `ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS renda_dia_vencimento INTEGER`,
+        `ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS renda_contrato_inicio DATE`,
+        `ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS renda_contrato_fim DATE`,
+      ];
+      for (const stmt of stmts5091) { await db.execute(sql.raw(stmt)); }
+      console.log("[SyncSchema+] Rev.5091: dimensões/averbado/renda garantidas em imoveis.");
+    } catch (e5091: any) {
+      console.warn("[SyncSchema+] FALHA Rev.5091 imoveis:", e5091?.message ?? e5091);
+    }
+
     if (missing.length === 0) {
       console.log("[SyncSchema] Todas as colunas OK — nenhuma diferença.");
       return;

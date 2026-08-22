@@ -241,6 +241,18 @@ function formatDate(val: unknown): string {
 
 export default function Colaboradores() {
   const { selectedCompanyId, companies, isConstrutoras, getCompanyIdsForQuery } = useCompany();
+  // Rev. 4984 — colaborador marcado como "JF": documentos saem com os dados do
+  // empregador Julio Ferraz (logo, razão social, CNPJ, endereço) no lugar da FC.
+  const { data: jfCompanyQ } = trpc.companies.empregadorJf.useQuery(undefined, { staleTime: 5 * 60 * 1000 });
+  const jfCompany = (companies?.find((c: any) => String(c.cnpj || "").replace(/\D/g, "").startsWith("03426403")) ?? jfCompanyQ) as any;
+  const swapCompDocs = <T,>(comp: T, empregadorDocs?: string | null): T =>
+    (empregadorDocs === "JF" && jfCompany ? (jfCompany as any) : comp);
+  // Rev. 5044 — a regra FC/JF só vale na própria FC (mesmo grupo empresarial da JF).
+  // Hotel Consagrado / Locnow são empresas de outros grupos: o toggle não aparece.
+  const empregadorToggleVisivel = (cid?: string | number | null) => {
+    const comp: any = companies?.find((c: any) => String(c.id) === String(cid || selectedCompanyId || ""));
+    return !!jfCompany && !!comp && (comp.grupoEmpresarial ?? null) === ((jfCompany as any).grupoEmpresarial ?? null);
+  };
   const { user } = useAuth();
   const documentMargins = useDocumentMargins();
   const isAdminMaster = user?.role === "admin_master";
@@ -619,7 +631,7 @@ export default function Colaboradores() {
   // de gerar/enviar p/ assinatura. Espelha o padrão do Contrato de Experiência.
   const validarTermoArt62 = (): string[] => {
     const faltando: string[] = [];
-    const comp = companies?.find(c => String(c.id) === (form.companyId || selectedCompanyId || ""));
+    const comp = swapCompDocs(companies?.find(c => String(c.id) === (form.companyId || selectedCompanyId || "")), (form as any).empregadorDocumentos);
     if (!comp) faltando.push("Empresa do colaborador");
     if (!String(form.cargoConfiancaInciso || "").trim()) faltando.push("Inciso de enquadramento (I/II/III)");
     if (!String(form.nomeCompleto || "").trim()) faltando.push("Nome completo");
@@ -644,7 +656,7 @@ export default function Colaboradores() {
   // dangerouslySetInnerHTML + DOMPurify (que PRESERVA <style>), então um <style>
   // global VAZARIA na UI da tela de assinatura. (REGRA DE OURO Rev. 2106+.)
   const buildTermoArt62 = (forFcsign: boolean): string | null => {
-    const comp = companies?.find(c => String(c.id) === (form.companyId || selectedCompanyId || ""));
+    const comp = swapCompDocs(companies?.find(c => String(c.id) === (form.companyId || selectedCompanyId || "")), (form as any).empregadorDocumentos);
     const inciso = String(form.cargoConfiancaInciso || "").toUpperCase();
     if (!inciso) { toast.error("Selecione o inciso de enquadramento antes de gerar o termo."); return null; }
     // Escape HTML em TODOS os campos dinâmicos — nome/função/endereço/razão
@@ -964,6 +976,8 @@ ${obs ? `<div style="border:1px solid #999;padding:10px;margin-top:12px;backgrou
         }
       }
       if (!novo.cpf && dados.cpf) novo.cpf = String(dados.cpf);
+      // Rev. 4984 — preserva o empregador documental do vínculo anterior (default FC)
+      novo.empregadorDocumentos = String((dados as any).empregadorDocumentos || "FC");
     }
     setForm(novo);
     setRecontratacaoVinculo(vinc);
@@ -1003,7 +1017,7 @@ ${obs ? `<div style="border:1px solid #999;padding:10px;margin-top:12px;backgrou
 
   const openNew = () => {
     setEditingId(null);
-    setForm({ status: "Ativo", companyId: selectedCompany });
+    setForm({ status: "Ativo", companyId: selectedCompany, empregadorDocumentos: "FC" });
     setBlacklistAlert(null);
     setCpfDuplicateAlert(null);
     setRecontratacaoMode(false);
@@ -1117,6 +1131,8 @@ ${obs ? `<div style="border:1px solid #999;padding:10px;margin-top:12px;backgrou
       if (typeof data.fotoUrl === "string" && data.fotoUrl.startsWith("data:")) delete data.fotoUrl;
       Object.keys(data).forEach(k => { if ((data as any)[k] === "none") (data as any)[k] = ""; });
       (data as any).jornadaTrabalho = jornadaStr;
+      // Rev. 5044 — FC/JF só existe na empresa FC; nas demais grava sempre 'FC'
+      if (!empregadorToggleVisivel(targetCompanyId)) (data as any).empregadorDocumentos = "FC";
       updateMut.mutate({ id: editingId, companyId: targetCompanyId, data });
     } else {
       const { empresa: _emp, ...restCreate } = form;
@@ -1130,6 +1146,8 @@ ${obs ? `<div style="border:1px solid #999;padding:10px;margin-top:12px;backgrou
       if (typeof createData.fotoUrl === "string" && createData.fotoUrl.startsWith("data:")) delete createData.fotoUrl;
       Object.keys(createData).forEach(k => { if ((createData as any)[k] === "none") (createData as any)[k] = ""; });
       (createData as any).jornadaTrabalho = jornadaStr;
+      // Rev. 5044 — FC/JF só existe na empresa FC; nas demais grava sempre 'FC'
+      if (!empregadorToggleVisivel(targetCompanyId)) (createData as any).empregadorDocumentos = "FC";
       if (recontratacaoMode) {
         // Staging: vira SOLICITAÇÃO; NÃO cria funcionário até a liberação do sócio.
         criarSolicitacaoMut.mutate({
@@ -1178,7 +1196,10 @@ ${obs ? `<div style="border:1px solid #999;padding:10px;margin-top:12px;backgrou
 
   const handlePrintFicha = () => {
     if (!viewingEmployee) return;
-    const empresa = getCompanyName(viewingEmployee.companyId);
+    // Rev. 4984 — colaborador JF: ficha sai em nome da Julio Ferraz
+    const empresa = (viewingEmployee as any).empregadorDocumentos === "JF" && jfCompany
+      ? (jfCompany.razaoSocial || jfCompany.nomeFantasia || "JULIO FERRAZ PROJETOS E OBRAS LTDA")
+      : getCompanyName(viewingEmployee.companyId);
     const dataEmissao = nowBrasilia();
     const nomeUsuario = user?.name || user?.username || "Usuário";
 
@@ -1277,6 +1298,22 @@ ${obs ? `<div style="border:1px solid #999;padding:10px;margin-top:12px;backgrou
     if (viewingEmployee.observacoes) {
       conteudo += `<div style="margin-top:20px;"><h3 style="font-size:13px;font-weight:600;color:#1B2A4A;border-bottom:2px solid #e2e8f0;padding-bottom:6px;margin-bottom:10px;">Observações</h3><p style="font-size:11px;background:#f8fafc;padding:8px 12px;border-radius:4px;">${safeDisplay(viewingEmployee.observacoes)}</p></div>`;
     }
+
+    // Rev. 4979 — ficha unificada com a Ficha de Registro do dossiê: bloco de
+    // assinaturas empregado/empregador também na impressão da aba Colaboradores.
+    conteudo += `<div style="margin-top:48px;page-break-inside:avoid;">
+      <p style="font-size:11px;color:#333;margin:0 0 36px;">Declaro que as informações constantes nesta ficha de registro são verdadeiras e refletem meus dados cadastrais junto ao empregador.</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:40px;">
+        <div style="text-align:center;">
+          <div style="border-top:2px solid #1a1a1a;padding-top:6px;font-size:12px;font-weight:700;">${safeDisplay(viewingEmployee.nomeCompleto)}</div>
+          <div style="font-size:10px;color:#666;">Assinatura do Empregado${viewingEmployee.cpf ? ` — CPF ${formatCPF(viewingEmployee.cpf)}` : ""}</div>
+        </div>
+        <div style="text-align:center;">
+          <div style="border-top:2px solid #1a1a1a;padding-top:6px;font-size:12px;font-weight:700;">${empresa}</div>
+          <div style="font-size:10px;color:#666;">Assinatura do Empregador</div>
+        </div>
+      </div>
+    </div>`;
 
     const printWindow = window.open("", "_blank");
     if (!printWindow) return toast.error("Popup bloqueado. Permita popups para imprimir.");
@@ -1562,6 +1599,18 @@ ${obs ? `<div style="border:1px solid #999;padding:10px;margin-top:12px;backgrou
                                 </div>
                               )
                               : null;
+                            // Selo CIPA (membro ativo) + vigência da estabilidade
+                            const cipaCargo = (emp as any).cipaCargo as string | null;
+                            const cipaFim = (emp as any).cipaFimEstabilidade as string | null;
+                            const linhaCipa = !isSaiu && cipaCargo
+                              ? (
+                                <div className="mt-1 flex">
+                                  <span className="inline-flex items-center gap-1 max-w-full px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-300 text-[10px] font-semibold leading-none">
+                                    🛡 CIPA · {cipaCargo}{cipaFim ? ` · até ${String(cipaFim).slice(0, 10).split("-").reverse().join("/")}` : ""}
+                                  </span>
+                                </div>
+                              )
+                              : null;
                             let linha2: ReactNode = null;
                             if (isSaiu && (emp as any).dataDesligamentoEfetiva) {
                               const dt = formatDate((emp as any).dataDesligamentoEfetiva);
@@ -1572,7 +1621,7 @@ ${obs ? `<div style="border:1px solid #999;padding:10px;margin-top:12px;backgrou
                                 </div>
                               );
                             }
-                            return <>{linha1}{linhaObra}{linha2}</>;
+                            return <>{linha1}{linhaObra}{linhaCipa}{linha2}</>;
                           })()}
                         </div>
                       </div>
@@ -2347,6 +2396,31 @@ ${obs ? `<div style="border:1px solid #999;padding:10px;margin-top:12px;backgrou
                     </Select>
                   </div>
 
+                  {/* Rev. 4984 — Empregador dos DOCUMENTOS (FC padrão / JF). Não altera o vínculo no sistema.
+                      Rev. 5044 — só aparece na empresa FC (mesmo grupo da JF); Hotel/Locnow ficam de fora. */}
+                  {empregadorToggleVisivel(form.companyId) && (
+                  <div>
+                    <Label className="text-xs font-medium text-muted-foreground">Empregador (documentos)</Label>
+                    <div className="flex gap-2 mt-1">
+                      {([["FC", "FC Engenharia"], ["JF", "Julio Ferraz"]] as const).map(([v, lbl]) => (
+                        <button
+                          key={v}
+                          type="button"
+                          onClick={() => set("empregadorDocumentos", v)}
+                          className={`flex-1 rounded-md border px-3 py-2 text-sm font-semibold transition-colors ${
+                            (form.empregadorDocumentos || "FC") === v
+                              ? "bg-primary text-primary-foreground border-primary"
+                              : "bg-input text-muted-foreground hover:bg-muted"
+                          }`}
+                        >
+                          {lbl}
+                        </button>
+                      ))}
+                    </div>
+                    <span className="text-[10px] text-muted-foreground mt-0.5 block">Define logo e dados do empregador nos documentos emitidos</span>
+                  </div>
+                  )}
+
                   <div className="sm:col-span-2 lg:col-span-3">
                     <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1"><HardHat className="h-3.5 w-3.5" /> Obra Atual</Label>
                     <div className="bg-muted/40 border border-dashed rounded-lg px-4 py-2.5 mt-1 text-sm text-muted-foreground flex items-center gap-2">
@@ -2612,7 +2686,10 @@ ${obs ? `<div style="border:1px solid #999;padding:10px;margin-top:12px;backgrou
                   {(form as any).experienciaTipo && (form as any).experienciaTipo !== 'none' && (() => {
                     // XSS hardening — escapa qualquer dado de form antes de interpolar no template HTML
                     const esc = (v: any) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-                    const comp = companies?.find(c => String(c.id) === selectedCompanyId);
+                    // Rev. 4984 — compOwner = empresa DONA do vínculo (ids, counters,
+                    // FCSign, saves); comp = empresa exibida nos DOCUMENTOS (FC ou JF).
+                    const compOwner = companies?.find(c => String(c.id) === selectedCompanyId);
+                    const comp = swapCompDocs(compOwner, (form as any).empregadorDocumentos);
                     const empNomeRaw = form.nomeCompleto || 'Funcionário';
                     const empNome = esc(empNomeRaw);
                     const empCpf = form.cpf || '';
@@ -2894,11 +2971,11 @@ ${(() => {
                         <Button
                           type="button"
                           size="sm"
-                          disabled={updateExperienciaMut.isPending || !editingId || !comp?.id}
+                          disabled={updateExperienciaMut.isPending || !editingId || !compOwner?.id}
                           className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white border-0 disabled:opacity-60"
                           onClick={() => {
                             const empId = editingId;
-                            const compId = comp?.id;
+                            const compId = compOwner?.id;
                             if (!empId || !compId) { toast.error('Salve o cadastro do colaborador antes de salvar a experiência.'); return; }
                             updateExperienciaMut.mutate({
                               id: Number(empId),
@@ -2923,7 +3000,7 @@ ${(() => {
                           disabled={allocateContratoExpMut.isPending}
                           className="border-orange-300 text-orange-700 hover:bg-orange-50 disabled:opacity-60"
                           onClick={async () => {
-                            if (!editingId || !comp?.id) {
+                            if (!editingId || !compOwner?.id) {
                               toast.error('Salve o cadastro do colaborador antes de gerar o Contrato.');
                               return;
                             }
@@ -2939,7 +3016,7 @@ ${(() => {
                             // Se já foi alocado p/ este employee, o backend devolve o mesmo (idempotente).
                             const res = await allocateContratoExpMut.mutateAsync({
                               employeeId: Number(editingId),
-                              companyId: Number(comp.id),
+                              companyId: Number(compOwner!.id),
                             });
                             const numeroStr = `${String(res.numero).padStart(3, '0')}/${res.ano}`;
                             const html = buildContratoHtmlWithNumero(numeroStr);
@@ -2952,9 +3029,9 @@ ${(() => {
                         >
                           <FileText className="h-4 w-4 mr-1" /> Imprimir Contrato de Experiência {numeroPreviewStr && numeroJaAlocado ? `(Nº ${numeroPreviewStr})` : ''}
                         </Button>
-                        {editingId && comp?.id ? (
+                        {editingId && compOwner?.id ? (
                           <FCSignContratoExperienciaPanel
-                            companyId={Number(comp.id)}
+                            companyId={Number(compOwner.id)}
                             employeeId={Number(editingId)}
                             empNome={empNome}
                             isAdminMaster={isAdminMaster}

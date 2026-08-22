@@ -9,10 +9,10 @@ import {
   Users, Shield, Gavel, CalendarRange, DollarSign, ShoppingCart, Calculator,
   ArrowRight, Lock, Building2, LogOut, ChevronDown, LayoutGrid,
   Bell, Clock, Zap, Layers, ArrowUpRight, ClipboardCheck,
-  Handshake, Home, Ruler, BookOpen,
+  Handshake, Home, Ruler, BookOpen, ClipboardList,
   HardHat, Warehouse, BarChart3, FolderOpen, Hammer, Truck,
-  Settings, FileText, Trash2, GitBranch, Receipt, Scale, Sparkles,
-  Megaphone, Briefcase, ShieldCheck, PenLine,
+  Settings, FileText, Trash2, GitBranch, Receipt, Scale, Sparkles, HandCoins,
+  Megaphone, Briefcase, ShieldCheck, PenLine, Activity, FileSignature,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -138,6 +138,21 @@ const MODULES: Module[] = [
     features: ["Pendências de Assinatura", "Envelopes", "Links de Assinatura", "Biblioteca de Assinados", "Auditoria"],
   },
   {
+    // Rev. 5053 — módulo Reembolso (despesas do bolso + caixinha/fundo fixo)
+    id: "reembolso",
+    title: "Reembolso",
+    subtitle: "Despesas e Fundo Fixo",
+    description: "Reembolso de despesas pagas do próprio bolso e caixinhas (fundo fixo), com leitura de notinha por IA, aprovação e título automático no Contas a Pagar.",
+    icon: HandCoins,
+    accentFrom: "#F97316",
+    accentTo: "#DB2777",
+    accentGlow: "rgba(249,115,22,0.5)",
+    iconBg: "rgba(249,115,22,0.14)",
+    path: "/reembolso/painel",
+    active: true,
+    features: ["Solicitações", "Aprovação item a item", "Caixinhas (Fundo Fixo)", "Leitura de notinha por IA", "Título no Contas a Pagar"],
+  },
+  {
     id: "parceiros",
     title: "Parceiros",
     subtitle: "Portal de Convênios",
@@ -199,6 +214,13 @@ const MODULES: Module[] = [
   },
 
   {
+    id: "apontamento", permId: "terceiros", title: "Apontamento de Campo", subtitle: "Ronda Diária de Produção",
+    description: "O apontador registra diariamente o que foi executado, trecho a trecho: local, serviço, quantidade e contrato. Alimenta a medição pré-carregada, RDO e produtividade.",
+    icon: ClipboardList, accentFrom: "#65A30D", accentTo: "#3F6212", accentGlow: "rgba(101,163,13,0.35)", iconBg: "rgba(101,163,13,0.12)", path: "/apontamento", active: true,
+    features: ["Ronda do Dia (mobile)", "Contrato Automático por Frente", "Trava Anti-Duplicidade 100%", "Pré-carga da Medição"],
+  },
+
+  {
     id: "almoxarifado", title: "Almoxarifado", subtitle: "Estoque Central",
     description: "Controle de materiais com foto por produto, entradas e saídas, histórico de movimentações e alertas de estoque mínimo.",
     icon: Warehouse, accentFrom: "#10B981", accentTo: "#059669", accentGlow: "rgba(16,185,129,0.35)", iconBg: "rgba(16,185,129,0.12)", path: "/almoxarifado", active: true,
@@ -231,6 +253,48 @@ const MODULES: Module[] = [
   // Comunicados Internos e Currículos foram movidos para dentro do módulo RH & DP
   // (seção "Comunicação e Recrutamento" no menu lateral). Removidos do hub de módulos
   // para evitar duplicidade. As rotas e permissões continuam ativas.
+  {
+    id: "gestao-interna",
+    title: "Gestão Interna",
+    subtitle: "Central Operacional Interna",
+    description: "Central operacional da empresa com visibilidade e controle dos processos internos.",
+    icon: Activity,
+    accentFrom: "#475569",
+    accentTo: "#334155",
+    accentGlow: "rgba(71,85,105,0.35)",
+    iconBg: "rgba(71,85,105,0.12)",
+    path: "/gestao-interna",
+    active: true,
+    features: ["Central Operacional", "Processos Internos"],
+  },
+  {
+    id: "patrimonio",
+    title: "Patrimônio Imobiliário",
+    subtitle: "Gestão Imobiliária",
+    description: "Gestão completa dos ativos imobiliários: terrenos, imóveis, documentação e valores.",
+    icon: Building2,
+    accentFrom: "#0369a1",
+    accentTo: "#0c4a6e",
+    accentGlow: "rgba(3,105,161,0.35)",
+    iconBg: "rgba(3,105,161,0.12)",
+    path: "/patrimonio",
+    active: true,
+    features: ["Escrituras e Matrículas", "Valores e IPTU", "Localização"],
+  },
+  {
+    id: "contratos-servico",
+    title: "Contratos de Serviço",
+    subtitle: "Contratos Recorrentes",
+    description: "Gestão de contratos de serviço continuado (contabilidade, jurídico, saúde ocupacional) com ciclo mensal de conferência de fatura e geração de título no Contas a Pagar.",
+    icon: FileSignature,
+    accentFrom: "#0284c7",
+    accentTo: "#075985",
+    accentGlow: "rgba(2,132,199,0.35)",
+    iconBg: "rgba(2,132,199,0.12)",
+    path: "/contratos-servico",
+    active: true,
+    features: ["Contratos Recorrentes", "Itens Variáveis por RH", "Conferência Mensal", "Título no Contas a Pagar"],
+  },
 ];
 
 function getGreeting(): string {
@@ -431,11 +495,16 @@ export default function ModuleHub() {
     "juridico-trabalhista": "juridico", "juridico-tributario": "juridico", "juridico-civil": "juridico",
     "avaliacao": "avaliacao", "terceiros": "terceiros", "parceiros": "parceiros",
     "cadastro": "cadastro", "medicao-terceiros": "medicao-terceiros",
-    "fcsign": "fcsign",
+    "fcsign": "fcsign", "gestao-interna": "gestao-interna",
+    "contratos-servico": "contratos-servico",
   };
   // Filtrar módulos: habilitados no config E acessíveis pelo grupo do usuário
   const activeModules = MODULES.filter(m => {
     if (!m.active) return false;
+    // A Gestão Interna é exibida no Hub apenas para Admin Master.
+    // A rota mantém sua própria autorização no RouteGuard e no servidor.
+    if (m.id === "gestao-interna" && !isAdminMaster) return false;
+    if (m.id === "patrimonio" && !isAdminMaster) return false;
     const permId = m.permId ?? m.id;
     const configKey = hubToConfigKey[m.id] ?? m.id;
     const modEnabled = m.id === "juridico"

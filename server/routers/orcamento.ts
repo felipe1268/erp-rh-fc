@@ -656,6 +656,12 @@ function parsearAbaCorcamento(rows: any[][], metaPerc: number, bdiPercentual: nu
   // ─── 3. Parsear linhas de dados ────────────────────────────────────────────
   const itens = [];
   let ordem = 0;
+  // Rev. 5025 — transparência da importação: o unitário da PLANILHA é soberano.
+  // Quando ele não é lido (coluna ausente/zerada) e o sistema recalcula
+  // unitário = total ÷ qtd, registramos o item aqui para reportar ao usuário
+  // (antes o recálculo era silencioso — "redistribuição sem autorização").
+  const unitariosRecalculados: string[] = [];
+  const moAjustados: string[] = [];
 
   for (let i = dataStartIdx; i < rows.length; i++) {
     const row = rows[i];
@@ -713,7 +719,11 @@ function parsearAbaCorcamento(rows: any[][], metaPerc: number, bdiPercentual: nu
         custoTotalMat = custoTotal; // item puro-Mat: Mat = Total
       } else if (custoTotalMat > 0 && custoTotalMdo > 0) {
         const adjMdo = custoTotal - custoTotalMat;
-        if (adjMdo >= 0) custoTotalMdo = adjMdo; // item misto: ajusta MO
+        if (adjMdo >= 0) {
+          // Rev. 5025 — só reporta se o ajuste for além de arredondamento (> R$0,05)
+          if (Math.abs(adjMdo - custoTotalMdo) > 0.05) moAjustados.push(eapCodigo);
+          custoTotalMdo = adjMdo; // item misto: ajusta MO
+        }
       }
     }
 
@@ -725,6 +735,7 @@ function parsearAbaCorcamento(rows: any[][], metaPerc: number, bdiPercentual: nu
     let custoUnitTotalFinal = custoUnitTotal;
     if (custoUnitTotalFinal === 0 && quantidade > 0 && custoTotal > 0) {
       custoUnitTotalFinal = custoTotal / quantidade;
+      unitariosRecalculados.push(eapCodigo); // Rev. 5025 — reportado na resposta da importação
       if (custoTotalMat > 0 && custoTotalMdo >= 0) {
         custoUnitMatFinal = custoTotal > 0 ? (custoTotalMat / custoTotal) * custoUnitTotalFinal : 0;
         custoUnitEquipFinal = custoTotal > 0 && custoTotalEquip > 0 ? (custoTotalEquip / custoTotal) * custoUnitTotalFinal : 0;
@@ -828,7 +839,7 @@ function parsearAbaCorcamento(rows: any[][], metaPerc: number, bdiPercentual: nu
     }
   }
 
-  return { itens, colMap };
+  return { itens, colMap, unitariosRecalculados, moAjustados };
 }
 
 // Parseia aba BDI
@@ -1908,7 +1919,7 @@ export const orcamentoRouter = router({
       obraId:         z.number().optional(),
       fileBase64:     z.string().min(10),
       fileName:       z.string(),
-      metaPercentual: z.number().min(0).max(0.99).default(0.2),
+      metaPercentual: z.number().min(0).max(1).default(0.2),
       userName:       z.string(),
       colMapping:     z.record(z.string(), z.number()).optional(),
       forceReplace:   z.boolean().optional(),
@@ -1954,7 +1965,7 @@ export const orcamentoRouter = router({
       const meta = extrairMetadados(dataOrc);
 
       // Itens da EAP — venda calculada sem BDI-MDO por enquanto (será recalculado após salvar)
-      const { itens, colMap: colMapOrc } = parsearAbaCorcamento(dataOrc, input.metaPercentual, bdiPercentual, input.colMapping);
+      const { itens, colMap: colMapOrc, unitariosRecalculados, moAjustados } = parsearAbaCorcamento(dataOrc, input.metaPercentual, bdiPercentual, input.colMapping);
       if (itens.length === 0) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Nenhum item encontrado na planilha.' });
 
       // ── Insumos ──
@@ -2093,11 +2104,22 @@ export const orcamentoRouter = router({
         }
       }
 
-      // CPUs: upsert composições e seus insumos no catálogo global da empresa
+      // CPUs: MESCLA composições no catálogo global da empresa.
+      // Rev. 5025 — antes a importação APAGAVA o catálogo inteiro da empresa e
+      // reinseria só as CPUs da planilha (uma planilha com CPUs parciais destruía
+      // o catálogo bom). Agora: substitui apenas as composições com os MESMOS
+      // códigos da planilha (atualiza) e preserva todas as demais.
       if (cpusParsed.composicoes.length > 0) {
-        // 1) Apagar as composições anteriores desta empresa (reimporta limpo)
-        await db.delete(composicoesCatalogo).where(eq(composicoesCatalogo.companyId, input.companyId));
-        await db.delete(composicaoInsumos).where(eq(composicaoInsumos.companyId, input.companyId));
+        const codigosImport = Array.from(new Set(cpusParsed.composicoes.map(c => c.codigo)));
+        for (let i = 0; i < codigosImport.length; i += BATCH) {
+          const chunk = codigosImport.slice(i, i + BATCH);
+          await db.delete(composicoesCatalogo).where(and(
+            eq(composicoesCatalogo.companyId, input.companyId),
+            inArray(composicoesCatalogo.codigo, chunk)));
+          await db.delete(composicaoInsumos).where(and(
+            eq(composicaoInsumos.companyId, input.companyId),
+            inArray(composicaoInsumos.composicaoCodigo, chunk)));
+        }
 
         // 2) Inserir composições
         for (let i = 0; i < cpusParsed.composicoes.length; i += BATCH) {
@@ -2185,6 +2207,14 @@ export const orcamentoRouter = router({
         cpusReferenciadasCount: cpusReferenciadas.size,
         cpusFaltantesCount: cpusFaltantes.length,
         cpusFaltantes: cpusFaltantes.slice(0, 50), // limita para não inflar a resposta
+        // Rev. 5025 — relatório de transparência da importação:
+        // quais colunas foram reconhecidas e quais itens tiveram valores recalculados
+        // (unitário = total ÷ qtd por coluna unitária ausente/zerada; MO ajustada p/ fechar total).
+        colunasReconhecidas: Object.keys(colMapOrc),
+        unitariosRecalculadosCount: unitariosRecalculados.length,
+        unitariosRecalculados: unitariosRecalculados.slice(0, 100),
+        moAjustadosCount: moAjustados.length,
+        moAjustados: moAjustados.slice(0, 100),
       };
       } catch (err: any) {
         // Captura qualquer erro não tratado e loga com detalhes para diagnóstico
@@ -2206,7 +2236,7 @@ export const orcamentoRouter = router({
   updateMeta: protectedProcedure
     .input(z.object({
       id:              z.number(),
-      metaPercentual:  z.number().min(0).max(0.9999),
+      metaPercentual:  z.number().min(0).max(1),
       totalMetaExato:  z.number().optional(), // R$ exato digitado pelo usuário — prioridade sobre o % arredondado
     }))
     .mutation(async ({ input, ctx }) => {

@@ -10,6 +10,8 @@ import { resolverResponsaveisBatch, truncarNomeEmpresa, type ResponsavelInfo } f
 import { recalcularPesosCore } from "../_shared/recalcularPesos";
 // Rev. 1821 — Normalização canônica do EAP (match orçamento ↔ cronograma).
 import { eapCanonico } from "../_shared/normalizarEap";
+// Rev. 5155 — panorama de MO em todas as obras (filtro multi-empresa padrão).
+import { companyFilter } from "../companyHelper";
 import { eq, and, desc, asc, sql, isNotNull, inArray, or, ilike, lt, ne, gt } from "drizzle-orm";
 import {
   planejamentoProjetos,
@@ -6998,7 +7000,650 @@ REGRAS TÉCNICAS:
         })),
       };
     }),
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Rev. 5146 — ESTIMATIVA DE MÃO DE OBRA DA SEMANA (Programação Semanal).
+  // CONSULTIVO, nunca vinculante: cruza a demanda de MO das atividades da
+  // semana com o efetivo alocado na obra, por função, para o gestor enxergar
+  // sobra/falta e realocar equipe. Fontes de demanda, nesta ordem:
+  //   1. ORÇAMENTO — atividade casa com item do orçamento por EAP canônica
+  //      (mesma régua de recalcularPesosCore) e o item tem composição (CPU)
+  //      com insumos de MO em horas (composicao_insumos.unidade='h'):
+  //      HH = coef(h/un) × quantidade do item × fração da atividade na semana.
+  //   2. REFERÊNCIA TCPO/SINAPI — quando a EAP NÃO casa com o orçamento
+  //      (cronograma ajustado/mais detalhado): produtividade MÉDIA de mercado
+  //      por palavra-chave do nome da atividade × quantidade planejada da
+  //      própria atividade. Vem com alerta "fora do orçamento".
+  //   3. SEM ESTIMATIVA — sem match e sem quantidade/unidade compatível:
+  //      nunca inventa número, lista a atividade como não-estimável.
+  // NÃO toca no motor do % Previsto (somente leitura por cima).
+  estimativaMaoObraSemana: protectedProcedure
+    .input(z.object({
+      projetoId: z.number(),
+      revisaoId: z.number(),
+      semanaIni: z.string(), // YYYY-MM-DD
+      semanaFim: z.string(), // YYYY-MM-DD
+    }))
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      await assertProjetoAcesso(db, ctx, input.projetoId);
+      return computeEstimativaMoSemana(db, input);
+    }),
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Rev. 5155 — PANORAMA DE MÃO DE OBRA (todas as obras). Mesma estimativa
+  // consultiva da Programação Semanal, calculada para TODOS os projetos em
+  // andamento na semana informada, para o gestor comparar quem precisa de
+  // gente × quem tem sobra e cruzar realocações entre obras.
+  // ══════════════════════════════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════════════════
+  // Rev. 5163 — Regras de apoio de equipamento (CONSULTIVO). O gestor cadastra
+  // "equipamento ativo na obra → exige N pessoas de tal função" (ex.: GUINCHO →
+  // 2 SERVENTE, NR-18). O panorama cruza com os equipamentos ativos por obra
+  // (equipamentos_proprios em_obra + equipamentos_locados em uso) e SÓ SUGERE —
+  // não altera o motor de estimativa nem o cronograma.
+  // Persistência: system_criteria chave 'planejamento_apoio_equipamento_regras'
+  // (JSON [{termo, funcao, qtd}]).
+  apoioEquipRegrasGet: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const { systemCriteria } = await import("../../drizzle/schema");
+      const [row] = await db.select().from(systemCriteria)
+        .where(and(eq(systemCriteria.companyId, input.companyId), eq(systemCriteria.chave, "planejamento_apoio_equipamento_regras")))
+        .limit(1);
+      try { return { regras: row?.valor ? JSON.parse(row.valor) : [] }; } catch { return { regras: [] }; }
+    }),
+  apoioEquipRegrasSet: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      regras: z.array(z.object({
+        termo: z.string().min(2).max(60),   // trecho do nome do equipamento (ex.: GUINCHO)
+        funcao: z.string().min(2).max(60),  // função exigida (ex.: SERVENTE)
+        qtd: z.number().int().min(1).max(20),
+      })).max(50),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== "admin" && ctx.user.role !== "admin_master") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Apenas admin pode alterar as regras de apoio" });
+      }
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const { systemCriteria } = await import("../../drizzle/schema");
+      const valor = JSON.stringify(input.regras);
+      const [existing] = await db.select({ id: systemCriteria.id }).from(systemCriteria)
+        .where(and(eq(systemCriteria.companyId, input.companyId), eq(systemCriteria.chave, "planejamento_apoio_equipamento_regras")))
+        .limit(1);
+      if (existing) {
+        await db.update(systemCriteria).set({ valor, atualizadoPor: ctx.user.name ?? "Sistema" }).where(eq(systemCriteria.id, existing.id));
+      } else {
+        await db.insert(systemCriteria).values({
+          companyId: input.companyId,
+          categoria: "planejamento",
+          chave: "planejamento_apoio_equipamento_regras",
+          valor,
+          descricao: "Regras de apoio de equipamento (equipamento ativo → funções exigidas) do panorama de MO",
+          atualizadoPor: ctx.user.name ?? "Sistema",
+        } as any);
+      }
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "planejamento", entityType: "apoio_equipamento_regras", entityId: input.companyId, details: `${input.regras.length} regra(s) de apoio de equipamento` });
+      return { success: true };
+    }),
+
+  estimativaMaoObraTodasObras: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      companyIds: z.array(z.number()).optional(),
+      semanaIni: z.string(), // YYYY-MM-DD
+      semanaFim: z.string(), // YYYY-MM-DD
+    }))
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+      // Rev. 5163 — carrega regras de apoio + equipamentos ativos por obra (consultivo)
+      const normEq = (s: any) => String(s || "").toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+      let apoioRegras: Array<{ termo: string; funcao: string; qtd: number }> = [];
+      let equipPorObra = new Map<number, Array<{ nome: string; qtd: number }>>();
+      try {
+        const { systemCriteria } = await import("../../drizzle/schema");
+        const [regraRow] = await db.select().from(systemCriteria)
+          .where(and(eq(systemCriteria.companyId, input.companyId), eq(systemCriteria.chave, "planejamento_apoio_equipamento_regras")))
+          .limit(1);
+        apoioRegras = regraRow?.valor ? JSON.parse(regraRow.valor) : [];
+        if (apoioRegras.length > 0) {
+          const eqRows: any = await db.execute(sql`
+            SELECT localizacao_atual_obra_id AS obra_id, COALESCE(descricao, '') AS nome, 1 AS qtd
+            FROM equipamentos_proprios
+            WHERE company_id = ${input.companyId} AND COALESCE(ativo, true) = true
+              AND status = 'em_obra' AND localizacao_atual_tipo = 'obra' AND localizacao_atual_obra_id IS NOT NULL
+            UNION ALL
+            SELECT obra_id, COALESCE(descricao, ''), COALESCE(quantidade, 1)
+            FROM equipamentos_locados
+            WHERE company_id = ${input.companyId} AND obra_id IS NOT NULL
+              AND status IN ('em_uso', 'atrasado', 'em_renovacao') AND data_fim_real IS NULL
+          `);
+          for (const r of (eqRows?.rows || eqRows || []) as any[]) {
+            const obraId = Number(r.obra_id);
+            if (!obraId) continue;
+            if (!equipPorObra.has(obraId)) equipPorObra.set(obraId, []);
+            equipPorObra.get(obraId)!.push({ nome: String(r.nome || ""), qtd: Number(r.qtd) || 1 });
+          }
+        }
+      } catch (e) {
+        console.error("[Panorama MO] Falha ao carregar apoio de equipamento (segue sem):", e);
+      }
+
+      const projs = await db.select({
+        id: planejamentoProjetos.id,
+        nome: planejamentoProjetos.nome,
+        obraId: planejamentoProjetos.obraId,
+      })
+        .from(planejamentoProjetos)
+        .where(and(
+          companyFilter(planejamentoProjetos.companyId, input),
+          sql`${planejamentoProjetos.status} IN ('Em andamento', 'em_andamento')`,
+        ));
+
+      // Rev. 5164 — Integração por cliente (Santuário, Rumo etc.): obras cujo
+      // cliente exige integração só podem RECEBER sugestão de quem já está
+      // integrado (employee_integrations válida para aquele cliente). Espelha a
+      // resolução obra→cliente de verificarIntegracaoObra (smo.ts).
+      // integracaoPorObra: obraId → { clienteId, clienteNome, integradosNomes }
+      const integracaoPorObra = new Map<number, { clienteNome: string; integradosNomes: string[] }>();
+      try {
+        const obraIds = projs.map((p: any) => Number(p.obraId)).filter(Boolean);
+        if (obraIds.length > 0) {
+          const obrasRows: any = await db.execute(sql`
+            SELECT id, COALESCE(cliente, '') AS cliente FROM obras WHERE id IN ${obraIds}
+          `);
+          const cliRows: any = await db.execute(sql`
+            SELECT id, COALESCE(razao_social, '') AS rs, COALESCE(nome_fantasia, '') AS nf
+            FROM clientes
+            WHERE company_id = ${input.companyId} AND tipo = 'PJ' AND COALESCE(integracao_requer, false) = true
+          `);
+          const clientes = ((cliRows?.rows ?? cliRows) as any[]) || [];
+          const integradosPorCliente = new Map<number, string[]>();
+          for (const ob of ((obrasRows?.rows ?? obrasRows) as any[]) || []) {
+            const obCliente = normEq(ob.cliente);
+            if (!obCliente) continue;
+            const cli = clientes.find((c: any) => {
+              const rs = normEq(c.rs), nf = normEq(c.nf);
+              return (rs && (obCliente.includes(rs) || rs.includes(obCliente))) ||
+                     (nf && (obCliente.includes(nf) || nf.includes(obCliente)));
+            });
+            if (!cli) continue;
+            const cliId = Number(cli.id);
+            if (!integradosPorCliente.has(cliId)) {
+              const intRows: any = await db.execute(sql`
+                SELECT DISTINCT e."nomeCompleto" AS nome
+                FROM employee_integrations ei
+                JOIN employees e ON e.id = ei.employee_id
+                WHERE ei.company_id = ${input.companyId} AND ei.cliente_id = ${cliId}
+                  AND (ei.data_vencimento IS NULL OR ei.data_vencimento = '' OR ei.data_vencimento >= CURRENT_DATE::text)
+              `);
+              integradosPorCliente.set(cliId, (((intRows?.rows ?? intRows) as any[]) || []).map((r: any) => normEq(r.nome)));
+            }
+            integracaoPorObra.set(Number(ob.id), {
+              clienteNome: String(cli.nf || cli.rs || ""),
+              integradosNomes: integradosPorCliente.get(cliId) || [],
+            });
+          }
+        }
+      } catch (e) {
+        console.error("[Panorama MO] Falha ao carregar integração por cliente (segue sem):", e);
+      }
+
+      const obrasOut: any[] = [];
+      for (const p of projs) {
+        // respeita o mesmo controle de acesso por projeto/obra do painel individual
+        try { await assertProjetoAcesso(db, ctx, Number(p.id)); } catch { continue; }
+        const [rev] = await db.select({ id: planejamentoRevisoes.id })
+          .from(planejamentoRevisoes)
+          .where(and(eq(planejamentoRevisoes.projetoId, Number(p.id)), eq(planejamentoRevisoes.status, "aprovada")))
+          .orderBy(desc(planejamentoRevisoes.numero)).limit(1);
+        if (!rev) continue;
+        let d: any;
+        try {
+          d = await computeEstimativaMoSemana(db, {
+            projetoId: Number(p.id), revisaoId: Number(rev.id),
+            semanaIni: input.semanaIni, semanaFim: input.semanaFim,
+          });
+        } catch { continue; }
+        const funcoes = (d?.funcoes || []) as any[];
+        // Rev. 5167 — transparência da fonte da estimativa por obra: quantas
+        // atividades vieram do orçamento, quantas de composição TCPO (referência)
+        // e quantas ficaram sem estimativa (quadro avisa estimativa incompleta).
+        const atvsD = (d?.atividades || []) as any[];
+        const fontes = {
+          orcamento: atvsD.filter((x) => x.origem === "orcamento").length,
+          tcpo: atvsD.filter((x) => x.origem === "referencia").length,
+          semEstimativa: atvsD.filter((x) => x.origem === "sem_estimativa" && x.hh <= 0).length,
+        };
+        // Rev. 5156 — déficit em pessoas INTEIRAS (precisa=ceil(pessoas) − tem)
+        const faltas = funcoes
+          .filter((f) => f.hh > 0 && f.disponiveis != null && (Math.max(1, Math.ceil(f.pessoas)) - f.disponiveis) > 0)
+          .map((f) => ({ funcao: f.funcao, deficit: Math.max(1, Math.ceil(f.pessoas)) - f.disponiveis }));
+        const semCorresp = funcoes.filter((f) => f.semMatch && f.hh > 0).map((f) => f.funcao);
+        const candidatos = funcoes
+          .filter((f) => !(f.hh > 0))
+          .flatMap((f) => ((f.alocados || []) as any[])
+            .filter((a) => !a.indisponivel)
+            .map((a) => ({ nome: a.nome, foto: a.foto || null, funcao: f.funcao, atestados12m: a.atestados12m || 0, terceiro: !!a.terceiro })))
+          .sort((a, b) => b.atestados12m - a.atestados12m || a.nome.localeCompare(b.nome, "pt-BR"));
+        const indisponiveis = funcoes
+          .flatMap((f) => ((f.alocados || []) as any[])
+            .filter((a) => a.indisponivel)
+            .map((a) => ({ nome: a.nome, foto: a.foto || null, funcao: f.funcao, motivo: a.indisponivel })));
+        // Rev. 5163 — apoio de equipamento (consultivo): equipamento ativo na obra
+        // × regras cadastradas → funções exigidas. Agregado por equipamento+função.
+        const apoio: Array<{ equipamento: string; funcao: string; qtd: number }> = [];
+        if (apoioRegras.length > 0 && p.obraId) {
+          const agreg = new Map<string, { equipamento: string; funcao: string; qtd: number }>();
+          for (const eqp of equipPorObra.get(Number(p.obraId)) || []) {
+            for (const regra of apoioRegras) {
+              if (!normEq(eqp.nome).includes(normEq(regra.termo))) continue;
+              const key = `${normEq(regra.termo)}|${normEq(regra.funcao)}`;
+              const cur = agreg.get(key) || { equipamento: regra.termo.toUpperCase(), funcao: regra.funcao.toUpperCase(), qtd: 0 };
+              cur.qtd += (Number(regra.qtd) || 1) * eqp.qtd;
+              agreg.set(key, cur);
+            }
+          }
+          apoio.push(...agreg.values());
+        }
+        obrasOut.push({
+          projetoId: Number(p.id),
+          projetoNome: p.nome,
+          revisaoId: Number(rev.id),
+          temObra: !!d?.temObra,
+          totalHH: d?.totalHH ?? 0,
+          totalPessoas: d?.totalPessoas ?? 0,
+          efetivoTotal: d?.efetivoTotal ?? 0,
+          faltas,
+          semCorresp,
+          candidatos,
+          indisponiveis,
+          apoio, // Rev. 5163 — exigências de apoio de equipamento (consultivo)
+          fontes, // Rev. 5167 — origem da estimativa (orçamento × TCPO × sem estimativa)
+          // Rev. 5164 — integração exigida pelo cliente da obra (se houver)
+          integracao: p.obraId && integracaoPorObra.has(Number(p.obraId))
+            ? { requer: true, cliente: integracaoPorObra.get(Number(p.obraId))!.clienteNome, integradosNomes: integracaoPorObra.get(Number(p.obraId))!.integradosNomes }
+            : { requer: false },
+        });
+      }
+      // Quem mais precisa primeiro
+      obrasOut.sort((a, b) => (b.faltas.length - a.faltas.length) || (b.totalPessoas - a.totalPessoas));
+      return { semanaIni: input.semanaIni, semanaFim: input.semanaFim, obras: obrasOut };
+    }),
 });
+
+// ════════════════════════════════════════════════════════════════════════════
+// Rev. 5155 — Núcleo COMPARTILHADO da Estimativa de MO da semana (extraído de
+// estimativaMaoObraSemana sem mudança de comportamento; reusado pelo panorama
+// de todas as obras). Consultivo — não toca no motor do % Previsto.
+// ════════════════════════════════════════════════════════════════════════════
+async function computeEstimativaMoSemana(db: any, input: { projetoId: number; revisaoId: number; semanaIni: string; semanaFim: string }) {
+      const [proj] = await db.select({
+        companyId: planejamentoProjetos.companyId,
+        obraId: planejamentoProjetos.obraId,
+        orcamentoId: planejamentoProjetos.orcamentoId,
+      }).from(planejamentoProjetos).where(eq(planejamentoProjetos.id, input.projetoId)).limit(1);
+      if (!proj) throw new TRPCError({ code: "NOT_FOUND", message: "Projeto não encontrado." });
+      const companyId = Number(proj.companyId);
+
+      const HORAS_SEMANA = 44; // jornada CLT padrão
+
+      // ── Atividades da semana (folhas, diretas, habilitadas) ──────────────
+      const atvRes: any = await db.execute(sql`
+        SELECT id, eap_codigo, nome, data_inicio, data_fim, duracao_dias,
+               quantidade_planejada, unidade
+        FROM planejamento_atividades
+        WHERE revisao_id = ${input.revisaoId}
+          AND projeto_id = ${input.projetoId}
+          AND COALESCE(is_grupo, false) = false
+          AND COALESCE(is_marco, false) = false
+          AND COALESCE(is_indireta, false) = false
+          AND COALESCE(disabled, false) = false
+          AND data_inicio IS NOT NULL AND data_fim IS NOT NULL
+          AND data_fim >= ${input.semanaIni}::date
+          AND data_inicio <= ${input.semanaFim}::date
+        ORDER BY ordem, eap_codigo`);
+      const atvs = ((atvRes?.rows ?? atvRes) as any[]) || [];
+
+      // ── Itens do orçamento por EAP canônica ──────────────────────────────
+      // Escopo restrito às EAPs das atividades DA SEMANA (perf: evita puxar
+      // composições do orçamento inteiro a cada navegação de semana).
+      const eapsSemana = new Set(atvs.map((a: any) => eapCanonico(a.eap_codigo)).filter(Boolean));
+      const itensPorEap = new Map<string, any[]>();
+      if (proj.orcamentoId && eapsSemana.size > 0) {
+        const itRes: any = await db.execute(sql`
+          SELECT "eapCodigo", "servicoCodigo", quantidade, unidade, descricao
+          FROM orcamento_itens
+          WHERE "orcamentoId" = ${Number(proj.orcamentoId)}
+            AND "eapCodigo" IS NOT NULL AND "servicoCodigo" IS NOT NULL AND "servicoCodigo" <> ''
+            AND "servicoCodigo" <> 'composto'`);
+        for (const it of ((itRes?.rows ?? itRes) as any[]) || []) {
+          const k = eapCanonico(it.eapCodigo);
+          if (!k || !eapsSemana.has(k)) continue;
+          if (!itensPorEap.has(k)) itensPorEap.set(k, []);
+          itensPorEap.get(k)!.push(it);
+        }
+      }
+
+      // ── Insumos de MO (horas) das composições usadas ─────────────────────
+      const codigosComp = Array.from(new Set(
+        Array.from(itensPorEap.values()).flat().map((i: any) => String(i.servicoCodigo))
+      ));
+      const moPorComp = new Map<string, { funcao: string; hhPorUn: number }[]>();
+      // Rev. 5167 — composições que EXISTEM no catálogo da empresa (qualquer
+      // unidade). Item cuja composição NÃO existe (ex.: criada em outro catálogo)
+      // cai no fallback TCPO (decisão do user, 17/08/2026), sempre sinalizado.
+      const compExiste = new Set<string>();
+      if (codigosComp.length > 0) {
+        const exRes: any = await db.execute(sql`
+          SELECT DISTINCT composicao_codigo
+          FROM composicao_insumos
+          WHERE company_id = ${companyId}
+            AND composicao_codigo IN (${sql.join(codigosComp.map(c => sql`${c}`), sql`, `)})`);
+        for (const r of ((exRes?.rows ?? exRes) as any[]) || []) compExiste.add(String(r.composicao_codigo));
+        const ciRes: any = await db.execute(sql`
+          SELECT composicao_codigo, insumo_descricao, quantidade
+          FROM composicao_insumos
+          WHERE company_id = ${companyId}
+            AND LOWER(TRIM(unidade)) = 'h'
+            AND composicao_codigo IN (${sql.join(codigosComp.map(c => sql`${c}`), sql`, `)})`);
+        for (const ci of ((ciRes?.rows ?? ciRes) as any[]) || []) {
+          const cod = String(ci.composicao_codigo);
+          if (!moPorComp.has(cod)) moPorComp.set(cod, []);
+          moPorComp.get(cod)!.push({
+            funcao: String(ci.insumo_descricao || "MÃO DE OBRA").trim(),
+            hhPorUn: Number(ci.quantidade) || 0,
+          });
+        }
+      }
+
+      // ── Referência TCPO/SINAPI (produtividade MÉDIA de mercado) ──────────
+      // Coeficientes médios em homem-hora por unidade — apenas para atividades
+      // SEM casamento com o orçamento (consultivo, sinalizado como referência).
+      const REF_TCPO: { kw: string[]; un: string[]; funcoes: Record<string, number> }[] = [
+        { kw: ["alvenaria", "bloco", "tijolo"], un: ["m2"], funcoes: { "Pedreiro": 0.80, "Servente": 0.90 } },
+        { kw: ["chapisco"], un: ["m2"], funcoes: { "Pedreiro": 0.10, "Servente": 0.15 } },
+        { kw: ["reboco", "emboço", "emboco", "massa única", "massa unica"], un: ["m2"], funcoes: { "Pedreiro": 0.65, "Servente": 0.70 } },
+        { kw: ["contrapiso", "regularização", "regularizacao"], un: ["m2"], funcoes: { "Pedreiro": 0.40, "Servente": 0.50 } },
+        { kw: ["pintura", "textura", "grafiato", "selador", "emassamento"], un: ["m2"], funcoes: { "Pintor": 0.35, "Ajudante": 0.15 } },
+        { kw: ["cerâmic", "ceramic", "porcelanato", "azulejo", "revestimento cer"], un: ["m2"], funcoes: { "Azulejista": 0.50, "Servente": 0.35 } },
+        { kw: ["piso", "assentamento"], un: ["m2"], funcoes: { "Azulejista": 0.45, "Servente": 0.35 } },
+        { kw: ["forma", "fôrma", "desforma"], un: ["m2"], funcoes: { "Carpinteiro": 1.20, "Ajudante": 0.60 } },
+        { kw: ["armação", "armacao", "armadura", "aço ca", "aco ca"], un: ["kg"], funcoes: { "Armador": 0.09, "Ajudante": 0.09 } },
+        { kw: ["concret", "lançamento de concreto", "lancamento de concreto"], un: ["m3"], funcoes: { "Pedreiro": 1.60, "Servente": 3.20 } },
+        { kw: ["escavação", "escavacao"], un: ["m3"], funcoes: { "Servente": 2.60 } },
+        { kw: ["aterro", "reaterro", "compacta"], un: ["m3"], funcoes: { "Servente": 1.80 } },
+        { kw: ["gesso", "drywall", "forro"], un: ["m2"], funcoes: { "Gesseiro": 0.55, "Ajudante": 0.30 } },
+        { kw: ["impermeabiliza", "manta"], un: ["m2"], funcoes: { "Impermeabilizador": 0.45, "Ajudante": 0.25 } },
+        { kw: ["elétric", "eletric", "eletroduto", "cabeamento", "fiação", "fiacao", "tomada", "ilumina", "quadro de distribu"], un: ["m2", "un", "pt", "m"], funcoes: { "Eletricista": 0.50, "Ajudante": 0.35 } },
+        { kw: ["hidráulic", "hidraulic", "tubula", "esgoto", "água fria", "agua fria", "água quente", "agua quente", "louça", "louca", "metais"], un: ["m2", "un", "pt", "m"], funcoes: { "Encanador": 0.55, "Ajudante": 0.35 } },
+        { kw: ["esquadria", "porta", "janela", "batente"], un: ["un", "m2"], funcoes: { "Carpinteiro": 2.00, "Ajudante": 1.00 } },
+        { kw: ["cobertura", "telha", "estrutura metálica", "estrutura metalica"], un: ["m2"], funcoes: { "Telhadista": 0.60, "Ajudante": 0.45 } },
+        { kw: ["demoli", "remoção", "remocao", "retirada"], un: ["m2", "m3"], funcoes: { "Servente": 1.50 } },
+        { kw: ["limpeza"], un: ["m2"], funcoes: { "Servente": 0.15 } },
+      ];
+      const normUn = (u: any) => String(u || "").toLowerCase().replace(/[²]/g, "2").replace(/[³]/g, "3").replace(/[^a-z0-9]/g, "");
+      const normTxt = (s: any) => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+      // ── Cálculo por atividade ────────────────────────────────────────────
+      const ymd = (v: any) => v instanceof Date
+        ? `${v.getFullYear()}-${String(v.getMonth() + 1).padStart(2, "0")}-${String(v.getDate()).padStart(2, "0")}`
+        : String(v).slice(0, 10);
+      const diasEntre = (a: string, b: string) =>
+        Math.round((Date.parse(b + "T12:00:00Z") - Date.parse(a + "T12:00:00Z")) / 86400000);
+      const hhPorFuncao = new Map<string, number>();
+      const addHH = (funcao: string, hh: number) => {
+        if (!(hh > 0)) return;
+        const k = funcao.trim();
+        hhPorFuncao.set(k, (hhPorFuncao.get(k) || 0) + hh);
+      };
+      const atividadesOut: any[] = [];
+
+      for (const a of atvs) {
+        const ini = ymd(a.data_inicio), fim = ymd(a.data_fim);
+        const durTotal = Math.max(1, diasEntre(ini, fim) + 1);
+        const ovIni = ini > input.semanaIni ? ini : input.semanaIni;
+        const ovFim = fim < input.semanaFim ? fim : input.semanaFim;
+        const ovDias = Math.max(0, diasEntre(ovIni, ovFim) + 1);
+        const fracao = Math.min(1, ovDias / durTotal);
+        if (fracao <= 0) continue;
+
+        const eapK = eapCanonico(a.eap_codigo);
+        const itens = eapK ? (itensPorEap.get(eapK) || []) : [];
+        let hhAtv = 0;
+        const funcoesAtv = new Map<string, number>();
+        let origem: "orcamento" | "referencia" | "sem_estimativa" = "sem_estimativa";
+        let obs: string | null = null;
+
+        // 1) ORÇAMENTO: composição do(s) item(ns) casado(s) por EAP
+        for (const it of itens) {
+          const insumos = moPorComp.get(String(it.servicoCodigo)) || [];
+          const qtd = Number(it.quantidade) || 0;
+          for (const ins of insumos) {
+            const hh = ins.hhPorUn * qtd * fracao;
+            if (hh > 0) {
+              funcoesAtv.set(ins.funcao, (funcoesAtv.get(ins.funcao) || 0) + hh);
+              hhAtv += hh;
+              origem = "orcamento";
+            }
+          }
+        }
+
+        // 2) REFERÊNCIA TCPO/SINAPI — SOMENTE quando a EAP não casa com o
+        // orçamento. Item casado sem MO em horas fica "sem estimativa" (nunca
+        // sobrepor referência de mercado a um orçamento que existe).
+        if (origem !== "orcamento" && itens.length === 0) {
+          const qtdAtv = Number(a.quantidade_planejada) || 0;
+          const unAtv = normUn(a.unidade);
+          const nomeN = normTxt(a.nome);
+          const ref = REF_TCPO.find(r => r.kw.some(k => nomeN.includes(normTxt(k))));
+          if (ref && qtdAtv > 0 && ref.un.includes(unAtv)) {
+            for (const [funcao, coef] of Object.entries(ref.funcoes)) {
+              const hh = coef * qtdAtv * fracao;
+              funcoesAtv.set(funcao, (funcoesAtv.get(funcao) || 0) + hh);
+              hhAtv += hh;
+            }
+            origem = "referencia";
+            obs = "EAP não casa com o orçamento — estimado por produtividade média TCPO/SINAPI";
+          } else {
+            obs = ref && qtdAtv > 0 ? "Unidade da atividade incompatível com a referência TCPO/SINAPI"
+              : ref ? "Sem quantidade planejada na atividade para aplicar a referência"
+              : "EAP não casa com o orçamento e sem referência de produtividade para o serviço";
+          }
+        } else if (origem !== "orcamento") {
+          // EAP casou com o orçamento, mas nenhum item gerou MO em horas.
+          // Rev. 5167 — DOIS casos distintos:
+          //   (a) composição EXISTE no catálogo mas não tem MO em horas → segue
+          //       sem estimativa (nunca sobrepor um orçamento que existe);
+          //   (b) composição NÃO EXISTE no catálogo da empresa (ex.: orçamento
+          //       importado de outro catálogo) → estima por composição TCPO
+          //       (produtividade média), SEMPRE sinalizado (decisão do user).
+          const itensSemCpu = itens.filter((it: any) => !compExiste.has(String(it.servicoCodigo)));
+          let usouTcpo = false;
+          for (const it of itensSemCpu) {
+            const qtdIt = Number(it.quantidade) || 0;
+            const unIt = normUn(it.unidade);
+            const descN = normTxt(it.descricao || a.nome);
+            const ref = REF_TCPO.find(r => r.kw.some(k => descN.includes(normTxt(k))));
+            if (ref && qtdIt > 0 && ref.un.includes(unIt)) {
+              for (const [funcao, coef] of Object.entries(ref.funcoes)) {
+                const hh = coef * qtdIt * fracao;
+                funcoesAtv.set(funcao, (funcoesAtv.get(funcao) || 0) + hh);
+                hhAtv += hh;
+              }
+              usouTcpo = true;
+            }
+          }
+          if (usouTcpo) {
+            origem = "referencia";
+            obs = "Composição não existe no catálogo da empresa — estimado por composição TCPO (produtividade média de mercado)";
+          } else if (itensSemCpu.length === itens.length) {
+            obs = "Composição não existe no catálogo da empresa e sem referência TCPO aplicável — sem estimativa";
+          } else {
+            obs = "Item do orçamento sem composição de MO em horas — sem estimativa";
+          }
+        }
+
+        for (const [f, hh] of funcoesAtv) addHH(f, hh);
+        atividadesOut.push({
+          id: a.id, nome: a.nome, eapCodigo: a.eap_codigo,
+          origem, obs, hh: +hhAtv.toFixed(1),
+          pessoas: +(hhAtv / HORAS_SEMANA).toFixed(1),
+        });
+      }
+
+      // ── Efetivo disponível na obra, por função (com NOMES + atestados) ──
+      // Rev. 5153 — além da contagem, devolve quem são as pessoas de cada
+      // função e quantos atestados tiveram nos últimos 12 meses, para o painel
+      // sugerir nominalmente quem realocar/liberar.
+      const dispPorFuncao = new Map<string, number>();
+      const pessoasPorFuncao = new Map<string, { nome: string; atestados12m: number; terceiro: boolean }[]>();
+      let efetivoTotal = 0;
+      if (proj.obraId != null) {
+        // Rev. 5154 — DISPONIBILIDADE na semana: férias (em gozo ou que começam
+        // na semana), atestado vigente e status Afastado/Recluso saem da conta
+        // de "disponível" e aparecem sinalizados nominalmente.
+        const efRes: any = await db.execute(sql`
+          SELECT COALESCE(NULLIF(TRIM(of2."funcaoNaObra"), ''), NULLIF(TRIM(e.funcao), ''), NULLIF(TRIM(e.cargo), ''), 'Sem função') AS funcao,
+                 e."nomeCompleto" AS nome,
+                 e."fotoUrl" AS foto,
+                 e.status AS emp_status,
+                 (SELECT COUNT(*)::int FROM atestados a
+                   WHERE a."employeeId" = e.id AND a."deletedAt" IS NULL
+                     AND a."dataEmissao" >= (CURRENT_DATE - INTERVAL '12 months')) AS atestados,
+                 EXISTS (SELECT 1 FROM vacation_periods vp
+                   WHERE vp."employeeId" = e.id AND vp."deletedAt" IS NULL
+                     AND vp.status IN ('agendada', 'em_gozo')
+                     AND (
+                       (vp."dataInicio" IS NOT NULL AND vp."dataFim" IS NOT NULL AND vp."dataInicio" <= ${input.semanaFim}::date AND vp."dataFim" >= ${input.semanaIni}::date)
+                       OR (vp."periodo2Inicio" IS NOT NULL AND vp."periodo2Fim" IS NOT NULL AND vp."periodo2Inicio" <= ${input.semanaFim}::date AND vp."periodo2Fim" >= ${input.semanaIni}::date)
+                       OR (vp."periodo3Inicio" IS NOT NULL AND vp."periodo3Fim" IS NOT NULL AND vp."periodo3Inicio" <= ${input.semanaFim}::date AND vp."periodo3Fim" >= ${input.semanaIni}::date)
+                     )) AS ferias_semana,
+                 EXISTS (SELECT 1 FROM atestados a2
+                   WHERE a2."employeeId" = e.id AND a2."deletedAt" IS NULL
+                     AND a2."dataEmissao" <= ${input.semanaFim}::date
+                     AND COALESCE(a2."dataRetorno", a2."dataEmissao" + (GREATEST(COALESCE(a2."diasAfastamento", 1), 1) || ' days')::interval) >= ${input.semanaIni}::date
+                 ) AS atestado_semana
+          FROM obra_funcionarios of2
+          INNER JOIN employees e ON e.id = of2."employeeId" AND e."deletedAt" IS NULL
+            AND e.status NOT IN ('Desligado', 'Lista_Negra', 'Inativo')
+          WHERE of2."obraId" = ${Number(proj.obraId)} AND of2."isActive" = 1
+          ORDER BY 1, atestados DESC, 2`);
+        for (const r of ((efRes?.rows ?? efRes) as any[]) || []) {
+          const f = String(r.funcao);
+          const st = String(r.emp_status || "");
+          const indisponivel =
+            r.ferias_semana === true || st === "Ferias" ? "férias" :
+            r.atestado_semana === true ? "atestado" :
+            (st === "Afastado" || st === "Recluso") ? "afastado" : null;
+          if (!indisponivel) dispPorFuncao.set(f, (dispPorFuncao.get(f) || 0) + 1);
+          if (!pessoasPorFuncao.has(f)) pessoasPorFuncao.set(f, []);
+          pessoasPorFuncao.get(f)!.push({
+            nome: String(r.nome || "—"),
+            foto: r.foto || null,
+            atestados12m: Number(r.atestados) || 0,
+            terceiro: false,
+            indisponivel,
+          } as any);
+          if (!indisponivel) efetivoTotal += 1;
+        }
+        // Rev. 5152 — TERCEIROS alocados na obra também contam como efetivo
+        // disponível (mesma fonte da aba Efetivo: funcionarios_terceiros por obra).
+        // Rev. 5156 — vínculo do terceiro com a obra pode estar em DUAS fontes:
+        // terceiro_obra_vinculos (canônica, com entrada/saída) OU o campo
+        // obraId do cadastro. Considera ambas, sem duplicar a pessoa.
+        const terRes: any = await db.execute(sql`
+          SELECT COALESCE(NULLIF(TRIM(f.funcao), ''), 'Sem função') AS funcao,
+                 f.nome,
+                 f.foto_url AS foto
+          FROM funcionarios_terceiros f
+          WHERE f."companyId" = ${companyId}
+            AND f.deleted_at IS NULL
+            AND LOWER(COALESCE(f.status, 'ativo')) = 'ativo'
+            AND (
+              f."obraId" = ${Number(proj.obraId)}
+              OR EXISTS (SELECT 1 FROM terceiro_obra_vinculos v
+                          WHERE v.funcionario_id = f.id
+                            AND v.obra_id = ${Number(proj.obraId)}
+                            AND v.data_saida IS NULL)
+            )
+          ORDER BY 1, 2`);
+        for (const r of ((terRes?.rows ?? terRes) as any[]) || []) {
+          const f = String(r.funcao);
+          dispPorFuncao.set(f, (dispPorFuncao.get(f) || 0) + 1);
+          if (!pessoasPorFuncao.has(f)) pessoasPorFuncao.set(f, []);
+          pessoasPorFuncao.get(f)!.push({ nome: String(r.nome || "—"), foto: r.foto || null, atestados12m: 0, terceiro: true, indisponivel: null } as any);
+          efetivoTotal += 1;
+        }
+      }
+
+      // ── Casamento de funções (demanda × disponível) por nome aproximado ──
+      // Ex.: insumo "Pedreiro de acabamento" casa com função "PEDREIRO".
+      const dispEntries = Array.from(dispPorFuncao.entries());
+      const usadas = new Set<string>();
+      const funcoesOut: any[] = [];
+      const matchFuncao = (demanda: string): string | null => {
+        const dN = normTxt(demanda);
+        let best: string | null = null; let bestLen = 0;
+        for (const [f] of dispEntries) {
+          const fN = normTxt(f);
+          const primeiro = fN.split(/[^a-z]+/)[0];
+          if ((primeiro.length >= 4 && dN.includes(primeiro)) || dN.split(/[^a-z]+/)[0] === primeiro) {
+            if (fN.length > bestLen) { best = f; bestLen = fN.length; }
+          }
+        }
+        return best;
+      };
+      // Agrega demanda por função DISPONÍVEL casada (ou mantém o rótulo da demanda)
+      const agregada = new Map<string, { hh: number; rotulos: Set<string> }>();
+      for (const [funcao, hh] of hhPorFuncao) {
+        const m = matchFuncao(funcao);
+        const key = m || funcao;
+        if (!agregada.has(key)) agregada.set(key, { hh: 0, rotulos: new Set() });
+        agregada.get(key)!.hh += hh;
+        agregada.get(key)!.rotulos.add(funcao);
+        if (m) usadas.add(m);
+      }
+      for (const [funcao, info] of agregada) {
+        const disponiveis = dispPorFuncao.get(funcao) ?? null;
+        const pessoas = info.hh / HORAS_SEMANA;
+        funcoesOut.push({
+          funcao,
+          hh: +info.hh.toFixed(1),
+          pessoas: +pessoas.toFixed(1),
+          disponiveis,
+          saldo: disponiveis == null ? null : +(disponiveis - pessoas).toFixed(1),
+          semMatch: disponiveis == null,
+          alocados: pessoasPorFuncao.get(funcao) ?? [],
+        });
+      }
+      // Funções da obra SEM demanda na semana (potencial sobra p/ realocar)
+      for (const [funcao, qtd] of dispPorFuncao) {
+        if (!usadas.has(funcao)) {
+          funcoesOut.push({ funcao, hh: 0, pessoas: 0, disponiveis: qtd, saldo: qtd, semMatch: false, alocados: pessoasPorFuncao.get(funcao) ?? [] });
+        }
+      }
+      funcoesOut.sort((x, y) => (x.saldo ?? 999) - (y.saldo ?? 999) || y.hh - x.hh);
+
+      const totalHH = Array.from(hhPorFuncao.values()).reduce((s, v) => s + v, 0);
+      return {
+        horasSemana: HORAS_SEMANA,
+        temOrcamento: !!proj.orcamentoId,
+        temObra: proj.obraId != null,
+        efetivoTotal,
+        totalHH: +totalHH.toFixed(1),
+        totalPessoas: +(totalHH / HORAS_SEMANA).toFixed(1),
+        funcoes: funcoesOut,
+        atividades: atividadesOut,
+      };
+}
 
 
 // ════════════════════════════════════════════════════════════════════════════

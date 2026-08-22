@@ -128,11 +128,63 @@ export function registerComunicadoPdfRoute(app: Express) {
         endereco: companies.endereco,
         cidade: companies.cidade,
         estado: companies.estado,
+        grupoEmpresarial: (companies as any).grupoEmpresarial,
       }).from(companies).where(eq(companies.id, companyId));
 
       const nomeEmpresa = company?.nomeFantasia || company?.razaoSocial || "FC ENGENHARIA";
       const enderecoLinha = [company?.endereco, company?.cidade, company?.estado].filter(Boolean).join(" - ");
       const logoB64 = await toBase64(company?.logoUrl || null);
+
+      // Rev. — Empregador documental JF: quando o comunicado tem colaboradores
+      // marcados como JF entre os destinatários, o documento é DUPLICADO — uma via
+      // com o cabeçalho/logo da FC e outra com o da Julio Ferraz (mesma regra da
+      // Lista de Ciência em 2 listas).
+      let temJf = false;
+      try {
+        let destinatariosIds: number[] | null = null;
+        if ((c as any).destinatariosJson) {
+          try {
+            const parsed = JSON.parse((c as any).destinatariosJson);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              destinatariosIds = parsed.map((d: any) => Number(typeof d === "object" ? (d.id ?? d) : d)).filter((n: number) => !isNaN(n) && n > 0);
+            }
+          } catch { /* json inválido → todos */ }
+        }
+        const { sql: dsql } = await import("drizzle-orm");
+        const jfCond = destinatariosIds && destinatariosIds.length > 0
+          ? dsql`AND id IN (${dsql.join(destinatariosIds.map((i) => dsql`${i}`), dsql`, `)})`
+          : dsql``;
+        const r: any = await db.execute(dsql`
+          SELECT 1 FROM employees
+          WHERE "companyId" = ${companyId}
+            AND empregador_documentos = 'JF'
+            AND status NOT IN ('Desligado', 'Lista_Negra', 'Inativo')
+            ${jfCond}
+          LIMIT 1
+        `);
+        temJf = (r.rows || []).length > 0;
+      } catch (e: any) {
+        console.warn("[ComunicadoPdf] Falha ao detectar colaboradores JF:", e?.message || e);
+      }
+      let jfEmpresa: { nome: string; cnpj: string; enderecoLinha: string; logoB64: string | null } | null = null;
+      if (temJf) {
+        const { sql: dsql } = await import("drizzle-orm");
+        const [jf] = await db.select().from(companies)
+          .where(dsql`${companies.cnpj} LIKE '03.426.403%'`)
+          .orderBy(dsql`(${companies.deletedAt} IS NULL) DESC, ${companies.id} ASC`)
+          .limit(1);
+        // Tenant guard (mesma regra de companies.empregadorJf): a JF só é exibida
+        // se pertencer ao MESMO grupo empresarial da empresa do comunicado.
+        if (jf && ((jf as any).grupoEmpresarial ?? null) !== ((company as any)?.grupoEmpresarial ?? null)) {
+          temJf = false;
+        } else
+        jfEmpresa = {
+          nome: (jf as any)?.razaoSocial || (jf as any)?.nomeFantasia || "JULIO FERRAZ PROJETOS E OBRAS LTDA",
+          cnpj: (jf as any)?.cnpj || "03.426.403/0001-95",
+          enderecoLinha: [(jf as any)?.endereco, (jf as any)?.cidade, (jf as any)?.estado].filter(Boolean).join(" - "),
+          logoB64: await toBase64((jf as any)?.logoUrl || null),
+        };
+      }
 
       // Corpo — mesma regra da tela: template vigente (comunicado_interno) quando existir.
       const [tpl] = await db.select({ conteudoHtml: systemDocumentTemplates.conteudoHtml })
@@ -143,21 +195,20 @@ export function registerComunicadoPdfRoute(app: Express) {
           isNull(systemDocumentTemplates.deletedAt),
         )).limit(1);
 
-      let corpoHtml = "";
-      if (c.conteudo) {
+      const buildCorpoHtml = (empNomeDoc: string, empCnpjDoc: string): string => {
+        if (!c.conteudo) return "";
         const corpoMsg = isHtmlContent(c.conteudo)
           ? sanitizeServerHtml(c.conteudo)
           : `<p>${esc(c.conteudo).replace(/\n/g, "<br/>")}</p>`;
         if (tpl?.conteudoHtml) {
-          corpoHtml = sanitizeServerHtml(renderTemplate(tpl.conteudoHtml, {
+          return sanitizeServerHtml(renderTemplate(tpl.conteudoHtml, {
             empNome: "", corpoMsg, assunto: esc(c.titulo || ""),
-            empresaRazaoSocial: esc(nomeEmpresa), empresaCnpj: esc(company?.cnpj || ""),
+            empresaRazaoSocial: esc(empNomeDoc), empresaCnpj: esc(empCnpjDoc),
             docNumero: esc(String(c.numero || "")), docData: esc(fmtDate(c.dataEmissao)),
           }));
-        } else {
-          corpoHtml = corpoMsg;
         }
-      }
+        return corpoMsg;
+      };
 
       // Blocos de assinatura do emissor — mesma lógica da tela (1 bloco p/ Direção, 2 caso contrário)
       const cargoLower = (c.emissorCargo || "").toLowerCase();
@@ -172,33 +223,28 @@ export function registerComunicadoPdfRoute(app: Express) {
           </div>
         </div>`;
       const emissorNome = c.emissorNome || c.criadoPor || "";
-      const assinaturasHtml = ehDirecao
+      const buildAssinaturasHtml = (diretorNome: string) => ehDirecao
         ? `<div style="display:flex;margin-top:56px;">${blocoAssin(emissorNome, c.emissorCargo || "Diretoria")}</div>`
         : `<div style="display:flex;margin-top:56px;gap:16px;">
              ${blocoAssin(emissorNome, c.emissorCargo || "Responsável")}
-             ${blocoAssin("", "Diretoria")}
+             ${blocoAssin(diretorNome, "Direção")}
            </div>`;
 
-      const html = `<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-<meta charset="utf-8"/>
-<style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Segoe UI', Arial, Helvetica, sans-serif; color: #1f2937; background: #fff; }
-  .conteudo p { margin: 8px 0; }
-  .conteudo ul, .conteudo ol { margin: 8px 0 8px 20px; }
-  .conteudo h1, .conteudo h2, .conteudo h3 { color: #1B2A4A; margin: 12px 0 6px; }
-  .conteudo strong { color: #111827; }
-</style>
-</head>
-<body>
-<div style="padding:8px 8px 0;">
+      // Rev. — uma "via" (página) do comunicado por empregador documental.
+      const empresasDoc: Array<{ nome: string; cnpj: string; enderecoLinha: string; logoB64: string | null; diretorNome: string }> = [
+        { nome: nomeEmpresa, cnpj: company?.cnpj || "", enderecoLinha, logoB64, diretorNome: temJf ? "FELIPE COSTA ALVES" : "" },
+      ];
+      if (temJf && jfEmpresa) {
+        empresasDoc.push({ ...jfEmpresa, diretorNome: "JULIO CESAR FERRAZ DE ARAUJO" });
+      }
+
+      const paginaHtml = (emp: typeof empresasDoc[0], isLast: boolean) => `
+<div style="padding:8px 8px 0;${isLast ? "" : "page-break-after:always;"}">
   <div style="text-align:center;margin-bottom:14px;">
-    ${logoB64 ? `<img src="${logoB64}" style="height:60px;object-fit:contain;margin-bottom:6px;"/>` : ""}
-    <div style="font-size:16px;font-weight:800;color:#1B2A4A;letter-spacing:.02em;">${esc(nomeEmpresa)}</div>
-    ${company?.cnpj ? `<div style="font-size:9.5px;color:#6b7280;">CNPJ: ${esc(company.cnpj)}</div>` : ""}
-    ${enderecoLinha ? `<div style="font-size:9.5px;color:#9ca3af;">${esc(enderecoLinha)}</div>` : ""}
+    ${emp.logoB64 ? `<img src="${emp.logoB64}" style="height:60px;max-width:190px;width:auto;object-fit:contain;object-position:left;margin-bottom:6px;"/>` : ""}
+    <div style="font-size:16px;font-weight:800;color:#1B2A4A;letter-spacing:.02em;">${esc(emp.nome)}</div>
+    ${emp.cnpj ? `<div style="font-size:9.5px;color:#6b7280;">CNPJ: ${esc(emp.cnpj)}</div>` : ""}
+    ${emp.enderecoLinha ? `<div style="font-size:9.5px;color:#9ca3af;">${esc(emp.enderecoLinha)}</div>` : ""}
   </div>
 
   <div style="background:#1B2A4A;color:#fff;text-align:center;padding:9px 12px;border-radius:3px;">
@@ -216,17 +262,33 @@ export function registerComunicadoPdfRoute(app: Express) {
   </div>
 
   <div class="conteudo" style="border:1px solid #e5e7eb;border-radius:4px;padding:16px 18px;margin-top:14px;font-size:11.5px;line-height:1.65;min-height:180px;">
-    ${corpoHtml}
+    ${buildCorpoHtml(emp.nome, emp.cnpj)}
   </div>
 
-  ${assinaturasHtml}
+  ${buildAssinaturasHtml(emp.diretorNome)}
 
   <div style="margin-top:36px;border-top:1px dashed #cbd5e1;padding-top:10px;">
     <div style="font-size:9.5px;color:#64748b;font-style:italic;text-align:center;">
       Declaro que recebi, li e estou ciente do conteúdo do comunicado acima identificado.
     </div>
   </div>
-</div>
+</div>`;
+
+      const html = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"/>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, Helvetica, sans-serif; color: #1f2937; background: #fff; }
+  .conteudo p { margin: 8px 0; }
+  .conteudo ul, .conteudo ol { margin: 8px 0 8px 20px; }
+  .conteudo h1, .conteudo h2, .conteudo h3 { color: #1B2A4A; margin: 12px 0 6px; }
+  .conteudo strong { color: #111827; }
+</style>
+</head>
+<body>
+${empresasDoc.map((emp, i) => paginaHtml(emp, i === empresasDoc.length - 1)).join("\n")}
 </body>
 </html>`;
 

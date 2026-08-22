@@ -8,6 +8,7 @@
  */
 
 import { parseBRL } from "./parseBRL";
+import { dataLimitePagamentoRescisao } from "../../shared/feriados";
 
 export { parseBRL };
 
@@ -548,11 +549,9 @@ export function calcularRescisaoCompleta(params: {
     mediaInsalubridade: mediaInsalubridade.toFixed(2),
     mediaHorasExtras: mediaHorasExtras.toFixed(2),
     baseFerias13: baseFerias13.toFixed(2),
-    dataLimitePagamento: (() => {
-      const dt = new Date(dataFimAviso + 'T00:00:00');
-      dt.setDate(dt.getDate() + 10);
-      return dt.toISOString().split("T")[0];
-    })(),
+    // Rev. 5057 — dias EXTRAS do aviso (Lei 12.506) são indenizados e NÃO
+    // empurram o prazo de pagamento; antecipa p/ dia útil (fds/feriado).
+    dataLimitePagamento: dataLimitePagamentoRescisao(dataDesligamento, dataFimAviso) || dataFimAviso,
   };
 }
 

@@ -36,6 +36,11 @@ const RESULT_STATUS: Record<string, { label: string; color: string; bg: string; 
   pagar_indevido:  { label: "Pagar Indevido",   color: "text-orange-700", bg: "bg-orange-50 border-orange-200",Icon: AlertTriangle,desc: "Na lista do corretor mas não encontrado como ativo no HR" },
   novo:            { label: "Recém-admitido",   color: "text-blue-700",   bg: "bg-blue-50 border-blue-200",    Icon: Clock,        desc: "Admitido há menos de 45 dias — pode estar em carência de inclusão" },
   na_lista_sem_cadastro: { label: "Sem cadastro HR", color: "text-slate-600", bg: "bg-slate-50 border-slate-200", Icon: Info, desc: "Aparece na lista do corretor mas sem funcionário cadastrado" },
+  // Rev. 4989 — statuses do PDF de MOVIMENTAÇÃO (Movimento de Faturas = delta do mês)
+  incluir_mov:       { label: "Incluir (movimentação)",   color: "text-blue-700",   bg: "bg-blue-50 border-blue-200",   Icon: CheckCircle2, desc: "Inclusão no arquivo de movimentação — será criada a cobertura ao confirmar" },
+  cancelar_mov:      { label: "Cancelar (movimentação)",  color: "text-red-700",    bg: "bg-red-50 border-red-200",     Icon: Ban,          desc: "Cancelamento no arquivo de movimentação — a cobertura será cancelada ao confirmar" },
+  mov_sem_cobertura: { label: "Cancelamento s/ cobertura",color: "text-orange-700", bg: "bg-orange-50 border-orange-200",Icon: AlertTriangle,desc: "Cancelamento no arquivo, mas não há cobertura ativa no ERP" },
+  mov_sem_cadastro:  { label: "Sem cadastro no ERP",      color: "text-slate-600",  bg: "bg-slate-50 border-slate-200", Icon: Info,         desc: "Movimentação sem funcionário correspondente no cadastro" },
 };
 
 function fmtDate(d?: string | null) {
@@ -133,15 +138,26 @@ function ResultadoMesDetalhe({ res }: { res: any }) {
           }
           {res.filename && <p className="text-[11px] text-slate-400 truncate max-w-xs">{res.filename}</p>}
         </div>
+        {res.tipoArquivo === "movimentacao" && (
+          <div className="mb-3 text-[11px] px-3 py-2 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-800 font-medium">
+            🔄 Arquivo de <strong>movimentação do mês</strong> (Movimento de Faturas) — só quem está listado é analisado; os demais funcionários ficam intocados (nada de falso "sem seguro").
+          </div>
+        )}
         {/* Estatísticas — clicáveis como filtros */}
         <div className="grid grid-cols-5 gap-3">
-          {[
+          {(res.tipoArquivo === "movimentacao" ? [
+            { label: "Movimentos",        val: res.totalSeguradosCorretora, filtroKey: "todos",         cls: "text-slate-700", bg: "bg-slate-50 border-slate-200",   ring: "ring-slate-400" },
+            { label: "🔵 Inclusões",      val: res.totalInclusoes,          filtroKey: "incluir_mov",   cls: "text-blue-700",  bg: "bg-blue-50 border-blue-100",     ring: "ring-blue-500" },
+            { label: "🔴 Cancelamentos",  val: res.totalCancelamentos,      filtroKey: "cancelar_mov",  cls: "text-red-700",   bg: "bg-red-50 border-red-100",       ring: "ring-red-500" },
+            { label: "✅ Já cobertos",    val: res.totalOk,                 filtroKey: "ok",            cls: "text-green-700", bg: "bg-green-50 border-green-100",   ring: "ring-green-500" },
+            { label: "❓ Sem cadastro",   val: res.totalNaoEncontrados,     filtroKey: "mov_sem_cadastro",cls: "text-slate-600",bg: "bg-slate-50 border-slate-200",  ring: "ring-slate-400" },
+          ] : [
             { label: "Na lista",          val: res.totalSeguradosCorretora, filtroKey: "todos",         cls: "text-slate-700", bg: "bg-slate-50 border-slate-200",   ring: "ring-slate-400" },
             { label: "Funcionários CLT",  val: res.totalAtivosHR,           filtroKey: null,            cls: "text-blue-700",  bg: "bg-blue-50 border-blue-100",     ring: "" },
             { label: "✅ OK",             val: res.totalOk,                 filtroKey: "ok",            cls: "text-green-700", bg: "bg-green-50 border-green-100",   ring: "ring-green-500" },
             { label: "🔴 Sem seguro",     val: res.totalSemSeguro,          filtroKey: "sem_seguro",    cls: "text-red-700",   bg: "bg-red-50 border-red-100",       ring: "ring-red-500" },
             { label: "🟡 Indevido",       val: res.totalPagarIndevido,      filtroKey: "pagar_indevido",cls: "text-orange-700",bg: "bg-orange-50 border-orange-100", ring: "ring-orange-400" },
-          ].map((c, i) => (
+          ]).map((c, i) => (
             <div
               key={i}
               onClick={() => c.filtroKey && setFiltro(c.filtroKey)}
@@ -160,14 +176,21 @@ function ResultadoMesDetalhe({ res }: { res: any }) {
 
       {/* Filtros */}
       <div className="px-6 py-2.5 border-b shrink-0 flex gap-1.5 flex-wrap bg-slate-50">
-        {[
+        {(res.tipoArquivo === "movimentacao" ? [
+          { key: "todos",             label: "Todos",              activeClass: "bg-slate-500 text-white border-slate-500" },
+          { key: "incluir_mov",       label: "Inclusões",          activeClass: "bg-blue-600 text-white border-blue-600" },
+          { key: "cancelar_mov",      label: "Cancelamentos",      activeClass: "bg-red-600 text-white border-red-600" },
+          { key: "ok",                label: "Já cobertos",        activeClass: "bg-green-600 text-white border-green-600" },
+          { key: "mov_sem_cobertura", label: "Canc. s/ cobertura", activeClass: "bg-orange-500 text-white border-orange-500" },
+          { key: "mov_sem_cadastro",  label: "Sem cadastro",       activeClass: "bg-slate-700 text-white border-slate-700" },
+        ] : [
           { key: "divergencias",   label: "Só divergências", activeClass: "bg-slate-700 text-white border-slate-700" },
           { key: "todos",          label: "Todos",            activeClass: "bg-slate-500 text-white border-slate-500" },
           { key: "sem_seguro",     label: "Sem seguro",       activeClass: "bg-red-600 text-white border-red-600" },
           { key: "pagar_indevido", label: "Indevido",         activeClass: "bg-orange-500 text-white border-orange-500" },
           { key: "ok",             label: "OK",               activeClass: "bg-green-600 text-white border-green-600" },
           { key: "novo",           label: "Recém-admitido",   activeClass: "bg-blue-600 text-white border-blue-600" },
-        ].map(op => (
+        ]).map(op => (
           <button key={op.key} onClick={() => setFiltro(op.key)}
             className={cn("text-[11px] px-3 py-1 rounded-full border font-medium transition-colors",
               filtro === op.key ? op.activeClass : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100")}>
@@ -329,7 +352,7 @@ function ImportModal({ open, onClose, companyId, companyIds, onSuccess }: {
     onSuccess: (data) => {
       setConfirmed(true);
       onSuccess();
-      toast.success(`Importação confirmada! ${data.criadas} cobertura(s) criada(s)${data.mantidas > 0 ? `, ${data.mantidas} já ativas.` : "."}`);
+      toast.success(`Importação confirmada! ${data.criadas} cobertura(s) criada(s)${(data as any).canceladas > 0 ? `, ${(data as any).canceladas} cancelada(s)` : ""}${(data as any).reativadas > 0 ? `, ${(data as any).reativadas} reativada(s)` : ""}${data.mantidas > 0 ? `, ${data.mantidas} já ativas.` : "."}`);
     },
     onError: e => toast.error(e.message),
   });
@@ -626,7 +649,7 @@ function ImportModal({ open, onClose, companyId, companyIds, onSuccess }: {
               </Button>
               <Button
                 onClick={handleConfirmar}
-                disabled={confirmarMutation.isPending || !resultados?.some((r: any) => !r.erro && r.resultado?.some((x: any) => x.status === "ok" || x.status === "novo"))}
+                disabled={confirmarMutation.isPending || !resultados?.some((r: any) => !r.erro && r.resultado?.some((x: any) => x.status === "ok" || x.status === "novo" || x.status === "incluir_mov" || x.status === "cancelar_mov"))}
                 className="bg-green-600 hover:bg-green-700 text-white">
                 {confirmarMutation.isPending
                   ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Confirmando...</>

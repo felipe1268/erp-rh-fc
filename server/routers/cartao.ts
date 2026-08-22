@@ -222,8 +222,9 @@ function ativoDeStatus(s: StatusCartao | undefined | null): number {
   return s === "cancelado" || s === "inativo" ? 0 : 1;
 }
 
-// Rev. 4019 — escopo do cartão: 'fc' entra na sugestão automática de melhor
-// cartão em Cotação/OC; 'local' (obra/pessoal/terceiro) NUNCA entra.
+// Escopo do cartão: 'fc' é corporativo e 'local' pode ser associado a obra,
+// pessoa ou terceiro. Ambos podem ser escolhidos em Compras quando estiverem
+// ativos; o escopo é apenas classificatório neste fluxo.
 const ESCOPO_CARTAO = ["fc", "local"] as const;
 
 // Rev. 4589 — FINALIDADE de uso do cartão (separação pedida pelo usuário):
@@ -231,10 +232,10 @@ const ESCOPO_CARTAO = ["fc", "local"] as const;
 // 'corporativo'  → viagens/refeições/escritório — NUNCA aparece em Compras;
 // 'obra'         → dedicado a uma obra — NUNCA aparece em Compras;
 // 'geral'        → sem restrição (default/legado) — aparece em Compras.
-// Poka-Yoke por design: em resumoParaCompra o comprador NEM VÊ cartões
-// corporativo/obra — impossível escolher o cartão errado.
+// Rev. 5054 — a pedido do user: resumoParaCompra mostra TODOS os cartões ativos
+// (qualquer finalidade — geral, recorrentes, corporativo e obra). A finalidade
+// continua no retorno pra UI exibir como badge informativo.
 const FINALIDADE_CARTAO = ["recorrentes", "corporativo", "obra", "geral"] as const;
-const FINALIDADES_COMPRA = ["recorrentes", "geral"];
 
 // Dado dia de fechamento/vencimento e uma data de referência (hoje), calcula quantos
 // dias de "float" uma compra feita HOJE tem até o vencimento da fatura em que ela cai.
@@ -640,7 +641,7 @@ export const cartaoRouter = router({
   // soma das faturas com saldo em aberto (total > pagamentos) — aproximação
   // transparente, já que não existe status explícito de fatura paga/aberta.
   // Rev. 4019 — Item novo do docx: sugerir automaticamente o MELHOR cartão FC
-  // (nunca "local") considerando (1) melhor data de compra em relação ao ciclo
+  // considerando todos os cartões ativos, (1) melhor data de compra em relação ao ciclo
   // de fechamento/vencimento (mais dias de float) e (2) limite disponível ≥
   // valor da compra, quando informado. Usuário sempre pode sobrepor a sugestão.
   resumoParaCompra: protectedProcedure.input(z.object({
@@ -682,8 +683,6 @@ export const cartaoRouter = router({
               ), 0) AS "comprometidoOc"
          FROM financial_cartoes c
         WHERE c.company_id=$1 AND c.excluido_em IS NULL AND c.ativo=1
-          AND COALESCE(c.escopo, 'fc') = 'fc'
-          AND COALESCE(c.finalidade, 'geral') IN (${FINALIDADES_COMPRA.map((f) => `'${f}'`).join(", ")})
           AND COALESCE(c.status, 'ativo') = 'ativo'
         ORDER BY c.banco NULLS LAST, c.final4 NULLS LAST, c.id DESC`,
       [input.companyId]);

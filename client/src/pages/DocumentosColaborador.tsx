@@ -23,13 +23,19 @@ import DOMPurify from "dompurify";
 import {
   Loader2, FileText, PenLine, Download, Search, CheckCircle2, AlertTriangle,
   Circle, Plus, Trash2, ShieldCheck, FolderOpen, Layers, Send, ArrowLeft, Eye,
+  Building2, Ban,
 } from "lucide-react";
 import DashboardLayout from "@/components/DashboardLayout";
 import RhDocAssinatura from "@/components/RhDocAssinatura";
 import DependentesCard from "@/components/DependentesCard";
 import FCSignSendDialog from "@/components/FCSignSendDialog";
+import EmpregadorAssinaturaPendentes from "@/components/EmpregadorAssinaturaPendentes";
 import { PersonPhoto } from "@/components/PersonPhoto";
-import { RH_DOC_CAMPOS_EXTRAS, RH_DOCS_EVENTUAIS, getTemplateMeta, type CampoExtraDef } from "@shared/documentTemplates";
+import { RH_DOC_CAMPOS_EXTRAS, RH_DOCS_EVENTUAIS, getTemplateMeta, isCustomTipo, type CampoExtraDef } from "@shared/documentTemplates";
+import { useAuth } from "@/_core/hooks/useAuth";
+
+// Rev. 5048 — item entregue (documentos custom, ex.: Termo de Recebimento)
+type ItemEntregue = { descricao: string; qtd: string; estado: string };
 
 function fmtDateTime(v?: string | null): string {
   if (!v) return "";
@@ -48,6 +54,8 @@ function pctColor(p: number) {
 
 export default function DocumentosColaborador() {
   const [, setLocation] = useLocation();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin" || user?.role === "admin_master";
   const { selectedCompanyId, getCompanyIdsForQuery } = useCompany();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) || 0 : 0;
   const companyIds = getCompanyIdsForQuery();
@@ -56,14 +64,19 @@ export default function DocumentosColaborador() {
   const [busca, setBusca] = useState("");
   const [empSelId, setEmpSelId] = useState<number | null>(null);
   const [docAberto, setDocAberto] = useState<number | null>(null);
-  const [assinandoDoc, setAssinandoDoc] = useState<{ id: number; titulo: string } | null>(null);
+  const [assinandoDoc, setAssinandoDoc] = useState<{ id: number; titulo: string; tipo?: string } | null>(null);
   const [gerandoTipo, setGerandoTipo] = useState<string | null>(null);
   // Rev. 4672 — dialog de campos extras (contrato CLT, férias, folha, aditivo…)
-  const [extrasDoc, setExtrasDoc] = useState<{ tipo: string; titulo: string; campos: CampoExtraDef[] } | null>(null);
+  const [extrasDoc, setExtrasDoc] = useState<{ tipo: string; titulo: string; campos: CampoExtraDef[]; custom?: boolean } | null>(null);
   const [extrasVals, setExtrasVals] = useState<Record<string, string>>({});
+  // Rev. 5048 — itens entregues (documento custom): tabela dinâmica
+  const [extrasItens, setExtrasItens] = useState<ItemEntregue[]>([]);
   // Rev. 4673 — seleção p/ geração em lote + progresso
   const [selTipos, setSelTipos] = useState<Set<string>>(new Set());
   const [lote, setLote] = useState<{ done: number; total: number; atual: string } | null>(null);
+  // N/A em lote
+  const [naConfirmOpen, setNaConfirmOpen] = useState(false);
+  const [naLote, setNaLote] = useState<{ done: number; total: number } | null>(null);
   // Rev. 4673 — FCSign
   const [fcsignDoc, setFcsignDoc] = useState<{ id: number; titulo: string; html: string } | null>(null);
   // Rev. 4675 — olhinho: pré-visualização SEM salvar
@@ -78,10 +91,12 @@ export default function DocumentosColaborador() {
   const funcionarios = (geral?.funcionarios ?? []) as any[];
   const totalModelos = (geral?.modelos ?? []).length || 1;
   const pctDe = (f: any) => {
-    const assinados = Object.values(f.docs || {}).filter((d: any) => d.situacao === "assinado").length;
+    const assinados = Object.values(f.docs || {}).filter((d: any) => d.situacao === "assinado" || d.situacao === "nao_aplicavel").length;
     return Math.round((assinados / totalModelos) * 100);
   };
   const empSel = useMemo(() => funcionarios.find(f => f.id === empSelId) || null, [funcionarios, empSelId]);
+  // Co-assinatura do empregador: respeita flag do backend (com fallback a isAdmin)
+  const canManageEmployerSignature: boolean = isAdmin && ((geral as any)?.canManageEmployerSignature ?? isAdmin);
 
   // Rev. 4671 — pré-seleção via ?emp=<id>
   useEffect(() => {
@@ -137,6 +152,11 @@ export default function DocumentosColaborador() {
     onSuccess: () => { toast.success("Documento excluído."); refetchTudo(); },
     onError: (e) => toast.error(e.message),
   });
+  // Rev. 4978 — N/A: colaborador já possui o documento assinado fisicamente
+  const naMut = trpc.rhDocumentos.marcarNaoAplicavel.useMutation({
+    onSuccess: () => { toast.success("Marcado como N/A (não se aplica)."); refetchTudo(); },
+    onError: (e) => toast.error(e.message),
+  });
 
   const filtrados = useMemo(() => {
     const q = busca.trim().toLowerCase();
@@ -146,18 +166,33 @@ export default function DocumentosColaborador() {
   // Rev. 4672 — geração unitária: tipos com campos extras abrem dialog antes
   const iniciarGeracao = (tipo: string, titulo: string) => {
     const campos = (RH_DOC_CAMPOS_EXTRAS as any)[tipo] as CampoExtraDef[] | undefined;
-    if (campos?.length) { setExtrasVals({}); setExtrasDoc({ tipo, titulo, campos }); return; }
+    if (campos?.length) { setExtrasVals({}); setExtrasItens([]); setExtrasDoc({ tipo, titulo, campos }); return; }
+    // Rev. 5048 — documento CUSTOM: abre dialog com itens entregues + observações
+    if (isCustomTipo(tipo)) {
+      setExtrasVals({});
+      setExtrasItens([{ descricao: "", qtd: "1", estado: "Novo" }]);
+      setExtrasDoc({ tipo, titulo, custom: true, campos: [{ chave: "observacoes", rotulo: "Observações (opcional)", obrigatorio: false, placeholder: "Detalhes adicionais sobre a entrega, condições especiais, etc." } as CampoExtraDef] });
+      return;
+    }
     setGerandoTipo(tipo);
     gerarMut.mutate({ companyId: empresaDoSel, employeeId: empSelId!, tipo: tipo as any });
+  };
+  // Rev. 5048 — extras compartilhados entre gerar e pré-visualizar
+  const montarExtras = (): Record<string, string> => {
+    const extras: Record<string, string> = {};
+    for (const c of extrasDoc?.campos || []) { const v = (extrasVals[c.chave] || "").trim(); if (v) extras[c.chave] = v; }
+    if (extrasDoc?.custom) {
+      const itens = extrasItens.filter(i => i.descricao.trim());
+      if (itens.length) extras.itensEntreguesJson = JSON.stringify(itens.map(i => ({ descricao: i.descricao.trim(), qtd: i.qtd.trim() || "1", estado: i.estado.trim() })));
+    }
+    return extras;
   };
   const confirmarGeracao = () => {
     if (!extrasDoc || !empSel) return;
     const faltando = extrasDoc.campos.filter(c => c.obrigatorio && !(extrasVals[c.chave] || "").trim());
     if (faltando.length) { toast.error(`Preencha: ${faltando.map(f => f.rotulo).join(", ")}`); return; }
-    const extras: Record<string, string> = {};
-    for (const c of extrasDoc.campos) { const v = (extrasVals[c.chave] || "").trim(); if (v) extras[c.chave] = v; }
     setGerandoTipo(extrasDoc.tipo);
-    gerarMut.mutate({ companyId: empresaDoSel, employeeId: empSel.id, tipo: extrasDoc.tipo as any, extras });
+    gerarMut.mutate({ companyId: empresaDoSel, employeeId: empSel.id, tipo: extrasDoc.tipo as any, extras: montarExtras() });
     setExtrasDoc(null);
   };
 
@@ -168,9 +203,18 @@ export default function DocumentosColaborador() {
     n.has(tipo) ? n.delete(tipo) : n.add(tipo);
     return n;
   });
+  const todosFaltantesSelecionados = faltantes.length > 0 && faltantes.every((m: any) => selTipos.has(m.tipo));
+  const selecionarTodosFaltantes = (checked: boolean) => {
+    setSelTipos(checked ? new Set(faltantes.map((m: any) => m.tipo)) : new Set());
+  };
   const gerarLote = async () => {
     if (!empSel || selTipos.size === 0 || lote) return;
-    const tipos = (checklist?.modelos ?? []).filter((m: any) => selTipos.has(m.tipo)).map((m: any) => ({ tipo: m.tipo, titulo: m.titulo }));
+    // Rev. 5048 — documentos custom ficam FORA do lote (precisam dos itens
+    // entregues/observações digitados no dialog próprio)
+    const pulados = (checklist?.modelos ?? []).filter((m: any) => selTipos.has(m.tipo) && isCustomTipo(m.tipo));
+    if (pulados.length) toast.info(`Gere individualmente (pedem itens/observações): ${pulados.map((m: any) => m.titulo).join(", ")}`);
+    const tipos = (checklist?.modelos ?? []).filter((m: any) => selTipos.has(m.tipo) && !isCustomTipo(m.tipo)).map((m: any) => ({ tipo: m.tipo, titulo: m.titulo }));
+    if (tipos.length === 0) { setLote(null); return; }
     let ok = 0, falhas: string[] = [];
     setLote({ done: 0, total: tipos.length, atual: tipos[0]?.titulo || "" });
     for (let i = 0; i < tipos.length; i++) {
@@ -191,12 +235,63 @@ export default function DocumentosColaborador() {
   };
   const lotePct = lote ? Math.round((lote.done / Math.max(lote.total, 1)) * 100) : 0;
 
-  const pctSel = checklist ? Math.round(((checklist.modelos as any[]).filter(m => m.situacao === "assinado").length / Math.max((checklist.modelos as any[]).length, 1)) * 100) : 0;
+  // Marca N/A em lote para todos os itens selecionados
+  const marcarNALote = async () => {
+    if (!empSel || selTipos.size === 0 || naLote) return;
+    const alvos = (checklist?.modelos ?? []).filter((m: any) => selTipos.has(m.tipo) && m.situacao === "faltando");
+    if (alvos.length === 0) { setNaConfirmOpen(false); return; }
+    setNaConfirmOpen(false);
+    setNaLote({ done: 0, total: alvos.length });
+    let ok = 0;
+    const falhas: string[] = [];
+    for (let i = 0; i < alvos.length; i++) {
+      setNaLote({ done: i, total: alvos.length });
+      try {
+        await naMut.mutateAsync({ companyId: empresaDoSel, employeeId: empSel.id, tipo: alvos[i].tipo as any });
+        ok++;
+      } catch (e: any) {
+        falhas.push(alvos[i].titulo);
+      }
+    }
+    setNaLote({ done: alvos.length, total: alvos.length });
+    refetchTudo();
+    setSelTipos(new Set());
+    setTimeout(() => setNaLote(null), 1200);
+    if (falhas.length) toast.error(`${ok} marcado(s) como N/A · falhas: ${falhas.join(", ")}`);
+    else toast.success(`${ok} documento(s) marcado(s) como N/A.`);
+  };
+
+  // Rev. 4978 — N/A conta como resolvido no % (documento já assinado fisicamente)
+  const pctSel = checklist ? Math.round(((checklist.modelos as any[]).filter(m => m.situacao === "assinado" || m.situacao === "nao_aplicavel").length / Math.max((checklist.modelos as any[]).length, 1)) * 100) : 0;
 
   const sit = (s: string) =>
     s === "assinado" ? <Badge className="bg-green-100 text-green-800 border-green-300 text-[10px]">Assinado</Badge>
     : s === "gerado" ? <Badge className="bg-amber-100 text-amber-800 border-amber-300 text-[10px]">Aguardando assinatura</Badge>
+    : s === "nao_aplicavel" ? <Badge className="bg-slate-200 text-slate-600 border-slate-300 text-[10px]">N/A</Badge>
     : <Badge variant="outline" className="text-[10px] text-red-600 border-red-300">Faltando</Badge>;
+
+  // Badges para co-assinatura do empregador — backwards-compatible.
+  // Campos canônicos: empregadorAssinadoEm (truthy = assinado), empregadorModo.
+  const sitEmpregador = (d: any) => {
+    if (!d) return null;
+    if (d.empregadorAssinadoEm) {
+      return (
+        <Badge className="bg-blue-100 text-blue-800 border-blue-200 text-[10px] gap-1">
+          <Building2 className="w-2.5 h-2.5" /> Empregador assinou
+        </Badge>
+      );
+    }
+    // colaborador assinou, doc é elegível e ainda sem data do empregador = aguardando
+    const elegivel = d.employerSignatureRequired ?? d.empregadorElegivel ?? false;
+    if (d.status === "assinado" && !d.empregadorAssinadoEm && elegivel) {
+      return (
+        <Badge className="bg-slate-100 text-slate-600 border-slate-300 text-[10px] gap-1">
+          <Building2 className="w-2.5 h-2.5" /> Aguarda empregador
+        </Badge>
+      );
+    }
+    return null;
+  };
 
   return (
     <DashboardLayout>
@@ -257,6 +352,11 @@ export default function DocumentosColaborador() {
 
         {/* Painel do funcionário */}
         <div className="space-y-4">
+          {/* Fila de co-assinatura do empregador — apenas para admins autorizados */}
+          {canManageEmployerSignature && companyId > 0 && (
+            <EmpregadorAssinaturaPendentes companyId={companyId} />
+          )}
+
           {!empSel ? (
             <Card><CardContent className="py-16 text-center text-sm text-muted-foreground">Selecione um funcionário para ver o checklist documental.</CardContent></Card>
           ) : loadingCheck || !checklist ? (
@@ -284,20 +384,35 @@ export default function DocumentosColaborador() {
                 {/* Barra de ações do lote */}
                 <CardContent className="pt-3 space-y-1.5">
                   <div className="flex flex-wrap items-center gap-2 pb-1">
-                    <Button variant="outline" size="sm" className="h-7 px-2 text-[10px] gap-1"
-                      disabled={faltantes.length === 0 || !!lote}
-                      onClick={() => setSelTipos(new Set(faltantes.map((m: any) => m.tipo)))}>
-                      <Layers className="h-3 w-3" /> Selecionar faltantes ({faltantes.length})
-                    </Button>
-                    {selTipos.size > 0 && !lote ? (
+                    <label className="flex items-center gap-1.5 h-7 px-2 rounded-md border text-[10px] cursor-pointer hover:bg-slate-50 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50">
+                      <Checkbox
+                        checked={todosFaltantesSelecionados ? true : selTipos.size > 0 ? "indeterminate" : false}
+                        onCheckedChange={(checked) => selecionarTodosFaltantes(checked === true || checked === "indeterminate")}
+                        disabled={faltantes.length === 0 || !!lote}
+                        aria-label="Selecionar todos os documentos faltantes"
+                        className="h-3.5 w-3.5 data-[state=checked]:bg-[#EE9803] data-[state=checked]:border-[#EE9803] data-[state=indeterminate]:bg-[#EE9803] data-[state=indeterminate]:border-[#EE9803]"
+                      />
+                      <Layers className="h-3 w-3" />
+                      <span>Selecionar todos ({faltantes.length})</span>
+                    </label>
+                    {selTipos.size > 0 && !lote && !naLote ? (
                       <Button variant="ghost" size="sm" className="h-7 px-2 text-[10px]" onClick={() => setSelTipos(new Set())}>Limpar</Button>
                     ) : null}
                     <div className="flex-1" />
+                    {/* N/A em lote — marca todos os selecionados como não se aplica */}
+                    <Button size="sm" variant="outline" className="h-7 px-3 text-[10px] gap-1 border-slate-300 text-slate-600 hover:bg-slate-50"
+                      disabled={selTipos.size === 0 || !!lote || !!naLote}
+                      onClick={() => setNaConfirmOpen(true)}>
+                      {naLote ? <Loader2 className="h-3 w-3 animate-spin" /> : <Ban className="h-3 w-3" />}
+                      {naLote
+                        ? `N/A… ${naLote.done}/${naLote.total}`
+                        : `N/A (${selTipos.size})`}
+                    </Button>
                     <Button size="sm" className="h-7 px-3 text-[10px] gap-1 bg-[#EE9803] hover:bg-[#EE9803]/90 text-white"
-                      disabled={selTipos.size === 0 || !!lote}
+                      disabled={selTipos.size === 0 || !!lote || !!naLote}
                       onClick={gerarLote}>
                       {lote ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
-                      Gerar selecionados ({selTipos.size})
+                      {todosFaltantesSelecionados ? `Gerar todos (${selTipos.size})` : `Gerar selecionados (${selTipos.size})`}
                     </Button>
                   </div>
 
@@ -339,14 +454,30 @@ export default function DocumentosColaborador() {
                           onClick={() => setPreviewReq({ tipo: m.tipo, titulo: m.titulo })}>
                           <Eye className="h-3.5 w-3.5" />
                         </Button>
-                        {m.docId ? (
+                        {m.situacao === "nao_aplicavel" ? (
+                          /* Rev. 4978 — desfazer o N/A: exclui o marcador e volta a "Faltando" */
+                          <Button variant="ghost" size="sm" className="h-6 px-2 text-[10px] text-slate-500"
+                            disabled={excluirMut.isPending}
+                            onClick={() => { if (m.docId && confirm(`Desfazer o N/A de "${m.titulo}"? O documento volta a constar como pendente.`)) excluirMut.mutate({ id: m.docId }); }}>
+                            Desfazer
+                          </Button>
+                        ) : m.docId ? (
                           <Button variant="ghost" size="sm" className="h-6 px-2 text-[10px]" onClick={() => setDocAberto(m.docId)}>Abrir</Button>
                         ) : (
-                          <Button variant="outline" size="sm" className="h-6 px-2 text-[10px] gap-1"
-                            disabled={(gerarMut.isPending && gerandoTipo === m.tipo) || !!lote}
-                            onClick={() => iniciarGeracao(m.tipo, m.titulo)}>
-                            {gerarMut.isPending && gerandoTipo === m.tipo ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />} Gerar
-                          </Button>
+                          <>
+                            <Button variant="outline" size="sm" className="h-6 px-2 text-[10px] gap-1"
+                              disabled={(gerarMut.isPending && gerandoTipo === m.tipo) || !!lote}
+                              onClick={() => iniciarGeracao(m.tipo, m.titulo)}>
+                              {gerarMut.isPending && gerandoTipo === m.tipo ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />} Gerar
+                            </Button>
+                            {/* Rev. 4978 — N/A: já possui esse documento assinado (coleta física anterior) */}
+                            <Button variant="ghost" size="sm" className="h-6 px-2 text-[10px] text-slate-500 hover:text-slate-700"
+                              title="Não se aplica: o colaborador já possui este documento assinado — não precisa colher de novo"
+                              disabled={naMut.isPending || !!lote}
+                              onClick={() => { if (confirm(`Marcar "${m.titulo}" como N/A (não se aplica)?\n\nUse quando o colaborador já possui este documento assinado — ele deixa de contar como pendente.`)) naMut.mutate({ companyId: empresaDoSel, employeeId: empSel.id, tipo: m.tipo as any }); }}>
+                              N/A
+                            </Button>
+                          </>
                         )}
                       </div>
                     </div>
@@ -422,11 +553,13 @@ export default function DocumentosColaborador() {
                         <div className="min-w-0">
                           <span className="text-xs font-medium block truncate" title={d.titulo}>{d.titulo} {d.codigo ? <span className="text-muted-foreground">({d.codigo})</span> : null}</span>
                           <span className="text-[10px] text-muted-foreground">
-                            Gerado em {fmtDateTime(d.createdAt)}{d.criadoPorNome ? ` por ${d.criadoPorNome}` : ""}{d.assinadoEm ? ` · Assinado em ${fmtDateTime(d.assinadoEm)}` : ""}
+                            Gerado em {fmtDateTime(d.createdAt)}{d.criadoPorNome ? ` por ${d.criadoPorNome}` : ""}{d.assinadoEm ? ` · Col. assinou em ${fmtDateTime(d.assinadoEm)}` : ""}
+                            {d.empregadorAssinadoEm ? ` · Empregador assinou em ${fmtDateTime(d.empregadorAssinadoEm)}` : ""}
                           </span>
                         </div>
                         <div className="flex items-center gap-1.5 shrink-0">
                           {sit(d.status)}
+                          {sitEmpregador(d)}
                           <Button variant="ghost" size="sm" className="h-6 px-2 text-[10px]" onClick={() => setDocAberto(d.id)}>Abrir</Button>
                         </div>
                       </div>
@@ -439,11 +572,70 @@ export default function DocumentosColaborador() {
         </div>
       </div>
 
+      {/* Dialog confirmação N/A em lote */}
+      <Dialog open={naConfirmOpen} onOpenChange={(o) => { if (!o) setNaConfirmOpen(false); }}>
+        <DialogContent className="max-w-sm w-[92vw]" aria-describedby={undefined}>
+          <DialogHeader>
+            <DialogTitle className="text-base flex items-center gap-2">
+              <Ban className="h-4 w-4 text-slate-500" />
+              Marcar {selTipos.size} documento(s) como N/A?
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Use quando o colaborador já possui estes documentos assinados fisicamente — eles deixam de contar como pendentes.
+          </p>
+          <div className="max-h-40 overflow-y-auto border rounded-md px-3 py-2 text-xs space-y-1 bg-slate-50">
+            {(checklist?.modelos ?? [])
+              .filter((m: any) => selTipos.has(m.tipo) && m.situacao === "faltando")
+              .map((m: any) => <div key={m.tipo} className="text-slate-700">• {m.titulo}</div>)}
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => setNaConfirmOpen(false)}>Cancelar</Button>
+            <Button size="sm" onClick={marcarNALote} className="gap-1.5">
+              <Ban className="h-3.5 w-3.5" /> Confirmar N/A
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Rev. 4672 — Dialog de campos extras antes de gerar */}
       <Dialog open={!!extrasDoc} onOpenChange={(o) => { if (!o) setExtrasDoc(null); }}>
         <DialogContent className="max-w-md w-[96vw] max-h-[92dvh] overflow-y-auto" aria-describedby={undefined}>
           <DialogHeader><DialogTitle className="text-base">{extrasDoc?.titulo}</DialogTitle></DialogHeader>
           <div className="space-y-2 text-xs">
+            {/* Rev. 5048 — documento custom: itens entregues (tabela dinâmica) */}
+            {extrasDoc?.custom && (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="font-medium">Itens entregues</label>
+                  <Button type="button" variant="outline" size="sm" className="h-6 px-2 text-[10px] gap-1"
+                    onClick={() => setExtrasItens(v => [...v, { descricao: "", qtd: "1", estado: "Novo" }])}>
+                    <Plus className="h-3 w-3" /> Adicionar item
+                  </Button>
+                </div>
+                {extrasItens.map((it, idx) => (
+                  <div key={idx} className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-muted-foreground w-4 shrink-0">#{idx + 1}</span>
+                    <Input className="h-8 text-xs flex-1" placeholder="Ex: Notebook Dell Latitude 7420, S/N ABC12345"
+                      value={it.descricao}
+                      onChange={e => setExtrasItens(v => v.map((x, i) => i === idx ? { ...x, descricao: e.target.value } : x))} />
+                    <Input className="h-8 text-xs w-14 shrink-0" placeholder="Qtd."
+                      value={it.qtd}
+                      onChange={e => setExtrasItens(v => v.map((x, i) => i === idx ? { ...x, qtd: e.target.value } : x))} />
+                    <Input className="h-8 text-xs w-24 shrink-0" placeholder="Estado"
+                      value={it.estado}
+                      onChange={e => setExtrasItens(v => v.map((x, i) => i === idx ? { ...x, estado: e.target.value } : x))} />
+                    {extrasItens.length > 1 && (
+                      <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0 shrink-0 text-red-500"
+                        onClick={() => setExtrasItens(v => v.filter((_, i) => i !== idx))}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+                <p className="text-[10px] text-muted-foreground">Os itens entram na tabela "Relação específica dos itens entregues" do documento.</p>
+              </div>
+            )}
             {extrasDoc?.campos.map(c => (
               <div key={c.chave}>
                 <label className="font-medium">{c.rotulo}{c.obrigatorio ? " *" : ""}</label>
@@ -458,7 +650,7 @@ export default function DocumentosColaborador() {
             <Button variant="outline" size="sm" onClick={() => setExtrasDoc(null)}>Cancelar</Button>
             {/* Rev. 4675 — olhinho também aqui: vê com os valores digitados */}
             <Button variant="outline" size="sm" className="gap-1"
-              onClick={() => { if (extrasDoc) setPreviewReq({ tipo: extrasDoc.tipo, titulo: extrasDoc.titulo, extras: { ...extrasVals } }); }}>
+              onClick={() => { if (extrasDoc) setPreviewReq({ tipo: extrasDoc.tipo, titulo: extrasDoc.titulo, extras: montarExtras() }); }}>
               <Eye className="h-3.5 w-3.5" /> Pré-visualizar
             </Button>
             <Button size="sm" className="bg-[#0A1E3C] hover:bg-[#0A1E3C]/90" disabled={gerarMut.isPending} onClick={confirmarGeracao}>
@@ -490,7 +682,18 @@ export default function DocumentosColaborador() {
             {previewReq ? (
               <Button size="sm" className="gap-1 bg-[#0A1E3C] hover:bg-[#0A1E3C]/90"
                 disabled={gerarMut.isPending}
-                onClick={() => { const p = previewReq; setPreviewReq(null); iniciarGeracao(p.tipo, p.titulo); }}>
+                onClick={() => {
+                  const p = previewReq; setPreviewReq(null);
+                  // Rev. 5048 — se veio do dialog de campos extras, gera com os
+                  // MESMOS valores pré-visualizados (não reabre em branco)
+                  if (p.extras && Object.keys(p.extras).length && empSel) {
+                    setGerandoTipo(p.tipo);
+                    gerarMut.mutate({ companyId: empresaDoSel, employeeId: empSel.id, tipo: p.tipo as any, extras: p.extras });
+                    setExtrasDoc(null);
+                    return;
+                  }
+                  iniciarGeracao(p.tipo, p.titulo);
+                }}>
                 <Plus className="h-3.5 w-3.5" /> Gerar este documento
               </Button>
             ) : null}
@@ -519,12 +722,49 @@ export default function DocumentosColaborador() {
               />
 
               {docDetalhe.status === "assinado" ? (
-                <div className="rounded-lg border px-3 py-2 text-[11px]">
-                  <span className="inline-block text-green-700 border border-green-600 rounded px-1.5 py-0.5 font-bold text-[10px]">✓ ASSINADO DIGITALMENTE</span>
-                  <span className="block text-muted-foreground mt-1">
-                    {fmtDateTime(docDetalhe.assinadoEm)}{docDetalhe.assinaturaIp ? ` · IP ${docDetalhe.assinaturaIp}` : ""}
-                    {docDetalhe.assinaturaHash ? ` · SHA-256 ${String(docDetalhe.assinaturaHash).slice(0, 16)}…` : ""}
-                  </span>
+                <div className="rounded-lg border px-3 py-2 text-[11px] space-y-1.5">
+                  {/* Assinatura do colaborador */}
+                  <div>
+                    <span className="inline-block text-green-700 border border-green-600 rounded px-1.5 py-0.5 font-bold text-[10px]">✓ ASSINADO DIGITALMENTE (COLABORADOR)</span>
+                    <span className="block text-muted-foreground mt-0.5">
+                      {fmtDateTime(docDetalhe.assinadoEm)}{(docDetalhe as any).assinaturaIp ? ` · IP ${(docDetalhe as any).assinaturaIp}` : ""}
+                      {(docDetalhe as any).assinaturaHash ? ` · SHA-256 ${String((docDetalhe as any).assinaturaHash).slice(0, 16)}…` : ""}
+                    </span>
+                  </div>
+                  {/* Co-assinatura do empregador — campos canônicos:
+                      empregadorAssinadoEm, empregadorSocioNome (signatário legal),
+                      empregadorOperadorNome (quem operou/confirmou), empregadorModo */}
+                  {(() => {
+                    const dd = docDetalhe as any;
+                    if (dd.empregadorAssinadoEm) {
+                      const socioNome = dd.empregadorSocioNome;
+                      const operadorNome = dd.empregadorOperadorNome;
+                      return (
+                        <div>
+                          <span className="inline-flex items-center gap-1 text-blue-700 border border-blue-500 rounded px-1.5 py-0.5 font-bold text-[10px]">
+                            <Building2 className="w-2.5 h-2.5" /> ✓ CO-ASSINADO PELO EMPREGADOR
+                          </span>
+                          <span className="block text-muted-foreground mt-0.5">
+                            {fmtDateTime(dd.empregadorAssinadoEm)}
+                            {socioNome ? ` · signatário: ${socioNome}` : ""}
+                            {operadorNome && operadorNome !== socioNome
+                              ? ` · operado por: ${operadorNome}` : ""}
+                            {dd.empregadorModo ? ` · modo: ${dd.empregadorModo}` : ""}
+                          </span>
+                        </div>
+                      );
+                    }
+                    const elegivel = dd.employerSignatureRequired ?? dd.empregadorElegivel ?? false;
+                    if (dd.status === "assinado" && elegivel) {
+                      return (
+                        <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
+                          <Building2 className="w-3 h-3 text-blue-400" />
+                          Aguardando co-assinatura do empregador
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
                 </div>
               ) : null}
 
@@ -540,7 +780,7 @@ export default function DocumentosColaborador() {
                 {docDetalhe.status !== "assinado" ? (
                   <>
                     <Button variant="outline" size="sm" className="gap-1 border-[#0A1E3C] text-[#0A1E3C]"
-                      onClick={() => setAssinandoDoc({ id: docDetalhe.id, titulo: docDetalhe.titulo })}>
+                      onClick={() => setAssinandoDoc({ id: docDetalhe.id, titulo: docDetalhe.titulo, tipo: (docDetalhe as any).tipo })}>
                       <PenLine className="h-3.5 w-3.5" /> Assinar agora
                     </Button>
                     <Button size="sm" className="gap-1 bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 text-white"
@@ -577,11 +817,17 @@ export default function DocumentosColaborador() {
 
       {/* Overlay de assinatura presencial (pad) */}
       {assinandoDoc && empSel ? (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4 overflow-y-auto">
+        <div
+          // pointer-events-auto: o Dialog (Radix) atrás seta pointer-events:none
+          // no <body>; sem isso o pad fica 100% travado (mouse e touch).
+          className="pointer-events-auto fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4 overflow-y-auto overscroll-contain"
+          onWheel={(e) => e.stopPropagation()}
+        >
           <div className="max-w-lg w-full my-auto">
             <RhDocAssinatura
               docId={assinandoDoc.id}
               docTitulo={assinandoDoc.titulo}
+              docTipo={(assinandoDoc as any).tipo}
               employeeName={empSel.nomeCompleto}
               onComplete={() => { setAssinandoDoc(null); refetchTudo(); }}
               onCancel={() => setAssinandoDoc(null)}

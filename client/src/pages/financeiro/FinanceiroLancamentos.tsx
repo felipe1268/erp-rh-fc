@@ -221,6 +221,11 @@ const INITIAL_FORM = {
   status: "a_pagar",
   frequencia: "mensal",
   diaVencimento: "5",
+  // Rev. 5124 — data limite da recorrência (opcional; vazio = sem fim)
+  dataLimite: "",
+  // Rev. 5142 — primeiro vencimento da recorrência (padrão: hoje, para a
+  // parcela do mês corrente não ser pulada)
+  primeiroVencimento: new Date().toISOString().split("T")[0],
   fornecedorNome: "",
   // Rev. 2693 — Transferência entre contas (origem → destino)
   contaBancariaOrigemId: "",
@@ -761,6 +766,8 @@ export default function FinanceiroLancamentos() {
       obraNome: item.obraNome ?? "",
       frequencia: item.frequencia ?? "mensal",
       diaVencimento: String(item.diaVencimento ?? "5"),
+      dataLimite: item.dataLimite ? String(item.dataLimite).slice(0, 10) : "",
+      primeiroVencimento: item.proximoVencimento ? String(item.proximoVencimento).slice(0, 10) : "",
       formaPagamento: item.formaPagamento ?? "",
       fornecedorNome: item.fornecedorNome ?? "",
       observacoes: item.observacoes ?? "",
@@ -917,6 +924,9 @@ export default function FinanceiroLancamentos() {
         obraNome: form.obraNome || undefined,
         frequencia: form.frequencia,
         diaVencimento: parseInt(form.diaVencimento) || 5,
+        dataLimite: form.dataLimite || null,
+        // Rev. 5142 — primeira parcela começa na data escolhida (inclusive mês corrente)
+        primeiroVencimento: form.primeiroVencimento || undefined,
         formaPagamento: form.formaPagamento || undefined,
         fornecedorNome: form.fornecedorNome || undefined,
         observacoes: form.observacoes || undefined,
@@ -1898,6 +1908,60 @@ export default function FinanceiroLancamentos() {
                         <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-gray-400">do mês</span>
                       </div>
                     </div>
+                    {/* Rev. 5142 — primeiro vencimento explícito (inclui o mês corrente) */}
+                    <div>
+                      <p className="text-[11px] text-gray-400 mb-1">Primeiro vencimento — 1ª parcela nesta data</p>
+                      <Input
+                        type="date"
+                        value={form.primeiroVencimento}
+                        onChange={e => {
+                          const v = e.target.value;
+                          setForm(f => ({
+                            ...f,
+                            primeiroVencimento: v,
+                            // sincroniza o "todo dia" com o dia escolhido
+                            diaVencimento: v ? String(Number(v.slice(8, 10))) : f.diaVencimento,
+                          }));
+                        }}
+                        className="h-9"
+                      />
+                    </div>
+                    <div>
+                      <p className="text-[11px] text-gray-400 mb-1">Data limite (opcional) — última parcela até esta data</p>
+                      <Input type="date" value={form.dataLimite} onChange={e => setForm(f => ({ ...f, dataLimite: e.target.value }))} className="h-9" />
+                    </div>
+                    {/* Rev. 5142 — resumo: primeira e última parcela do parcelamento */}
+                    {form.primeiroVencimento && (() => {
+                      const addFreq = (d: Date) => {
+                        const n = new Date(d);
+                        if (form.frequencia === "mensal") n.setMonth(n.getMonth() + 1);
+                        else if (form.frequencia === "quinzenal") n.setDate(n.getDate() + 15);
+                        else if (form.frequencia === "semanal") n.setDate(n.getDate() + 7);
+                        else if (form.frequencia === "trimestral") n.setMonth(n.getMonth() + 3);
+                        else n.setFullYear(n.getFullYear() + 1);
+                        return n;
+                      };
+                      const fmt = (s: string) => `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}`;
+                      let ultima: string | null = null;
+                      let qtd = 0;
+                      if (form.dataLimite && form.dataLimite >= form.primeiroVencimento) {
+                        let d = new Date(form.primeiroVencimento + "T12:00:00Z");
+                        let iter = 0;
+                        while (d.toISOString().slice(0, 10) <= form.dataLimite && iter++ < 400) {
+                          ultima = d.toISOString().slice(0, 10);
+                          qtd++;
+                          d = addFreq(d);
+                        }
+                      }
+                      return (
+                        <div className="col-span-2 bg-blue-50 border border-blue-100 rounded-md px-3 py-1.5 text-[11px] text-blue-700">
+                          1ª parcela: <b>{fmt(form.primeiroVencimento)}</b>
+                          {ultima
+                            ? <> · última: <b>{fmt(ultima)}</b> · <b>{qtd}</b> parcela{qtd !== 1 ? "s" : ""}</>
+                            : <> · sem data limite (gera continuamente)</>}
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
               )}

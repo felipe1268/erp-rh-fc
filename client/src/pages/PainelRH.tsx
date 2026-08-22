@@ -112,11 +112,11 @@ export default function PainelRH() {
   if (homeData) {
     // ASOs vencidos
     (homeData.asosAlerta ?? []).filter((a: any) => a.vencido).forEach((a: any) => {
-      alertasList.push({ id: `aso-v-${a.employeeId}`, tipo: 'aso', titulo: `ASO Vencido`, nome: a.nome, empStatus: a.status, descricao: `Vencido há ${Math.abs(a.diasRestantes)} dias. Função: ${a.funcao || '-'}`, urgencia: 'critico', link: '/controle-documentos', fotoUrl: a.fotoUrl });
+      alertasList.push({ id: `aso-v-${a.employeeId}`, tipo: 'aso', titulo: `ASO Vencido`, nome: a.nome, empStatus: a.status, descricao: `Vencido há ${Math.abs(a.diasRestantes)} dias. Função: ${a.funcao || '-'}${a.agendadoPara ? ` — Renovação agendada para ${String(a.agendadoPara).split('-').reverse().join('/')}` : ''}`, urgencia: 'critico', link: '/controle-documentos', fotoUrl: a.fotoUrl });
     });
     // ASOs vencendo
     (homeData.asosAlerta ?? []).filter((a: any) => !a.vencido).forEach((a: any) => {
-      alertasList.push({ id: `aso-e-${a.employeeId}`, tipo: 'aso', titulo: `ASO Vencendo`, nome: a.nome, empStatus: a.status, descricao: `Vence em ${a.diasRestantes} dias. Função: ${a.funcao || '-'}`, urgencia: a.diasRestantes <= 15 ? 'urgente' : 'atencao', link: '/controle-documentos', fotoUrl: a.fotoUrl });
+      alertasList.push({ id: `aso-e-${a.employeeId}`, tipo: 'aso', titulo: `ASO Vencendo`, nome: a.nome, empStatus: a.status, descricao: `Vence em ${a.diasRestantes} dias. Função: ${a.funcao || '-'}${a.agendadoPara ? ` — Renovação agendada para ${String(a.agendadoPara).split('-').reverse().join('/')}` : ''}`, urgencia: a.diasRestantes <= 15 ? 'urgente' : 'atencao', link: '/controle-documentos', fotoUrl: a.fotoUrl });
     });
     // Sem ASO
     (homeData.semAso ?? []).forEach((e: any) => {
@@ -498,6 +498,12 @@ export default function PainelRH() {
                       {avisosValidos.map((a: any) => {
                         const tipoLabel = a.tipo === 'empregador_trabalhado' ? 'Emp. Trabalhado' : a.tipo === 'empregador_indenizado' ? 'Emp. Indenizado' : a.tipo === 'empregado_trabalhado' ? 'Ped. Trabalhado' : 'Ped. Indenizado';
                         const isAguardando = a.urgencia === 'aguardando_pagamento';
+                        const valorEstimado = parseFloat(a.valorEstimado) || 0;
+                        const valorEstimadoClass = valorEstimado < 0
+                          ? 'text-red-600'
+                          : valorEstimado > 0
+                            ? 'text-blue-700'
+                            : 'text-muted-foreground';
                         return (
                           <div key={a.id} onClick={() => setSelectedAvisoId(a.id)} className={`p-3 rounded-lg border cursor-pointer hover:shadow-md transition-shadow ${
                             isAguardando ? 'bg-amber-50 border-amber-300' :
@@ -531,7 +537,11 @@ export default function PainelRH() {
                             <p className="text-[10px] text-muted-foreground">{a.funcao} · {tipoLabel}</p>
                             <div className="flex items-center justify-between mt-1">
                               <span className="text-[10px] text-muted-foreground">Término: {new Date(a.dataFim + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
-                              {canSeeValues && a.valorEstimado && <span className="text-[10px] font-bold text-red-600">R$ {parseFloat(a.valorEstimado).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>}
+                              {canSeeValues && a.valorEstimado != null && (
+                                <span className={`text-[10px] font-bold ${valorEstimadoClass}`}>
+                                  R$ {valorEstimado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                </span>
+                              )}
                             </div>
                             {a.ultimoDiaTrabalhado && (
                               <div className="flex items-center gap-1 mt-0.5">

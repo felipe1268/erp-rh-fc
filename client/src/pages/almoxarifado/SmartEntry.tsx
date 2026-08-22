@@ -118,6 +118,9 @@ type EntryItem = {
   ocItemId?: number;
   quantidadeOc?: number;
   itemNovo: boolean;
+  modoAlocacao?: "existente" | "novo";
+  buscaItem?: string;
+  sugestaoAutomatica?: boolean;
   recebido: boolean;
   motivoDivergencia?: string;
   fotoAvariaUrl?: string;
@@ -199,11 +202,13 @@ export default function SmartEntry({ companyId, obraId, obraNome, itens, onClose
             itemId: existing?.id,
             itemNome: nfItem.descricao,
             unidade: nfItem.unidade,
-            categoria: existing?.categoria || catAuto || undefined,
+            categoria: existing?.categoria || catAuto || "Outros",
             quantidadeNf: nfItem.quantidade,
             quantidadeRecebida: nfItem.quantidade,
             valorUnitario: nfItem.valorUnitario,
-            itemNovo: !existing,
+            itemNovo: false,
+            modoAlocacao: existing ? "existente" as const : undefined,
+            sugestaoAutomatica: !!existing,
             recebido: true,
             status: "ok" as const,
           };
@@ -279,13 +284,15 @@ export default function SmartEntry({ companyId, obraId, obraNome, itens, onClose
         return {
           itemNome: i.descricao,
           unidade: i.unidade || "un",
-          categoria: existing?.categoria || inferirCategoria(i.descricao, Object.keys(CATEGORIA_KEYWORDS)) || undefined,
+          categoria: existing?.categoria || inferirCategoria(i.descricao, Object.keys(CATEGORIA_KEYWORDS)) || "Outros",
           quantidadeNf: i.quantidadePendente,
           quantidadeRecebida: i.quantidadePendente,
           valorUnitario: i.precoUnitario,
           ocItemId: i.id,
           quantidadeOc: i.quantidadePendente,
-          itemNovo: !existing,
+          itemNovo: false,
+          modoAlocacao: existing ? "existente" as const : undefined,
+          sugestaoAutomatica: !!existing,
           recebido: true,
           status: "ok" as const,
           itemId: existing?.id,
@@ -323,8 +330,54 @@ export default function SmartEntry({ companyId, obraId, obraNome, itens, onClose
     }));
   };
 
+  const definirModoAlocacao = (idx: number, modo: "existente" | "novo") => {
+    setEntryItems(prev => prev.map((item, i) => {
+      if (i !== idx) return item;
+      return {
+        ...item,
+        modoAlocacao: modo,
+        itemNovo: modo === "novo",
+        itemId: modo === "novo" ? undefined : item.itemId,
+        buscaItem: "",
+        sugestaoAutomatica: false,
+        categoria: item.categoria || "Outros",
+      };
+    }));
+  };
+
+  const selecionarItemExistente = (idx: number, itemId: number | undefined) => {
+    const selecionado = itens.find(item => item.id === itemId);
+    setEntryItems(prev => prev.map((item, i) => i !== idx ? item : {
+      ...item,
+      itemId: selecionado?.id,
+      modoAlocacao: "existente",
+      itemNovo: false,
+      sugestaoAutomatica: false,
+    }));
+  };
+
+  const atualizarCadastroNovo = (
+    idx: number,
+    campo: "itemNome" | "unidade" | "categoria",
+    valor: string,
+  ) => {
+    setEntryItems(prev => prev.map((item, i) => i !== idx ? item : { ...item, [campo]: valor }));
+  };
+
+  const itemSemDestino = (item: EntryItem) =>
+    item.recebido && (
+      !item.modoAlocacao ||
+      (item.modoAlocacao === "existente" && !item.itemId) ||
+      (item.modoAlocacao === "novo" && (!item.itemNome.trim() || !item.unidade.trim() || !item.categoria?.trim()))
+    );
+
   const handleConfirmEntry = async () => {
     if (entryItems.length === 0) return;
+    const pendentes = entryItems.filter(itemSemDestino).length;
+    if (pendentes > 0) {
+      toast.error(`Defina onde receber ${pendentes} ${pendentes === 1 ? "material" : "materiais"} antes de confirmar.`);
+      return;
+    }
     setIsProcessing(true);
 
     try {
@@ -348,6 +401,7 @@ export default function SmartEntry({ companyId, obraId, obraNome, itens, onClose
           ocItemId: item.ocItemId,
           quantidadeOc: item.quantidadeOc,
           itemNovo: item.itemNovo,
+          modoAlocacao: item.modoAlocacao,
           recebido: item.recebido,
           motivoDivergencia: item.motivoDivergencia,
           fotoAvariaUrl: item.fotoAvariaUrl,
@@ -377,6 +431,7 @@ export default function SmartEntry({ companyId, obraId, obraNome, itens, onClose
       quantidadeNf: parseFloat(manualQtd),
       quantidadeRecebida: parseFloat(manualQtd),
       itemNovo: false,
+      modoAlocacao: "existente",
       recebido: true,
       status: "ok",
     }]);
@@ -850,6 +905,18 @@ export default function SmartEntry({ companyId, obraId, obraNome, itens, onClose
                 </div>
               )}
 
+              <div className="mb-3 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5">
+                <div className="flex items-center gap-2 text-blue-900">
+                  <Building2 className="h-4 w-4 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-blue-600">Destino do recebimento</p>
+                    <p className="truncate text-sm font-semibold">
+                      {obraNome || (obraId == null ? "Escritório Central" : `Obra #${obraId}`)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               <p className="text-sm font-semibold text-gray-600">
                 {entryItems.length} {entryItems.length === 1 ? "item" : "itens"} — toque para conferir
               </p>
@@ -894,15 +961,130 @@ export default function SmartEntry({ companyId, obraId, obraNome, itens, onClose
                           <span className="text-xs px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 font-bold">NOVO</span>
                         )}
                       </div>
+                      {item.recebido && (
+                        <div className="mt-3 rounded-lg border border-white/80 bg-white/90 p-2.5 text-gray-800 shadow-sm">
+                          <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-gray-600">
+                            Onde este material será recebido?
+                          </p>
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => definirModoAlocacao(idx, "existente")}
+                              className={`rounded-lg border px-2 py-2 text-xs font-semibold transition ${
+                                item.modoAlocacao === "existente"
+                                  ? "border-blue-600 bg-blue-600 text-white"
+                                  : "border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-100"
+                              }`}
+                            >
+                              Item já cadastrado
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => definirModoAlocacao(idx, "novo")}
+                              className={`rounded-lg border px-2 py-2 text-xs font-semibold transition ${
+                                item.modoAlocacao === "novo"
+                                  ? "border-violet-600 bg-violet-600 text-white"
+                                  : "border-violet-200 bg-violet-50 text-violet-800 hover:bg-violet-100"
+                              }`}
+                            >
+                              Primeira entrada
+                            </button>
+                          </div>
+
+                          {!item.modoAlocacao && (
+                            <p className="mt-2 flex items-center gap-1 text-xs font-semibold text-amber-700">
+                              <AlertTriangle className="h-3.5 w-3.5" />
+                              Escolha uma das opções para continuar.
+                            </p>
+                          )}
+
+                          {item.modoAlocacao === "existente" && (
+                            <div className="mt-2 space-y-2">
+                              {item.sugestaoAutomatica && (
+                                <p className="text-[11px] font-semibold text-blue-700">
+                                  Encontramos uma sugestão. Confira antes de confirmar.
+                                </p>
+                              )}
+                              <div className="relative">
+                                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
+                                <input
+                                  value={item.buscaItem || ""}
+                                  onChange={event => setEntryItems(prev => prev.map((linha, i) =>
+                                    i === idx ? { ...linha, buscaItem: event.target.value } : linha
+                                  ))}
+                                  placeholder="Pesquisar no estoque..."
+                                  className="w-full rounded-lg border border-gray-300 bg-white py-2 pl-8 pr-2 text-sm"
+                                />
+                              </div>
+                              <select
+                                value={item.itemId ?? ""}
+                                onChange={event => selecionarItemExistente(idx, event.target.value ? Number(event.target.value) : undefined)}
+                                className="w-full rounded-lg border border-gray-300 bg-white px-2 py-2 text-sm"
+                              >
+                                <option value="">Selecione o item que receberá a entrada</option>
+                                {itens
+                                  .filter(cadastro => {
+                                    if (cadastro.id === item.itemId) return true;
+                                    const busca = (item.buscaItem || "").trim().toLocaleLowerCase("pt-BR");
+                                    return !busca || `${cadastro.nome} ${cadastro.categoria || ""}`.toLocaleLowerCase("pt-BR").includes(busca);
+                                  })
+                                  .slice(0, 100)
+                                  .map(cadastro => (
+                                    <option key={cadastro.id} value={cadastro.id}>
+                                      {cadastro.nome} · {cadastro.quantidadeAtual ?? 0} {cadastro.unidade}
+                                    </option>
+                                  ))}
+                              </select>
+                            </div>
+                          )}
+
+                          {item.modoAlocacao === "novo" && (
+                            <div className="mt-2 grid grid-cols-2 gap-2">
+                              <label className="col-span-2 text-[11px] font-semibold text-violet-800">
+                                Nome do novo item
+                                <input
+                                  value={item.itemNome}
+                                  onChange={event => atualizarCadastroNovo(idx, "itemNome", event.target.value)}
+                                  className="mt-1 w-full rounded-lg border border-violet-200 bg-white px-2 py-2 text-sm text-gray-800"
+                                />
+                              </label>
+                              <label className="text-[11px] font-semibold text-violet-800">
+                                Unidade
+                                <input
+                                  value={item.unidade}
+                                  onChange={event => atualizarCadastroNovo(idx, "unidade", event.target.value)}
+                                  className="mt-1 w-full rounded-lg border border-violet-200 bg-white px-2 py-2 text-sm text-gray-800"
+                                />
+                              </label>
+                              <label className="text-[11px] font-semibold text-violet-800">
+                                Categoria
+                                <input
+                                  value={item.categoria || ""}
+                                  onChange={event => atualizarCadastroNovo(idx, "categoria", event.target.value)}
+                                  className="mt-1 w-full rounded-lg border border-violet-200 bg-white px-2 py-2 text-sm text-gray-800"
+                                />
+                              </label>
+                              <p className="col-span-2 text-[11px] text-violet-700">
+                                Um novo cadastro só será criado porque você escolheu “Primeira entrada”.
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
               ))}
 
               <div className="space-y-2 pt-2">
+                {entryItems.some(itemSemDestino) && (
+                  <div className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800">
+                    Há {entryItems.filter(itemSemDestino).length} {entryItems.filter(itemSemDestino).length === 1 ? "material sem destino definido" : "materiais sem destino definido"}.
+                  </div>
+                )}
                 <button
                   onClick={handleConfirmEntry}
-                  disabled={isProcessing || entryItems.every(i => !i.recebido)}
+                  disabled={isProcessing || entryItems.every(i => !i.recebido) || entryItems.some(itemSemDestino)}
                   className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-5 rounded-2xl text-lg disabled:opacity-50 transition flex items-center justify-center gap-2"
                 >
                   {isProcessing ? (

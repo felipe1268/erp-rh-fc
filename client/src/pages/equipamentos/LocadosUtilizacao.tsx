@@ -381,6 +381,54 @@ export default function LocadosUtilizacao() {
           );
         })()}
 
+        {/* ── Rev. 5065 — Alerta: sempre em uso → avaliar COMPRA em vez de locação ── */}
+        {(() => {
+          const agg = new Map<string, { count: number; horas: number; valorMensal: number }>();
+          for (const c of ciclos) {
+            const k = c.descricao || "—";
+            const e = agg.get(k) || { count: 0, horas: 0, valorMensal: 0 };
+            e.count++;
+            e.horas += Number(c.horasFora) || 0;
+            e.valorMensal = Math.max(e.valorMensal, Number(c.valorMensal) || 0);
+            agg.set(k, e);
+          }
+          const candidatos = Array.from(agg.entries())
+            .filter(([, v]) => v.count >= 5)
+            .sort((a, b) => b[1].count - a[1].count)
+            .slice(0, 3);
+          if (candidatos.length === 0) return null;
+          return (
+            <div className="bg-amber-50 border-2 border-amber-200 rounded-xl shadow-sm p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="h-8 w-8 rounded-lg bg-amber-100 flex items-center justify-center">
+                  <Zap className="h-4 w-4 text-amber-600" />
+                </div>
+                <div>
+                  <span className="text-sm font-bold text-amber-900">Sempre em uso — vale a pena comprar?</span>
+                  <p className="text-[11px] text-amber-700">Equipamentos locados com uso contínuo no período. Se a demanda é permanente, a compra tende a sair mais barato que pagar locação todo mês.</p>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                {candidatos.map(([desc, v]) => (
+                  <div key={desc} className="flex items-center justify-between gap-2 bg-white/70 border border-amber-200 rounded-lg px-3 py-2">
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-slate-800 truncate">{desc}</div>
+                      <div className="text-[11px] text-slate-500">{v.count}× retiradas · {fmtHoras(v.horas)} em campo no período</div>
+                    </div>
+                    {v.valorMensal > 0 && (
+                      <div className="text-right shrink-0">
+                        <div className="text-xs font-black text-amber-700 tabular-nums">{fmtMoeda(v.valorMensal)}/mês</div>
+                        <div className="text-[10px] text-slate-500 tabular-nums">{fmtMoeda(v.valorMensal * 12)}/ano em locação</div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <p className="text-[11px] text-amber-800 mt-2">💡 Se o receio é "comprado quebra": termo de responsabilidade assinado na admissão permite desconto por mau uso comprovado (CLT art. 462 §1º).</p>
+            </div>
+          );
+        })()}
+
         {/* ── Insights: mais/menos usado + pendentes de devolução ── */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
 
@@ -501,7 +549,7 @@ export default function LocadosUtilizacao() {
                         </span>
                         {c.quemSaiu && (
                           <span className="flex items-center gap-1">
-                            <Avatar nome={c.quemSaiu} size="sm" />
+                            <FotoFuncionario fotoUrl={(c as any).fotoFuncionario} nome={c.quemSaiu} size="sm" />
                             {c.quemSaiu}
                           </span>
                         )}
@@ -668,7 +716,7 @@ export default function LocadosUtilizacao() {
 
           {/* Rankings */}
           <div className="space-y-4">
-            <RankingQuem topQuem={topQuem} />
+            <RankingQuem topQuem={topQuem} ciclos={ciclos} />
             <div className="bg-white border rounded-xl shadow-sm p-4">
               <h3 className="font-semibold text-slate-800 text-sm mb-3 flex items-center gap-2">
                 <Truck className="h-4 w-4 text-emerald-600" /> Mais movimentados
@@ -955,7 +1003,7 @@ export default function LocadosUtilizacao() {
                           )}
                           {c.quemSaiu && (
                             <span className="flex items-center gap-1">
-                              <Avatar nome={c.quemSaiu} size="sm" />
+                              <FotoFuncionario fotoUrl={(c as any).fotoFuncionario} nome={c.quemSaiu} size="sm" />
                               {c.quemSaiu}
                             </span>
                           )}
@@ -1022,10 +1070,16 @@ function FotoFuncionario({ fotoUrl, nome, size = "sm" }: {
   );
 }
 
-function RankingQuem({ topQuem }: {
-  topQuem: { nome: string; count: number; fotoUrl?: string | null; funcionarioId?: number | null }[];
+function RankingQuem({ topQuem, ciclos }: {
+  topQuem: { nome: string; count: number; fotoUrl?: string | null; funcionarioId?: number | null; empresaTerceira?: string | null }[];
+  ciclos: any[];
 }) {
   const [expandido, setExpandido] = useState(false);
+  // Rev. 5061 — clicar na pessoa abre o detalhe das retiradas do período
+  const [pessoaSel, setPessoaSel] = useState<{ nome: string; fotoUrl?: string | null; empresaTerceira?: string | null } | null>(null);
+  const retiradasSel = pessoaSel
+    ? ciclos.filter(c => (c.quemSaiu || "Não informado") === pessoaSel.nome)
+    : [];
   const VISIBLE = 5;
   const lista = expandido ? topQuem : topQuem.slice(0, VISIBLE);
   const maxCount = topQuem[0]?.count ?? 1;
@@ -1046,11 +1100,15 @@ function RankingQuem({ topQuem }: {
         <>
           <ul className="space-y-2.5">
             {lista.map((p, i) => (
-              <li key={p.nome} className="flex items-center gap-2.5">
+              <li key={p.nome} onClick={() => setPessoaSel({ nome: p.nome, fotoUrl: p.fotoUrl, empresaTerceira: p.empresaTerceira })}
+                className="flex items-center gap-2.5 cursor-pointer rounded-lg -mx-1 px-1 py-0.5 hover:bg-emerald-50 active:bg-emerald-100 transition">
                 <span className="text-[10px] font-bold text-slate-400 w-4 text-right shrink-0">{i + 1}</span>
                 <FotoFuncionario fotoUrl={p.fotoUrl} nome={p.nome} size="sm" />
                 <div className="flex-1 min-w-0">
                   <div className="text-xs text-slate-700 font-medium truncate">{p.nome}</div>
+                  {p.empresaTerceira && (
+                    <div className="text-[10px] text-violet-600 font-semibold truncate leading-tight">🏢 {p.empresaTerceira}</div>
+                  )}
                   <div className="mt-1 w-full bg-slate-100 rounded-full h-1">
                     <div
                       className="bg-emerald-400 h-1 rounded-full transition-all"
@@ -1073,6 +1131,57 @@ function RankingQuem({ topQuem }: {
             </button>
           )}
         </>
+      )}
+      {/* Rev. 5061 — detalhe das retiradas da pessoa no período */}
+      {pessoaSel && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center" onClick={() => setPessoaSel(null)}>
+          <div className="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl max-h-[85vh] flex flex-col shadow-xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 px-4 py-3 border-b">
+              <FotoFuncionario fotoUrl={pessoaSel.fotoUrl} nome={pessoaSel.nome} size="md" />
+              <div className="flex-1 min-w-0">
+                <div className="font-bold text-slate-900 text-sm truncate">{pessoaSel.nome}</div>
+                {pessoaSel.empresaTerceira && (
+                  <div className="text-[11px] text-violet-600 font-semibold truncate">🏢 Terceiro · {pessoaSel.empresaTerceira}</div>
+                )}
+                <div className="text-[11px] text-slate-500">{retiradasSel.length} retirada{retiradasSel.length !== 1 ? "s" : ""} no período</div>
+              </div>
+              <button onClick={() => setPessoaSel(null)} className="p-1.5 rounded-lg hover:bg-slate-100 transition shrink-0">
+                <X className="h-5 w-5 text-slate-500" />
+              </button>
+            </div>
+            <div className="overflow-y-auto flex-1 divide-y">
+              {retiradasSel.length === 0 && <p className="text-xs text-slate-400 text-center py-6">Sem retiradas no período</p>}
+              {retiradasSel.map((c: any) => {
+                const fmt = (s: string | null) => {
+                  if (!s) return null;
+                  const d = String(s).slice(0, 16);
+                  return `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}${d.length >= 16 ? ` ${d.slice(11, 16)}` : ""}`;
+                };
+                return (
+                  <div key={c.id} className="px-4 py-2.5 flex items-start gap-3">
+                    {c.fotoUrl
+                      ? <img src={c.fotoUrl} alt="" className="h-9 w-9 rounded-lg object-cover shrink-0 border" />
+                      : <span className="h-9 w-9 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400 text-[10px] shrink-0 border">—</span>}
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-semibold text-slate-800 leading-tight">{c.descricao}</div>
+                      <div className="text-[11px] text-slate-500 mt-0.5">
+                        Saiu {fmt(c.saiuEm)}{c.devolvidoEm ? ` · devolvido ${fmt(c.devolvidoEm)}` : ""}
+                      </div>
+                      <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-100">
+                          🏗 {c.obraNome || "Obra não informada"}
+                        </span>
+                        {!c.devolvidoEm && (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-100">Em campo</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

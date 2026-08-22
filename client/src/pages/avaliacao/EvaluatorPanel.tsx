@@ -45,6 +45,25 @@ const NOTA_COLORS: Record<number, string> = {
   1: "#EF4444", 2: "#F97316", 3: "#EAB308", 4: "#22C55E", 5: "#1e3a5f",
 };
 
+// Tempo de casa ("2a 4m" / "8m") e idade ("34 anos") — datas vêm como string YYYY-MM-DD
+function tempoEmpresa(dataAdmissao?: string | null): string | null {
+  if (!dataAdmissao) return null;
+  const d = new Date(String(dataAdmissao).slice(0, 10) + "T00:00:00");
+  if (isNaN(d.getTime())) return null;
+  const meses = Math.max(0, Math.floor((Date.now() - d.getTime()) / (30.44 * 86400000)));
+  if (meses < 12) return `${meses}m de empresa`;
+  const anos = Math.floor(meses / 12);
+  const resto = meses % 12;
+  return `${anos}a${resto ? ` ${resto}m` : ""} de empresa`;
+}
+function idadeAnos(dataNascimento?: string | null): string | null {
+  if (!dataNascimento) return null;
+  const d = new Date(String(dataNascimento).slice(0, 10) + "T00:00:00");
+  if (isNaN(d.getTime())) return null;
+  const idade = Math.floor((Date.now() - d.getTime()) / (365.25 * 86400000));
+  return idade > 0 && idade < 120 ? `${idade} anos` : null;
+}
+
 function RatingButton({ value, selected, onClick }: { value: number; selected: boolean; onClick: () => void }) {
   const color = NOTA_COLORS[value];
   return (
@@ -87,6 +106,7 @@ export default function EvaluatorPanel() {
   const [observacoes, setObservacoes] = useState("");
   const [showResult, setShowResult] = useState(false);
   const [showPendingOnly, setShowPendingOnly] = useState(true);
+  const [aba, setAba] = useState<"fila" | "dash">("fila");
 
   const [startedAt, setStartedAt] = useState<string | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -115,16 +135,13 @@ export default function EvaluatorPanel() {
     return { pilares: PILARES_FALLBACK, revisionId: null };
   }, [criteriaQuery.data]);
 
-  const totalSteps = pilares.length + 2;
-  const observacoesStep = pilares.length + 1;
-
   const pendingQuery = trpc.avaliacao.evaluatorPanel.listPending.useQuery(
-    { evaluatorId: evaluator?.id || 0, companyId },
-    { enabled: !!evaluator?.id && !!companyId }
+    { evaluatorId: evaluator?.id ?? 0, companyId },
+    { enabled: !!evaluator && !!companyId }
   );
   const historyQuery = trpc.avaliacao.evaluatorPanel.listMyEvaluations.useQuery(
-    { evaluatorId: evaluator?.id || 0, companyId },
-    { enabled: !!evaluator?.id && !!companyId }
+    { evaluatorId: evaluator?.id ?? 0, companyId },
+    { enabled: !!evaluator && !!companyId }
   );
 
   const createEval = trpc.avaliacao.evaluatorPanel.createEvaluation.useMutation({
@@ -150,7 +167,22 @@ export default function EvaluatorPanel() {
     [employeeId, pendingQuery.data]
   );
 
-  const allScoresFilled = pilares.every((p: any) => p.criterios.every((c: any) => scores[c.key] > 0));
+  const allCriterios = useMemo(() => pilares.flatMap((p: any) => p.criterios), [pilares]);
+  const totalCriterios = allCriterios.length;
+  const filledCount = allCriterios.filter((c: any) => scores[c.key] > 0).length;
+  const allScoresFilled = filledCount === totalCriterios && totalCriterios > 0;
+  const criterioRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  // Ao dar a nota, rola suavemente até o próximo critério sem nota (fluxo contínuo)
+  const handleScore = (key: string, n: number) => {
+    const next = { ...scores, [key]: n };
+    setScores(next);
+    const idx = allCriterios.findIndex((c: any) => c.key === key);
+    const proximo = [...allCriterios.slice(idx + 1), ...allCriterios.slice(0, idx)].find((c: any) => !(next[c.key] > 0));
+    if (proximo) {
+      setTimeout(() => criterioRefs.current[proximo.key]?.scrollIntoView({ behavior: "smooth", block: "center" }), 150);
+    }
+  };
 
   const handleSelectEmployee = (id: number) => {
     setEmployeeId(id);
@@ -178,15 +210,6 @@ export default function EvaluatorPanel() {
     });
   };
 
-  const canAdvance = () => {
-    if (step === 0) return employeeId !== null;
-    if (step >= 1 && step <= pilares.length) {
-      const pilar = pilares[step - 1];
-      return pilar.criterios.every((c: any) => scores[c.key] > 0);
-    }
-    return true;
-  };
-
   const resetForm = () => {
     setStep(0);
     setEmployeeId(null);
@@ -212,7 +235,8 @@ export default function EvaluatorPanel() {
       const term = removeAccents(searchTerm);
       list = list.filter((e: any) => removeAccents(e.nome || '').includes(term) || e.cpf?.includes(term) || removeAccents(e.funcao || '').includes(term));
     }
-    return list;
+    // Já avaliados no mês vão pro fim da lista (na visão "Todos"), pendentes primeiro
+    return [...list].sort((a: any, b: any) => Number(!!a.jaAvaliado) - Number(!!b.jaAvaliado));
   }, [pendingQuery.data, showPendingOnly, searchTerm]);
 
   // Se não é avaliador, mostrar mensagem
@@ -278,21 +302,143 @@ export default function EvaluatorPanel() {
         )}
       </div>
 
-      {/* Progress bar */}
+      {/* Progress bar (notas preenchidas) */}
       {step > 0 && (
-        <div className="mb-6">
+        <div className="mb-4">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs text-[#64748B]">Progresso</span>
-            <span className="text-xs font-medium text-[#1e3a5f]">{Math.round((step / (totalSteps - 1)) * 100)}%</span>
+            <span className="text-xs font-medium text-[#1e3a5f]">{filledCount} de {totalCriterios} notas</span>
           </div>
           <div className="h-2 bg-[#E2E8F0] rounded-full overflow-hidden">
-            <div className="h-full bg-[#1e3a5f] rounded-full transition-all duration-500" style={{ width: `${(step / (totalSteps - 1)) * 100}%` }} />
+            <div className="h-full bg-[#1e3a5f] rounded-full transition-all duration-300" style={{ width: `${totalCriterios ? (filledCount / totalCriterios) * 100 : 0}%` }} />
           </div>
         </div>
       )}
 
-      {/* STEP 0: Seleção de funcionário */}
+      {/* Abas: Avaliar × Dashboard */}
       {step === 0 && (
+        <div className="flex gap-2 mb-4">
+          <button onClick={() => setAba("fila")} className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border transition-colors ${aba === "fila" ? "bg-[#1e3a5f] text-white border-[#1e3a5f]" : "bg-white text-[#64748B] border-[#E2E8F0]"}`}>
+            ✍️ Avaliar
+          </button>
+          <button onClick={() => setAba("dash")} className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border transition-colors ${aba === "dash" ? "bg-[#1e3a5f] text-white border-[#1e3a5f]" : "bg-white text-[#64748B] border-[#E2E8F0]"}`}>
+            📊 Dashboard
+          </button>
+        </div>
+      )}
+
+      {/* ABA DASHBOARD */}
+      {step === 0 && aba === "dash" && (() => {
+        const lista: any[] = pendingQuery.data ?? [];
+        const total = lista.length;
+        const avaliados = lista.filter(e => e.jaAvaliado).length;
+        const pendentes = total - avaliados;
+        const pct = total ? Math.round((avaliados / total) * 100) : 0;
+        const mesAtual = new Date().toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+        // Por obra
+        const porObra = new Map<string, { total: number; feitos: number }>();
+        for (const e of lista) {
+          const k = e.obraNome || e.setor || "Sem obra";
+          const o = porObra.get(k) ?? { total: 0, feitos: 0 };
+          o.total += 1; if (e.jaAvaliado) o.feitos += 1;
+          porObra.set(k, o);
+        }
+        const obrasOrd = [...porObra.entries()].sort((a, b) => (b[1].total - b[1].feitos) - (a[1].total - a[1].feitos));
+        const situacoes = [
+          { label: "🏖 De férias", n: lista.filter(e => e.statusFuncionario === "Ferias").length, cls: "bg-sky-50 text-sky-700 border-sky-200" },
+          { label: "⚠ Afastados", n: lista.filter(e => e.statusFuncionario === "Afastado").length, cls: "bg-orange-50 text-orange-700 border-orange-200" },
+          { label: "📋 Em aviso", n: lista.filter(e => e.statusFuncionario === "Aviso").length, cls: "bg-red-50 text-red-700 border-red-200" },
+          { label: "🩺 Com atestado", n: lista.filter(e => e.atestadoAte).length, cls: "bg-amber-50 text-amber-700 border-amber-200" },
+          { label: "🛡 CIPA", n: lista.filter(e => e.cipaCargo).length, cls: "bg-indigo-50 text-indigo-700 border-indigo-200" },
+        ].filter(s => s.n > 0);
+        const pendList = lista.filter(e => !e.jaAvaliado);
+        return (
+          <div className="space-y-4">
+            {/* Hero de progresso do mês */}
+            <div className="rounded-xl bg-gradient-to-br from-[#1e3a5f] to-[#15294a] text-white p-5 shadow-sm">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm font-semibold capitalize">Progresso de {mesAtual}</p>
+                <p className="text-sm font-bold">{avaliados} de {total} · {pct}%</p>
+              </div>
+              <div className="h-3 bg-white/15 rounded-full overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-emerald-400 to-emerald-300 rounded-full transition-all" style={{ width: `${pct}%` }} />
+              </div>
+              <p className="text-[11px] opacity-70 mt-2">{pendentes > 0 ? `Faltam ${pendentes} avaliação(ões) este mês` : "🎉 Todos avaliados este mês!"}</p>
+            </div>
+            {/* KPIs */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-sm p-4 text-center">
+                <p className="text-2xl font-extrabold text-[#0F172A]">{total}</p>
+                <p className="text-[11px] text-[#64748B]">Minha equipe</p>
+              </div>
+              <div className="bg-white rounded-xl border border-green-200 shadow-sm p-4 text-center">
+                <p className="text-2xl font-extrabold text-green-600">{avaliados}</p>
+                <p className="text-[11px] text-[#64748B]">Avaliados no mês</p>
+              </div>
+              <div className="bg-white rounded-xl border border-amber-200 shadow-sm p-4 text-center">
+                <p className="text-2xl font-extrabold text-amber-600">{pendentes}</p>
+                <p className="text-[11px] text-[#64748B]">Pendentes</p>
+              </div>
+            </div>
+            {/* Situações especiais */}
+            {situacoes.length > 0 && (
+              <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-sm p-4">
+                <p className="text-sm font-bold text-[#0F172A] mb-2">Situações na equipe</p>
+                <div className="flex flex-wrap gap-2">
+                  {situacoes.map(s => (
+                    <span key={s.label} className={`text-xs font-semibold border px-2.5 py-1 rounded-lg ${s.cls}`}>{s.label}: {s.n}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {/* Por obra */}
+            {obrasOrd.length > 1 && (
+              <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-sm p-4">
+                <p className="text-sm font-bold text-[#0F172A] mb-3">Progresso por obra</p>
+                <div className="space-y-2.5">
+                  {obrasOrd.map(([obra, o]) => (
+                    <div key={obra}>
+                      <div className="flex items-center justify-between text-xs mb-1">
+                        <span className="font-medium text-[#0F172A] break-words">🏗 {obra}</span>
+                        <span className="text-[#64748B] shrink-0 ml-2">{o.feitos}/{o.total}</span>
+                      </div>
+                      <div className="h-2 bg-[#E2E8F0] rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full ${o.feitos === o.total ? "bg-green-500" : "bg-[#1e3a5f]"}`} style={{ width: `${o.total ? (o.feitos / o.total) * 100 : 0}%` }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {/* Quem falta avaliar */}
+            {pendList.length > 0 && (
+              <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-sm p-4">
+                <p className="text-sm font-bold text-[#0F172A] mb-2">Falta avaliar ({pendList.length})</p>
+                <div className="space-y-1.5 max-h-[300px] overflow-y-auto">
+                  {pendList.map((e: any) => (
+                    <button key={e.id} onClick={() => { setAba("fila"); handleSelectEmployee(e.id); }}
+                      className="w-full flex items-center gap-2.5 p-2 rounded-lg border border-[#E2E8F0] hover:border-[#1e3a5f]/40 hover:bg-[#F8FAFC] text-left">
+                      {e.fotoUrl ? (
+                        <img src={`${e.fotoUrl}${e.fotoUrl.includes("?") ? "&" : "?"}w=128`} alt="" loading="lazy" className="w-8 h-8 rounded-full object-cover border border-[#E2E8F0]" />
+                      ) : (
+                        <span className="w-8 h-8 rounded-full bg-[#1e3a5f]/10 text-[#1e3a5f] flex items-center justify-center text-xs font-bold">{e.nome?.charAt(0)}</span>
+                      )}
+                      <span className="flex-1 min-w-0">
+                        <span className="block text-xs font-medium text-[#0F172A] truncate">{e.nome}</span>
+                        <span className="block text-[10px] text-[#94A3B8] truncate">{e.funcao}{e.obraNome ? ` · ${e.obraNome}` : ""}</span>
+                      </span>
+                      <ChevronRight className="w-3.5 h-3.5 text-[#94A3B8] shrink-0" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* STEP 0: Seleção de funcionário */}
+      {step === 0 && aba === "fila" && (
         <div className="bg-white rounded-xl shadow-sm border border-[#E2E8F0] p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-bold text-[#0F172A] flex items-center gap-2">
@@ -357,14 +503,56 @@ export default function EvaluatorPanel() {
                       : "bg-white border-[#E2E8F0] hover:border-[#1e3a5f]/40 hover:bg-[#F8FAFC]"
                   }`}
                 >
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold ${
-                    emp.jaAvaliado ? "bg-green-100 text-green-600" : "bg-[#1e3a5f]/10 text-[#1e3a5f]"
-                  }`}>
-                    {emp.jaAvaliado ? <Check className="w-4 h-4" /> : emp.nome?.charAt(0)}
+                  <div className="relative shrink-0">
+                    {emp.fotoUrl ? (
+                      <img
+                        src={`${emp.fotoUrl}${emp.fotoUrl.includes("?") ? "&" : "?"}w=128`}
+                        alt={emp.nome || ""}
+                        loading="lazy"
+                        className={`w-10 h-10 rounded-full object-cover border border-[#E2E8F0] ${emp.jaAvaliado ? "grayscale" : ""}`}
+                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; (e.currentTarget.nextElementSibling as HTMLElement)?.classList.remove("hidden"); }}
+                      />
+                    ) : null}
+                    <div className={`w-10 h-10 rounded-full items-center justify-center text-sm font-bold ${emp.fotoUrl ? "hidden" : "flex"} ${
+                      emp.jaAvaliado ? "bg-green-100 text-green-600" : "bg-[#1e3a5f]/10 text-[#1e3a5f]"
+                    }`}>
+                      {emp.nome?.charAt(0)}
+                    </div>
+                    {emp.jaAvaliado && (
+                      <span className="absolute -bottom-0.5 -right-0.5 h-4.5 w-4.5 min-h-[18px] min-w-[18px] rounded-full bg-green-500 border-2 border-white flex items-center justify-center">
+                        <Check className="w-2.5 h-2.5 text-white" strokeWidth={3.5} />
+                      </span>
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-[#0F172A] truncate">{emp.nome}</p>
-                    <p className="text-xs text-[#64748B]">{emp.funcao} — {emp.setor || "Sem setor"}</p>
+                    <p className="text-xs text-[#64748B] truncate">
+                      {emp.funcao}{emp.obraNome ? ` — 🏗 ${emp.obraNome}` : emp.setor ? ` — ${emp.setor}` : ""}
+                    </p>
+                    <p className="text-[11px] text-[#94A3B8]">
+                      {[tempoEmpresa(emp.dataAdmissao), idadeAnos(emp.dataNascimento)].filter(Boolean).join(" · ")}
+                    </p>
+                    {(emp.statusFuncionario !== "Ativo" || emp.atestadoAte || emp.cipaCargo) && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {emp.cipaCargo && (
+                          <span className="text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 px-1.5 py-0.5 rounded">🛡 CIPA · {emp.cipaCargo}</span>
+                        )}
+                        {emp.statusFuncionario === "Ferias" && (
+                          <span className="text-[10px] font-semibold bg-sky-50 text-sky-700 border border-sky-200 px-1.5 py-0.5 rounded">🏖 De férias</span>
+                        )}
+                        {emp.statusFuncionario === "Afastado" && (
+                          <span className="text-[10px] font-semibold bg-orange-50 text-orange-700 border border-orange-200 px-1.5 py-0.5 rounded">⚠ Afastado</span>
+                        )}
+                        {emp.statusFuncionario === "Aviso" && (
+                          <span className="text-[10px] font-semibold bg-red-50 text-red-700 border border-red-200 px-1.5 py-0.5 rounded">📋 Em aviso prévio</span>
+                        )}
+                        {emp.atestadoAte && (
+                          <span className="text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded">
+                            🩺 Atestado até {emp.atestadoAte.slice(8, 10)}/{emp.atestadoAte.slice(5, 7)}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                   {emp.jaAvaliado ? (
                     <span className="text-xs text-green-600 font-medium bg-green-50 px-2 py-1 rounded">Avaliado</span>
@@ -393,47 +581,63 @@ export default function EvaluatorPanel() {
         </div>
       )}
 
-      {/* STEPS 1-N: Avaliação por pilar */}
-      {step >= 1 && step <= pilares.length && (
-        <div className="bg-white rounded-xl shadow-sm border border-[#E2E8F0] p-6">
-          <div className="flex items-center gap-3 mb-4 pb-3 border-b border-[#E2E8F0]">
-            <HardHat className="w-5 h-5 text-[#1e3a5f]" />
-            <div>
-              <p className="text-sm text-[#64748B]">Avaliando: <strong className="text-[#0F172A]">{selectedEmployee?.nome}</strong></p>
-              <p className="text-xs text-[#94A3B8]">{selectedEmployee?.funcao}</p>
-            </div>
-          </div>
-
-          <h3 className="text-lg font-bold text-[#1e3a5f] mb-1">{pilares[step - 1].nome}</h3>
-          <p className="text-sm text-[#64748B] mb-6">Pilar {step} de {pilares.length} — Avalie cada critério de 1 a 5</p>
-
-          <div className="space-y-5">
-            {pilares[step - 1].criterios.map((c: any) => (
-              <div key={c.key} className="bg-[#F8FAFC] rounded-xl p-4 border border-[#E2E8F0]">
-                <h4 className="text-sm font-semibold text-[#0F172A] mb-0.5">{c.label}</h4>
-                <p className="text-xs text-[#94A3B8] mb-3">{c.desc}</p>
-                <div className="flex justify-between items-end gap-2">
-                  {[1, 2, 3, 4, 5].map((n) => (
-                    <RatingButton
-                      key={n}
-                      value={n}
-                      selected={scores[c.key] === n}
-                      onClick={() => setScores({ ...scores, [c.key]: n })}
-                    />
-                  ))}
-                </div>
+      {/* STEP 1: Avaliação completa em tela única */}
+      {step === 1 && (
+        <div className="pb-28">
+          {/* Cabeçalho do avaliado */}
+          <div className="bg-white rounded-xl shadow-sm border border-[#E2E8F0] p-4 mb-4 flex items-center justify-between sticky top-0 z-10">
+            <div className="flex items-center gap-3 min-w-0">
+              <HardHat className="w-5 h-5 text-[#1e3a5f] shrink-0" />
+              <div className="min-w-0">
+                <p className="text-sm text-[#64748B] truncate">Avaliando: <strong className="text-[#0F172A]">{selectedEmployee?.nome}</strong></p>
+                <p className="text-xs text-[#94A3B8] truncate">{selectedEmployee?.funcao}</p>
               </div>
-            ))}
+            </div>
+            <Button variant="outline" size="sm" onClick={resetForm} className="flex items-center gap-1 shrink-0">
+              <ChevronLeft className="w-4 h-4" /> Trocar
+            </Button>
           </div>
-        </div>
-      )}
 
-      {/* STEP N+1: Observações + Submit */}
-      {step === observacoesStep && (
-        <div className="bg-white rounded-xl shadow-sm border border-[#E2E8F0] p-6">
-          <h3 className="text-lg font-bold text-[#1e3a5f] mb-4">Observações e Confirmação</h3>
+          {pilares.map((pilar: any, pi: number) => (
+            <div key={pi} className="bg-white rounded-xl shadow-sm border border-[#E2E8F0] p-4 sm:p-6 mb-4">
+              <h3 className="text-base font-bold text-[#1e3a5f] mb-3">{pilar.nome}</h3>
+              <div className="space-y-3">
+                {pilar.criterios.map((c: any) => {
+                  const filled = scores[c.key] > 0;
+                  return (
+                    <div
+                      key={c.key}
+                      ref={(el) => { criterioRefs.current[c.key] = el; }}
+                      className={`rounded-xl p-3 sm:p-4 border transition-colors ${filled ? "bg-white border-[#E2E8F0]" : "bg-[#F8FAFC] border-[#1e3a5f]/30"}`}
+                    >
+                      <div className="flex items-center justify-between mb-0.5">
+                        <h4 className="text-sm font-semibold text-[#0F172A]">{c.label}</h4>
+                        {filled && (
+                          <span className="text-xs font-bold" style={{ color: NOTA_COLORS[scores[c.key]] }}>
+                            {scores[c.key]} — {NOTA_LABELS[scores[c.key]]}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-[#94A3B8] mb-3">{c.desc}</p>
+                      <div className="flex justify-between items-end gap-2">
+                        {[1, 2, 3, 4, 5].map((n) => (
+                          <RatingButton
+                            key={n}
+                            value={n}
+                            selected={scores[c.key] === n}
+                            onClick={() => handleScore(c.key, n)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
 
-          <div className="mb-6">
+          {/* Observações */}
+          <div className="bg-white rounded-xl shadow-sm border border-[#E2E8F0] p-4 sm:p-6">
             <label className="block text-sm font-medium text-[#0F172A] mb-2">Observações (opcional)</label>
             <textarea
               value={observacoes}
@@ -443,67 +647,34 @@ export default function EvaluatorPanel() {
             />
           </div>
 
-          {/* Resumo das notas */}
-          <div className="bg-[#F8FAFC] rounded-xl p-4 border border-[#E2E8F0] mb-6">
-            <h4 className="text-sm font-semibold text-[#0F172A] mb-3">Resumo das Notas</h4>
-            {pilares.map((pilar: any, i: number) => (
-              <div key={i} className="mb-3 last:mb-0">
-                <p className="text-xs font-medium text-[#1e3a5f] mb-1">{pilar.nome}</p>
-                <div className="grid grid-cols-2 gap-1">
-                  {pilar.criterios.map((c: any) => (
-                    <div key={c.key} className="flex items-center justify-between text-xs">
-                      <span className="text-[#64748B] truncate mr-2">{c.label}</span>
-                      <span className="font-bold" style={{ color: NOTA_COLORS[scores[c.key]] }}>
-                        {scores[c.key]}
-                      </span>
-                    </div>
-                  ))}
+          {/* Barra fixa de confirmação */}
+          <div className="fixed bottom-0 left-0 right-0 z-20 bg-white/95 backdrop-blur border-t border-[#E2E8F0] p-3 sm:p-4">
+            <div className="max-w-4xl mx-auto flex items-center gap-3">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-[#64748B]">{allScoresFilled ? "Tudo preenchido — pode confirmar" : `Faltam ${totalCriterios - filledCount} nota(s)`}</p>
+                <div className="h-1.5 bg-[#E2E8F0] rounded-full overflow-hidden mt-1">
+                  <div className="h-full bg-[#1e3a5f] rounded-full transition-all duration-300" style={{ width: `${totalCriterios ? (filledCount / totalCriterios) * 100 : 0}%` }} />
                 </div>
               </div>
-            ))}
+              <Button
+                onClick={handleSubmit}
+                disabled={!allScoresFilled || createEval.isPending}
+                className="bg-[#1e3a5f] hover:bg-[#15294a] text-white h-12 px-6 text-base shrink-0"
+              >
+                {createEval.isPending ? (
+                  <span className="flex items-center gap-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                    Registrando...
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-2">
+                    <Check className="w-5 h-5" />
+                    Confirmar
+                  </span>
+                )}
+              </Button>
+            </div>
           </div>
-
-          <Button
-            onClick={handleSubmit}
-            disabled={!allScoresFilled || createEval.isPending}
-            className="w-full bg-[#1e3a5f] hover:bg-[#15294a] text-white h-12 text-base"
-          >
-            {createEval.isPending ? (
-              <span className="flex items-center gap-2">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
-                Registrando...
-              </span>
-            ) : (
-              <span className="flex items-center gap-2">
-                <Check className="w-5 h-5" />
-                Confirmar Avaliação
-              </span>
-            )}
-          </Button>
-        </div>
-      )}
-
-      {/* Navigation buttons */}
-      {step > 0 && !showResult && (
-        <div className="flex items-center justify-between mt-4">
-          <Button
-            variant="outline"
-            onClick={() => step === 1 ? resetForm() : setStep(step - 1)}
-            className="flex items-center gap-1"
-          >
-            <ChevronLeft className="w-4 h-4" />
-            {step === 1 ? "Voltar à lista" : "Anterior"}
-          </Button>
-          {step < observacoesStep && (
-            <Button
-              onClick={() => setStep(step + 1)}
-              disabled={!canAdvance()}
-              className="bg-[#1e3a5f] hover:bg-[#15294a] text-white flex items-center gap-1"
-            >
-              Próximo
-              <ChevronRight className="w-4 h-4" />
-            </Button>
-          )}
         </div>
       )}
     </div>

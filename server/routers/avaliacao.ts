@@ -1,6 +1,7 @@
 import { router, publicProcedure, protectedProcedure } from "../_core/trpc";
 import { z } from "zod";
 import { getDb as _getDb } from "../db";
+import { assertRaioXAccess } from "../raioXGuard";
 import {
   evalAvaliadores,
   evalAvaliacoes,
@@ -32,6 +33,23 @@ import { TRPCError } from "@trpc/server";
 import { invokeLLM } from "../_core/llm";
 import bcrypt from "bcryptjs";
 import { SignJWT, jwtVerify } from "jose";
+
+// Autoriza o avaliador "virtual" (evaluatorId=0): exige usuário logado com role admin/admin_master
+// OU perfil adm_master/adm/avaliador ativo na empresa. Retorna identidade estável do usuário.
+async function autorizarAvaliadorVirtual(db: any, ctx: any, input: { companyId: number; companyIds?: number[] }) {
+  const userId = ctx.user?.id;
+  if (!userId) throw new TRPCError({ code: "UNAUTHORIZED", message: "Sessão expirada. Faça login novamente." });
+  const userRole = (ctx.user as any)?.role;
+  if (userRole === 'admin_master' || userRole === 'admin') {
+    return { userId, nome: ctx.user?.name || 'Administrador' };
+  }
+  const [profile] = await db.select().from(userProfiles)
+    .where(and(eq(userProfiles.userId, userId), companyFilter(userProfiles.companyId, input), eq(userProfiles.isActive, 1)));
+  if (profile && ['adm_master', 'adm', 'avaliador'].includes(profile.profileType)) {
+    return { userId, nome: ctx.user?.name || 'Avaliador' };
+  }
+  throw new TRPCError({ code: "FORBIDDEN", message: "Seu usuário não está autorizado a avaliar nesta empresa." });
+}
 import { ENV } from "../_core/env";
 import { getSessionCookieOptions } from "../_core/cookies";
 
@@ -177,49 +195,98 @@ export const avaliacaoRouter = router({
       }),
 
     // Listar funcionários pendentes de avaliação (exclui já avaliados no período)
-    listPending: publicProcedure
+    listPending: protectedProcedure
       .input(z.object({ evaluatorId: z.number(), companyId: z.number(), mesReferencia: z.string().optional() }))
-      .query(async ({ input }) => {
+      .query(async ({ input, ctx }) => {
         const db = await getDb();
         const now = new Date();
         const mesRef = input.mesReferencia || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-        const [evaluator] = await db.select().from(evalAvaliadores).where(eq(evalAvaliadores.id, input.evaluatorId));
-        if (!evaluator) return [];
+        // evaluatorId 0 = admin/perfil avaliador sem cadastro (acesso virtual): lista todos os ativos da empresa
+        const isVirtual = input.evaluatorId === 0;
+        let evaluator: any = null;
+        let virtualUserId: number | null = null;
+        if (!isVirtual) {
+          [evaluator] = await db.select().from(evalAvaliadores).where(eq(evalAvaliadores.id, input.evaluatorId));
+          if (!evaluator) return [];
+        } else {
+          virtualUserId = (await autorizarAvaliadorVirtual(db, ctx, input)).userId;
+        }
         // Buscar IDs dos funcionários já avaliados neste mês por este avaliador
+        // (para o avaliador virtual id=0, distinguir pelo userId — vários admins compartilham o id 0)
+        const alreadyConds: any[] = [eq(evalAvaliacoes.evaluatorId, input.evaluatorId), eq(evalAvaliacoes.mesReferencia, mesRef)];
+        if (isVirtual) alreadyConds.push(eq(evalAvaliacoes.actorUserId, virtualUserId!));
         const alreadyEvaluated = await db.select({ employeeId: evalAvaliacoes.employeeId })
           .from(evalAvaliacoes)
-          .where(and(eq(evalAvaliacoes.evaluatorId, input.evaluatorId), eq(evalAvaliacoes.mesReferencia, mesRef)));
+          .where(and(...alreadyConds));
         const evaluatedIds = new Set(alreadyEvaluated.map(e => e.employeeId));
-        // Buscar todos os funcionários ATIVOS da empresa (e obra se aplicável)
-        const conditions: any[] = [companyFilter(employees.companyId, input), eq(employees.status, "Ativo")];
-        const allEmployees = await db.select({ id: employees.id, nome: employees.nomeCompleto, cpf: employees.cpf, funcao: employees.funcao, setor: employees.setor, fotoUrl: employees.fotoUrl })
+        // Buscar funcionários presentes/temporariamente afastados da empresa (e obra se aplicável)
+        // Inclui Ferias/Afastado/Aviso para o avaliador VER a situação (badge no painel)
+        const conditions: any[] = [companyFilter(employees.companyId, input), inArray(employees.status, ["Ativo", "Ferias", "Afastado", "Aviso"])];
+        const allEmployees = await db.select({
+          id: employees.id, nome: employees.nomeCompleto, cpf: employees.cpf, funcao: employees.funcao,
+          setor: employees.setor, fotoUrl: employees.fotoUrl, statusFuncionario: employees.status,
+          dataAdmissao: employees.dataAdmissao, dataNascimento: employees.dataNascimento,
+        })
           .from(employees).where(and(...conditions)).orderBy(asc(employees.nomeCompleto));
         const pendAlocs = await db.select({ employeeId: obraFuncionarios.employeeId, obraId: obraFuncionarios.obraId })
           .from(obraFuncionarios).where(eq(obraFuncionarios.isActive, 1));
         const pendObraMap = new Map(pendAlocs.map(a => [a.employeeId, a.obraId]));
-        let pendResult = allEmployees.map(emp => ({ ...emp, obraId: pendObraMap.get(emp.id) || null, jaAvaliado: evaluatedIds.has(emp.id) }));
-        if (evaluator.obraId) pendResult = pendResult.filter(e => e.obraId === evaluator.obraId);
+        // Nome da obra alocada
+        const rowsAny = (r: any) => (Array.isArray(r) ? r : (r?.rows ?? []));
+        const obraIds = Array.from(new Set(pendAlocs.map(a => a.obraId).filter(Boolean))) as number[];
+        const obrasRows = obraIds.length > 0
+          ? await db.select({ id: obras.id, nome: obras.nome }).from(obras).where(inArray(obras.id, obraIds))
+          : [];
+        const obraNomeMap = new Map(obrasRows.map((o: any) => [Number(o.id), o.nome]));
+        // Atestado vigente HOJE (emissão ≤ hoje ≤ retorno)
+        const atestRows = rowsAny(await db.execute(sql`
+          SELECT "employeeId", MAX("dataRetorno") AS retorno
+          FROM atestados
+          WHERE "companyId" = ${input.companyId} AND "deletedAt" IS NULL
+            AND "dataEmissao" <= CURRENT_DATE AND "dataRetorno" >= CURRENT_DATE
+          GROUP BY "employeeId"`));
+        const atestMap = new Map(atestRows.map((a: any) => [Number(a.employeeId), String(a.retorno).slice(0, 10)]));
+        // Membros ATIVOS da CIPA (estabilidade — importante sinalizar pro avaliador)
+        const cipaRows = rowsAny(await db.execute(sql`
+          SELECT "employeeId", "cargoCipa"
+          FROM cipa_members
+          WHERE "companyId" = ${input.companyId} AND "statusMembro" = 'Ativo'`));
+        const cipaMap = new Map(cipaRows.map((c: any) => [Number(c.employeeId), String(c.cargoCipa || "").replace(/_/g, " ")]));
+        let pendResult = allEmployees.map(emp => {
+          const obraId = pendObraMap.get(emp.id) || null;
+          return {
+            ...emp,
+            obraId,
+            obraNome: obraId ? (obraNomeMap.get(Number(obraId)) ?? null) : null,
+            atestadoAte: atestMap.get(emp.id) ?? null,
+            cipaCargo: cipaMap.get(emp.id) ?? null,
+            jaAvaliado: evaluatedIds.has(emp.id),
+          };
+        });
+        if (evaluator?.obraId) pendResult = pendResult.filter(e => e.obraId === evaluator.obraId);
         return pendResult;
       }),
 
     // Verificar trava de frequência
-    checkFrequencyLock: publicProcedure
+    checkFrequencyLock: protectedProcedure
       .input(z.object({ evaluatorId: z.number(), employeeId: z.number(), mesReferencia: z.string().optional() }))
-      .query(async ({ input }) => {
+      .query(async ({ input, ctx }) => {
         const db = await getDb();
         const now = new Date();
         const mesRef = input.mesReferencia || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
         const [evaluator] = await db.select().from(evalAvaliadores).where(eq(evalAvaliadores.id, input.evaluatorId));
         const freq = evaluator?.evaluationFrequency || "monthly";
-        // Verificar se já avaliou no mês de referência
+        // Verificar se já avaliou no mês de referência (avaliador virtual id=0: distinguir pelo userId)
+        const lockConds: any[] = [eq(evalAvaliacoes.evaluatorId, input.evaluatorId), eq(evalAvaliacoes.employeeId, input.employeeId), eq(evalAvaliacoes.mesReferencia, mesRef)];
+        if (input.evaluatorId === 0) lockConds.push(eq(evalAvaliacoes.actorUserId, ctx.user?.id ?? -1));
         const existing = await db.select({ id: evalAvaliacoes.id }).from(evalAvaliacoes)
-          .where(and(eq(evalAvaliacoes.evaluatorId, input.evaluatorId), eq(evalAvaliacoes.employeeId, input.employeeId), eq(evalAvaliacoes.mesReferencia, mesRef)));
+          .where(and(...lockConds));
         const freqLabels: Record<string, string> = { daily: "dia", weekly: "semana", monthly: "mês", quarterly: "trimestre", annual: "ano" };
         return { locked: existing.length > 0, mesReferencia: mesRef, frequency: freq, frequencyLabel: freqLabels[freq] || freq };
       }),
 
     // Criar avaliação (pelo avaliador logado) - COM TRAVA DE FREQUÊNCIA e APENAS ATIVOS
-    createEvaluation: publicProcedure
+    createEvaluation: protectedProcedure
       .input(z.object({
         evaluatorId: z.number(),
         companyId: z.number(),
@@ -244,18 +311,28 @@ export const avaliacaoRouter = router({
         deviceType: z.string().optional(),
         revisionId: z.number().optional(),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
         const db = await getDb();
         const now = new Date();
         const mesRef = input.mesReferencia || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
-        // Verificar se avaliador existe e está ativo
-        const [evaluator] = await db.select().from(evalAvaliadores).where(eq(evalAvaliadores.id, input.evaluatorId));
-        if (!evaluator || evaluator.status !== "ativo") throw new TRPCError({ code: "FORBIDDEN", message: "Avaliador não encontrado ou inativo." });
+        // Verificar se avaliador existe e está ativo.
+        // evaluatorId 0 = admin/perfil avaliador sem cadastro (acesso virtual) — autorização revalidada no servidor.
+        const isVirtual = input.evaluatorId === 0;
+        let evaluator: any = null;
+        let virtualUserId: number | null = null;
+        if (isVirtual) {
+          const auth = await autorizarAvaliadorVirtual(db, ctx, input);
+          virtualUserId = auth.userId;
+          evaluator = { id: 0, nome: auth.nome, obraId: null, evaluationFrequency: 'monthly', status: 'ativo' };
+        } else {
+          [evaluator] = await db.select().from(evalAvaliadores).where(eq(evalAvaliadores.id, input.evaluatorId));
+          if (!evaluator || evaluator.status !== "ativo") throw new TRPCError({ code: "FORBIDDEN", message: "Avaliador não encontrado ou inativo." });
+        }
 
-        // Verificar se funcionário existe e está ATIVO
-        const [employee] = await db.select().from(employees).where(eq(employees.id, input.employeeId));
-        if (!employee) throw new TRPCError({ code: "NOT_FOUND", message: "Funcionário não encontrado." });
+        // Verificar se funcionário existe, está ATIVO e pertence à empresa informada
+        const [employee] = await db.select().from(employees).where(and(eq(employees.id, input.employeeId), eq(employees.companyId, input.companyId)));
+        if (!employee) throw new TRPCError({ code: "NOT_FOUND", message: "Funcionário não encontrado nesta empresa." });
         if (employee.status !== "Ativo") throw new TRPCError({ code: "BAD_REQUEST", message: "Apenas funcionários com status ATIVO podem ser avaliados." });
 
         // TRAVA DE FREQUÊNCIA - verificar se já avaliou neste período
@@ -267,8 +344,10 @@ export const avaliacaoRouter = router({
         else if (freq === "monthly") cutoffDate.setMonth(cutoffDate.getMonth() - 1);
         else if (freq === "quarterly") cutoffDate.setMonth(cutoffDate.getMonth() - 3);
         else if (freq === "annual") cutoffDate.setFullYear(cutoffDate.getFullYear() - 1);
+        const lockConds: any[] = [eq(evalAvaliacoes.evaluatorId, input.evaluatorId), eq(evalAvaliacoes.employeeId, input.employeeId), sql`${evalAvaliacoes.createdAt} >= ${cutoffDate}`];
+        if (isVirtual) lockConds.push(eq(evalAvaliacoes.actorUserId, virtualUserId!));
         const existingEval = await db.select({ id: evalAvaliacoes.id }).from(evalAvaliacoes)
-          .where(and(eq(evalAvaliacoes.evaluatorId, input.evaluatorId), eq(evalAvaliacoes.employeeId, input.employeeId), sql`${evalAvaliacoes.createdAt} >= ${cutoffDate}`));
+          .where(and(...lockConds));
         if (existingEval.length > 0) throw new TRPCError({ code: "BAD_REQUEST", message: `Você já avaliou este funcionário neste período. Sua frequência de avaliação é ${freqLabels[freq] || freq}. Aguarde o próximo período.` });
 
         // Verificar se avaliador pode avaliar este funcionário (mesma obra)
@@ -292,6 +371,7 @@ export const avaliacaoRouter = router({
           evaluatorId: input.evaluatorId,
           obraId: input.obraId || null,
           evaluatorName: evaluator.nome,
+          actorUserId: ctx.user?.id ?? null,
           comportamento: input.comportamento,
           pontualidade: input.pontualidade,
           assiduidade: input.assiduidade,
@@ -334,10 +414,13 @@ export const avaliacaoRouter = router({
       }),
 
     // Listar avaliações do avaliador (SEM mediaGeral, SEM recomendação - SIGILOSO)
-    listMyEvaluations: publicProcedure
+    listMyEvaluations: protectedProcedure
       .input(z.object({ evaluatorId: z.number(), companyId: z.number() }))
-      .query(async ({ input }) => {
+      .query(async ({ input, ctx }) => {
         const db = await getDb();
+        const myConds: any[] = [eq(evalAvaliacoes.evaluatorId, input.evaluatorId), companyFilter(evalAvaliacoes.companyId, input)];
+        // Avaliador virtual (id=0): só as avaliações do PRÓPRIO usuário (vários admins compartilham o id 0)
+        if (input.evaluatorId === 0) myConds.push(eq(evalAvaliacoes.actorUserId, ctx.user?.id ?? -1));
         const evals = await db.select({
           id: evalAvaliacoes.id,
           employeeId: evalAvaliacoes.employeeId,
@@ -347,7 +430,7 @@ export const avaliacaoRouter = router({
           createdAt: evalAvaliacoes.createdAt,
           // NÃO retorna mediaGeral, recomendação - SIGILOSO
         }).from(evalAvaliacoes)
-          .where(and(eq(evalAvaliacoes.evaluatorId, input.evaluatorId), companyFilter(evalAvaliacoes.companyId, input)))
+          .where(and(...myConds))
           .orderBy(desc(evalAvaliacoes.createdAt));
         const enriched = [];
         for (const ev of evals) {
@@ -370,7 +453,9 @@ export const avaliacaoRouter = router({
   raioX: router({
     getByEmployee: protectedProcedure
       .input(z.object({ employeeId: z.number(), companyId: z.number() }))
-      .query(async ({ input }) => {
+      .query(async ({ input, ctx }) => {
+        // Rev. 5192 — Raio-X guard: full access = admin_master or rh-dp admin.
+        await assertRaioXAccess(ctx as any, input.employeeId);
         const db = await getDb();
         const [emp] = await db.select().from(employees).where(eq(employees.id, input.employeeId));
         if (!emp) return null;
@@ -797,6 +882,8 @@ export const avaliacaoRouter = router({
     getByEmployee: protectedProcedure
       .input(z.object({ employeeId: z.number(), companyId: z.number() }))
       .query(async ({ input, ctx }) => {
+        // Rev. 5192 — Raio-X guard: full access = admin_master or rh-dp admin.
+        await assertRaioXAccess(ctx as any, input.employeeId);
         const db = await getDb();
         const canView = canViewResults(ctx.user?.role);
 

@@ -1,6 +1,7 @@
 import { router, protectedProcedure } from "../_core/trpc";
 import { z } from "zod";
 import { getDb } from "../db";
+import { assertRaioXAccess, userHasFullRaioXAccess, resolveOwnEmployee, deriveAllowedCompanyIds, RAIO_X_FORBIDDEN_MSG } from "../raioXGuard";
 import {
   ddsTemas, ddsSessoes, ddsSessaoFuncionarios,
   employees, obras, accidents, obraFuncionarios,
@@ -2204,6 +2205,28 @@ ${input.foco ? `Foco solicitado pelo usuário: "${input.foco}". Priorize temas d
     .query(async ({ input, ctx }) => {
       try {
         assertCompanyAccess(ctx, input.companyId);
+        // Rev. 5194 — Raio-X guard for DDS sessions viewed from the dossier.
+        // Full-access users (admin_master / rh-dp admin) see any session.
+        // Self-access users may only view sessions they participated in.
+        // Company scope always derived server-side.
+        if (!(await userHasFullRaioXAccess(ctx.user.id, ctx.user.role))) {
+          const allowedCids = await deriveAllowedCompanyIds(ctx.user.id, ctx.user.role);
+          const ownEmp = await resolveOwnEmployee(ctx.user.id, (ctx.user as any).email, allowedCids);
+          if (!ownEmp) {
+            throw new TRPCError({ code: "FORBIDDEN", message: RAIO_X_FORBIDDEN_MSG });
+          }
+          const db2 = (await getDb())!;
+          const [myPart] = await db2.select({ id: ddsSessaoFuncionarios.id })
+            .from(ddsSessaoFuncionarios)
+            .where(and(
+              eq(ddsSessaoFuncionarios.sessaoId, input.id),
+              eq(ddsSessaoFuncionarios.employeeId, ownEmp.id),
+            ))
+            .limit(1);
+          if (!myPart) {
+            throw new TRPCError({ code: "FORBIDDEN", message: RAIO_X_FORBIDDEN_MSG });
+          }
+        }
         const db = (await getDb())!;
         // Rev. 1753 — projeta colunas explícitas da sessão (igual aos funcionários).
         // Antes usava `select()` que trazia TUDO; algum campo problemático no spread
@@ -2300,6 +2323,14 @@ ${input.foco ? `Foco solicitado pelo usuário: "${input.foco}". Priorize temas d
     .query(async ({ input, ctx }) => {
       assertCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
+      // Rev. 5193 — Raio-X guard: derive employeeId from the ddsSessaoFuncionarios row.
+      const [sfRow] = await db.select({ employeeId: ddsSessaoFuncionarios.employeeId })
+        .from(ddsSessaoFuncionarios)
+        .where(eq(ddsSessaoFuncionarios.id, input.funcionarioId))
+        .limit(1);
+      if (sfRow?.employeeId) {
+        await assertRaioXAccess(ctx as any, sfRow.employeeId);
+      }
       const [row] = await db.select({ img: ddsSessaoFuncionarios.assinaturaImg })
         .from(ddsSessaoFuncionarios)
         .innerJoin(ddsSessoes, eq(ddsSessaoFuncionarios.sessaoId, ddsSessoes.id))

@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
-import { Plus, Search, Pencil, Trash2, Landmark, MapPin, Calendar, Loader2, Wifi, X, AlertCircle, CheckCircle, ArrowLeft, FileText, Brain, BookOpen, Wrench, UserCheck, ChevronDown, Merge, Upload, Image as ImageIcon, Building, PackageOpen, ArrowLeftRight, ShieldCheck, HardHat, Handshake, Ruler } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Landmark, MapPin, Calendar, Loader2, Wifi, X, AlertCircle, CheckCircle, ArrowLeft, FileText, Brain, BookOpen, Wrench, UserCheck, ChevronDown, Merge, Upload, Image as ImageIcon, Building, PackageOpen, ArrowLeftRight, ShieldCheck, HardHat, Handshake, Ruler, Lock, Sparkles } from "lucide-react";
 import ModalAprovadoresEstoque from "@/components/obras/ModalAprovadoresEstoque";
 import { TimeCombobox, ENTRADA_OPTIONS, INTERVALO_OPTIONS, SAIDA_OPTIONS } from "@/components/TimeCombobox";
 import { useLocation } from "wouter";
@@ -87,7 +87,13 @@ type ObraForm = {
   terceiroDiaPagamento: number | null;
   terceiroPrazoAprovacaoDias: number | null;
   terceiroPagamentoConformeRecebimento: number;
+  terceiroCriterioMedicao: string | null;
+  contratoAssinadoUrl: string;
+  contratoAssinadoKey: string;
 };
+
+// Rev. 5001/5002 — Critério de Medição de MDO da obra (JSON {tipo, condicoes[], descontos[]})
+import CriterioMedicaoMdoEditor, { parseCriterioMedicaoMdo as parseCriterioMedicao } from "@/components/CriterioMedicaoMdoEditor";
 
 const TIPO_CONTRATO_OPTIONS = [
   { value: "global", label: "Empreitada Global", color: "bg-blue-100 text-blue-800", desc: "MDO + Material + Equipamentos" },
@@ -126,6 +132,9 @@ const emptyForm: ObraForm = {
   terceiroDiaPagamento: null,
   terceiroPrazoAprovacaoDias: null,
   terceiroPagamentoConformeRecebimento: 0,
+  terceiroCriterioMedicao: null,
+  contratoAssinadoUrl: "",
+  contratoAssinadoKey: "",
 };
 
 export default function Obras() {
@@ -208,8 +217,15 @@ export default function Obras() {
 
   const [dialogOpen, setDialogOpen] = useState(false);
   // Rev. 4833 — abas do formulário de obra (pedido do usuário: separar os cadastros)
-  const [formTab, setFormTab] = useState<"geral" | "terceiros" | "jornada" | "ponto" | "projetos">("geral");
+  const [formTab, setFormTab] = useState<"geral" | "contrato" | "terceiros" | "criterios" | "jornada" | "ponto" | "projetos">("geral");
   const [editingId, setEditingId] = useState<number | null>(null);
+  // Rev. 5004 — aba Medição & Pagamento nasce TRAVADA no padrão da empresa;
+  // "Personalizar" habilita os campos só quando a obra tem condição diferente.
+  const [personalizarMedicao, setPersonalizarMedicao] = useState(false);
+  const criterioPadraoQ = (trpc as any).terceiroContratos.getCriterioMedicaoPadrao.useQuery(
+    { companyId },
+    { enabled: !!companyId && dialogOpen }
+  );
 
   // Rev. 3451 — Múltiplos clientes por obra (movido para após editingId — fix Rev. 3453)
   const obraClientesQ = (trpc as any).obras.listClientes.useQuery(
@@ -228,6 +244,80 @@ export default function Obras() {
 
   const [mesclarDialog, setMesclarDialog] = useState<{ open: boolean; sourceObra: any | null }>({ open: false, sourceObra: null });
   const [mesclarTargetId, setMesclarTargetId] = useState<number | null>(null);
+
+  // Rev. 5152 — Contrato assinado + leitura por IA
+  const contratoFileRef = useRef<HTMLInputElement>(null);
+  const contratoBase64Ref = useRef<string>("");
+  const [contratoUploading, setContratoUploading] = useState(false);
+  const [contratoAnalisando, setContratoAnalisando] = useState(false);
+  const [iaResult, setIaResult] = useState<Record<string, any> | null>(null);
+  const IA_FIELD_LABELS: Record<string, string> = {
+    nome: "Nome da Obra", numeroContrato: "Nº do Contrato", cliente: "Cliente",
+    dataInicio: "Data de Início", dataPrevisaoFim: "Data de Término",
+    valorContrato: "Valor do Contrato", endereco: "Endereço",
+    tipoContrato: "Tipo de Contrato", observacoes: "Observações",
+  };
+  const uploadContratoMut = (trpc as any).obras.uploadContrato.useMutation({
+    onError: (e: any) => { setContratoUploading(false); toast.error(e.message || "Erro ao enviar contrato"); },
+  });
+  const lerContratoIAMut = (trpc as any).obras.lerContratoIA.useMutation({
+    onError: (e: any) => { setContratoAnalisando(false); toast.error(e.message || "Erro na leitura por IA"); },
+  });
+  const handleContratoFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !editingId) return;
+    if (file.size > 30 * 1024 * 1024) { toast.error("PDF muito grande (máx 30 MB)"); return; }
+    setContratoUploading(true);
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve((reader.result as string).split(",")[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      contratoBase64Ref.current = base64;
+      const result = await uploadContratoMut.mutateAsync({ obraId: editingId, companyId, fileBase64: base64, mimeType: "application/pdf", fileName: file.name });
+      setForm(f => ({ ...f, contratoAssinadoUrl: result.url, contratoAssinadoKey: result.key }));
+      toast.success("Contrato anexado! Clique em 'Ler com IA' para extrair os dados.");
+    } finally {
+      setContratoUploading(false);
+      e.target.value = "";
+    }
+  };
+  const handleLerContratoIA = async () => {
+    const b64 = contratoBase64Ref.current;
+    if (!b64 || !editingId) {
+      toast.info("Selecione o PDF do contrato novamente para usar a IA.");
+      contratoFileRef.current?.click();
+      return;
+    }
+    setContratoAnalisando(true);
+    try {
+      const data = await lerContratoIAMut.mutateAsync({ obraId: editingId, companyId, fileBase64: b64, mimeType: "application/pdf" });
+      const nonNull = Object.fromEntries(Object.entries(data).filter(([, v]) => v != null));
+      if (Object.keys(nonNull).length === 0) { toast.warning("A IA não conseguiu extrair campos do contrato. Verifique se o PDF é legível."); return; }
+      setIaResult(nonNull);
+    } finally {
+      setContratoAnalisando(false);
+    }
+  };
+  const aplicarIaResult = () => {
+    if (!iaResult) return;
+    const TIPO_MAP: Record<string, string> = { global: "global", mdo: "mdo", adm: "adm", projeto: "projeto" };
+    setForm(f => ({
+      ...f,
+      ...(iaResult.nome ? { nome: iaResult.nome } : {}),
+      ...(iaResult.numeroContrato ? { numeroContrato: iaResult.numeroContrato } : {}),
+      ...(iaResult.cliente ? { cliente: iaResult.cliente } : {}),
+      ...(iaResult.dataInicio ? { dataInicio: iaResult.dataInicio } : {}),
+      ...(iaResult.dataPrevisaoFim ? { dataPrevisaoFim: iaResult.dataPrevisaoFim } : {}),
+      ...(iaResult.endereco ? { endereco: iaResult.endereco } : {}),
+      ...(iaResult.tipoContrato && TIPO_MAP[iaResult.tipoContrato] ? { tipoContrato: TIPO_MAP[iaResult.tipoContrato] } : {}),
+      ...(iaResult.observacoes ? { observacoes: (f.observacoes ? f.observacoes + "\n" : "") + iaResult.observacoes } : {}),
+    }));
+    toast.success("Campos aplicados com sucesso! Revise antes de salvar.");
+    setIaResult(null);
+  };
   // Rev. 3455 — confirmações sem window.confirm (feio no iOS)
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const [confirmRemoveSnId, setConfirmRemoveSnId] = useState<number | null>(null);
@@ -357,7 +447,7 @@ export default function Obras() {
     return list;
   }, [obras, search, statusFilter, snsByObra]);
 
-  const openNew = () => { setEditingId(null); setForm(emptyForm); setJornadaForm({}); setNewSn(""); setNewSnApelido(""); setSnValidation({ checking: false }); setPendingSns([]); setNomeError(false); setClienteOpen(false); setClienteBusca(""); setResponsavelOpen(false); setResponsavelBusca(""); setTstOpen(false); setTstBusca(""); setEncarregadoOpen(false); setEncarregadoBusca(""); setFormTab("geral"); setDialogOpen(true); };
+  const openNew = () => { setEditingId(null); setForm(emptyForm); setJornadaForm({}); setNewSn(""); setNewSnApelido(""); setSnValidation({ checking: false }); setPendingSns([]); setNomeError(false); setClienteOpen(false); setClienteBusca(""); setResponsavelOpen(false); setResponsavelBusca(""); setTstOpen(false); setTstBusca(""); setEncarregadoOpen(false); setEncarregadoBusca(""); setFormTab("geral"); setPersonalizarMedicao(false); setDialogOpen(true); };
   const openEdit = (obra: any) => {
     setEditingId(obra.id);
     setForm({
@@ -393,7 +483,16 @@ export default function Obras() {
       terceiroDiaPagamento: obra.terceiroDiaPagamento ?? null,
       terceiroPrazoAprovacaoDias: obra.terceiroPrazoAprovacaoDias ?? null,
       terceiroPagamentoConformeRecebimento: obra.terceiroPagamentoConformeRecebimento ?? 0,
+      terceiroCriterioMedicao: obra.terceiroCriterioMedicao ?? null,
+      contratoAssinadoUrl: obra.contratoAssinadoUrl || "",
+      contratoAssinadoKey: obra.contratoAssinadoKey || "",
     });
+    setIaResult(null);
+    setPersonalizarMedicao(
+      obra.terceiroCriterioMedicao != null || obra.terceiroDiaMedicao != null ||
+      obra.terceiroPrazoAprovacaoDias != null || obra.terceiroDiaPagamento != null ||
+      (obra.terceiroPagamentoConformeRecebimento ?? 0) === 1
+    );
     setJornadaForm(decomporJornadaObra(obra.jornadaTrabalho));
     setNewSn(""); setNewSnApelido(""); setSnValidation({ checking: false }); setNomeError(false);
     setClienteOpen(false); setClienteBusca(""); setResponsavelOpen(false); setResponsavelBusca("");
@@ -553,7 +652,7 @@ export default function Obras() {
       }
     }
     setSaving(true);
-    const logoFields = ["clienteLogoUrl", "gerenciadoraLogoUrl", "gerenciadoraNome"];
+    const logoFields = ["clienteLogoUrl", "gerenciadoraLogoUrl", "gerenciadoraNome", "contratoAssinadoUrl", "contratoAssinadoKey"];
     const cleanForm = Object.fromEntries(
       Object.entries(form).map(([k, v]) => [k, typeof v === "string" && v.trim() === "" ? (logoFields.includes(k) ? null : undefined) : v])
     ) as any;
@@ -747,12 +846,19 @@ export default function Obras() {
         )}
       </div>
 
-      <FullScreenDialog open={dialogOpen} onClose={() => { setDialogOpen(false); setSaving(false); }} title={editingId ? "Editar Obra" : "Nova Obra"} icon={<Landmark className="h-5 w-5 text-white" />}>
+      <FullScreenDialog
+        open={dialogOpen}
+        onClose={() => { setDialogOpen(false); setSaving(false); }}
+        title={editingId ? "Editar Obra" : "Nova Obra"}
+        subtitle={editingId ? "Organize dados, contrato e configurações em etapas." : "Preencha por etapas para deixar o cadastro completo."}
+        icon={<Landmark className="h-5 w-5 text-white" />}
+      >
         <div className="w-full">
-          {/* Rev. 4833 — abas do cadastro da obra (Poka-Yoke: status por aba) */}
+          {/* Fluxo guiado do cadastro: cada barra representa uma etapa do trabalho. */}
           {(() => {
             const nomeOk = !!(form.nome.trim() || form.numOrcamento.trim());
             const geralOk = nomeOk && !!form.cliente;
+            const contratoOk = !!form.contratoAssinadoUrl;
             const terceirosOk =
               form.terceiroDiaMedicao != null || form.terceiroDiaPagamento != null ||
               form.terceiroPrazoAprovacaoDias != null || form.terceiroPagamentoConformeRecebimento === 1;
@@ -761,40 +867,101 @@ export default function Obras() {
               ? obraSns.some((s: any) => s.status === "ativo")
               : pendingSns.length > 0;
             const tabs = [
-              { key: "geral" as const, label: "Dados Gerais", Icon: Landmark, ok: geralOk, alerta: !nomeOk },
-              { key: "terceiros" as const, label: "Terceiros", Icon: Handshake, ok: terceirosOk, alerta: false },
-              { key: "jornada" as const, label: "Jornada", Icon: Calendar, ok: jornadaOk, alerta: false },
-              { key: "ponto" as const, label: "Ponto & Convenção", Icon: Wifi, ok: pontoOk, alerta: false },
-              { key: "projetos" as const, label: "Projetos (Medição)", Icon: Ruler, ok: false, alerta: false },
+              { key: "geral" as const, label: "Dados Gerais", shortLabel: "Dados", Icon: Landmark, ok: geralOk, alerta: !nomeOk, active: "bg-indigo-600 text-white", hover: "hover:bg-indigo-50 hover:text-indigo-700" },
+              { key: "contrato" as const, label: "Contrato", shortLabel: "Contrato", Icon: FileText, ok: contratoOk, alerta: false, active: "bg-sky-600 text-white", hover: "hover:bg-sky-50 hover:text-sky-700" },
+              { key: "criterios" as const, label: "Medição & Pagamento", shortLabel: "Medição", Icon: Ruler, ok: terceirosOk || !!parseCriterioMedicao(form.terceiroCriterioMedicao).tipo, alerta: false, active: "bg-violet-600 text-white", hover: "hover:bg-violet-50 hover:text-violet-700" },
+              { key: "jornada" as const, label: "Jornada", shortLabel: "Jornada", Icon: Calendar, ok: jornadaOk, alerta: false, active: "bg-amber-500 text-white", hover: "hover:bg-amber-50 hover:text-amber-700" },
+              { key: "ponto" as const, label: "Ponto & Convenção", shortLabel: "Ponto", Icon: Wifi, ok: pontoOk, alerta: false, active: "bg-cyan-600 text-white", hover: "hover:bg-cyan-50 hover:text-cyan-700" },
+              { key: "projetos" as const, label: "Projetos (Medição)", shortLabel: "Projetos", Icon: Ruler, ok: false, alerta: false, active: "bg-blue-700 text-white", hover: "hover:bg-blue-50 hover:text-blue-700" },
             ];
+            const completedTabs = tabs.filter(t => t.ok).length;
             return (
-              <div className="sticky top-0 z-10 -mx-1 px-1 pt-1 pb-3 bg-white/95 backdrop-blur mb-3">
-                <div className="flex gap-1.5 overflow-x-auto rounded-xl bg-slate-100 p-1.5">
+              <div className="sticky top-0 z-10 -mx-1 px-1 pt-1 pb-3 bg-gray-50/95 backdrop-blur mb-3">
+                <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+                  <div className="flex items-center justify-between gap-3 mb-3">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800">{editingId ? "Atualize os dados da obra" : "Vamos cadastrar sua obra"}</p>
+                      <p className="text-xs text-slate-500">Preencha cada etapa e salve quando terminar.</p>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600">
+                      {completedTabs}/{tabs.length} etapas
+                    </span>
+                  </div>
+                  <div className="mb-3 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-sky-500 to-cyan-500 transition-all duration-300"
+                      style={{ width: `${Math.max(6, (completedTabs / tabs.length) * 100)}%` }}
+                    />
+                  </div>
+                  <div className="flex gap-1.5 overflow-x-auto pb-0.5">
                   {tabs.map(t => (
                     <button
                       key={t.key}
                       type="button"
                       onClick={() => setFormTab(t.key)}
-                      className={`relative flex items-center gap-2 whitespace-nowrap rounded-lg px-3.5 py-2 text-sm font-medium transition-all flex-1 justify-center ${
+                      className={`relative flex min-w-max flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 text-xs sm:text-sm font-semibold transition-all ${
                         formTab === t.key
-                          ? "bg-white text-indigo-700 shadow-sm ring-1 ring-indigo-200"
-                          : "text-slate-500 hover:text-slate-700 hover:bg-white/60"
+                          ? `${t.active} shadow-sm`
+                          : `text-slate-500 ${t.hover}`
                       }`}
                     >
-                      <t.Icon className={`h-4 w-4 shrink-0 ${formTab === t.key ? "text-indigo-600" : "text-slate-400"}`} />
-                      <span>{t.label}</span>
-                      {/* Poka-Yoke: bolinha de status — verde = preenchido; âmbar = falta o obrigatório */}
+                      <t.Icon className="h-4 w-4 shrink-0" />
+                      <span className="sm:hidden">{t.shortLabel}</span>
+                      <span className="hidden sm:inline">{t.label}</span>
                       {t.alerta ? (
-                        <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-amber-400 ring-2 ring-white" title="Falta o nome da obra" />
+                        <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-amber-400 ring-2 ring-white" title="Falta o nome da obra" />
                       ) : t.ok ? (
-                        <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white" title="Preenchido" />
+                        <CheckCircle className={`h-3.5 w-3.5 ${formTab === t.key ? "text-white/90" : "text-sky-500"}`} aria-label="Preenchido" />
                       ) : null}
                     </button>
                   ))}
+                  </div>
                 </div>
               </div>
             );
           })()}
+          <div className="md:grid md:grid-cols-[56px_minmax(0,1fr)] lg:grid-cols-[210px_minmax(0,1fr)] md:items-start md:gap-4 lg:gap-5">
+            <aside className="hidden md:block md:sticky md:top-4">
+              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <div className="hidden border-b border-slate-100 bg-slate-50 px-3.5 py-3 lg:block">
+                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Comandos rápidos</p>
+                  <p className="mt-0.5 text-[11px] leading-relaxed text-slate-400">Navegue sem perder o contexto do cadastro.</p>
+                </div>
+                <nav className="space-y-1 p-2">
+                  {([
+                    { key: "geral", label: "Dados da obra", Icon: Landmark },
+                    { key: "contrato", label: "Contrato", Icon: FileText },
+                    { key: "criterios", label: "Medição", Icon: Ruler },
+                    { key: "jornada", label: "Jornada", Icon: Calendar },
+                    { key: "ponto", label: "Ponto e convenção", Icon: Wifi },
+                    { key: "projetos", label: "Projetos", Icon: Ruler },
+                  ] as const).map(command => (
+                    <button
+                      key={command.key}
+                      type="button"
+                      onClick={() => setFormTab(command.key)}
+                      className={`flex w-full items-center justify-center gap-2.5 rounded-lg px-2 py-2.5 text-left text-xs font-semibold transition-colors lg:justify-start lg:px-3 ${
+                        formTab === command.key
+                          ? "bg-[#1B2A4A] text-white shadow-sm"
+                          : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                      }`}
+                      title={command.label}
+                    >
+                      <command.Icon className="h-4 w-4 shrink-0" />
+                      <span className="hidden lg:inline">{command.label}</span>
+                    </button>
+                  ))}
+                </nav>
+                <div className="flex justify-center border-t border-slate-100 p-2 lg:block lg:p-3">
+                  <Button type="button" size="sm" className="w-full bg-sky-600 text-white hover:bg-sky-700" disabled={saving} onClick={handleSave}>
+                    {saving ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="mr-1.5 h-3.5 w-3.5" />}
+                    <span className="hidden lg:inline">{saving ? "Salvando" : "Salvar alterações"}</span>
+                  </Button>
+                </div>
+              </div>
+            </aside>
+
+            <div className="min-w-0">
           <div className={`grid grid-cols-1 sm:grid-cols-2 gap-4 ${formTab === "geral" ? "" : "hidden"}`}>
             <div className="sm:col-span-2">
               <Label>Nome da Obra <span className="text-muted-foreground text-xs">(ou preencha o Nº do Orçamento abaixo)</span></Label>
@@ -1383,11 +1550,7 @@ export default function Obras() {
               <Label>N° do Orçamento</Label>
               <Input value={form.numOrcamento} onChange={e => setForm(f => ({ ...f, numOrcamento: e.target.value }))} placeholder="Ex: ORC-2026-001" />
             </div>
-            <div>
-              <Label>N° do Contrato</Label>
-              <Input value={form.numeroContrato} onChange={e => setForm(f => ({ ...f, numeroContrato: e.target.value }))} placeholder="Ex: CT-2026-0214" />
-              <p className="text-[11px] text-muted-foreground mt-1">Aparece no campo "Contrato nº" das fichas do Databook.</p>
-            </div>
+
             <div>
               <Label>Status</Label>
               <Select value={form.status || "Planejamento"} onValueChange={v => setForm(f => ({ ...f, status: v }))}>
@@ -1422,21 +1585,218 @@ export default function Obras() {
             </div>
           </div>
 
-          {/* ══════ ABA: TERCEIROS & JORNADA ══════ */}
-          <div className={`space-y-4 ${formTab === "terceiros" ? "" : "hidden"}`}>
-            {/* Rev. 4832 — Condição de Pagamento padrão de TERCEIROS (herdada pelos contratos) */}
-            <div className="sm:col-span-2 rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-3">
+          {/* ══════ ABA: CONTRATO ══════ */}
+          <div className={`space-y-4 ${formTab === "contrato" ? "" : "hidden"}`}>
+            <div className="overflow-hidden rounded-2xl border border-sky-200 bg-white shadow-sm">
+              <div className="bg-gradient-to-r from-sky-700 via-blue-700 to-indigo-800 px-4 py-4 text-white sm:px-5">
+                <div className="flex items-start gap-3">
+                  <div className="rounded-xl bg-white/15 p-2.5">
+                    <FileText className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-bold">Contrato da obra</h2>
+                    <p className="mt-0.5 text-sm text-sky-100">Centralize o PDF assinado e use a leitura assistida para acelerar o preenchimento.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-4 sm:p-5">
+                <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50/70 p-3.5">
+                  <Label className="text-xs font-semibold uppercase tracking-wide text-slate-600">Número do contrato</Label>
+                  <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <Input
+                      value={form.numeroContrato}
+                      onChange={e => setForm(f => ({ ...f, numeroContrato: e.target.value }))}
+                      placeholder="Ex: CT-2026-0214"
+                      className="bg-white sm:max-w-sm"
+                    />
+                    <p className="text-xs leading-relaxed text-slate-500">Este número também aparece nas fichas do Databook.</p>
+                  </div>
+                </div>
+                {!editingId ? (
+                  <div className="rounded-xl border border-dashed border-sky-300 bg-sky-50/70 px-4 py-8 text-center">
+                    <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-white text-sky-600 shadow-sm">
+                      <FileText className="h-6 w-6" />
+                    </div>
+                    <h3 className="text-sm font-semibold text-slate-800">Salve os dados da obra antes de anexar o contrato</h3>
+                    <p className="mx-auto mt-1 max-w-md text-xs leading-relaxed text-slate-500">
+                      Primeiro informe os dados essenciais da obra. Depois do primeiro salvamento, você poderá anexar o PDF e usar a leitura por IA nesta mesma aba.
+                    </p>
+                    <Button type="button" variant="outline" size="sm" className="mt-4 border-sky-200 bg-white text-sky-700 hover:bg-sky-50" onClick={() => setFormTab("geral")}>
+                      <Landmark className="mr-1.5 h-3.5 w-3.5" /> Ir para Dados Gerais
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)]">
+                    <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-slate-800">PDF assinado</p>
+                          <p className="mt-0.5 text-xs text-slate-500">Formato aceito: PDF de até 30 MB.</p>
+                        </div>
+                        {form.contratoAssinadoUrl ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2.5 py-1 text-xs font-semibold text-sky-700">
+                            <CheckCircle className="h-3.5 w-3.5" /> Anexado
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700">
+                            <AlertCircle className="h-3.5 w-3.5" /> Pendente
+                          </span>
+                        )}
+                      </div>
+
+                      <input ref={contratoFileRef} type="file" accept="application/pdf" className="hidden" onChange={handleContratoFileSelect} />
+                      <div className="mt-4 rounded-xl border-2 border-dashed border-sky-200 bg-white p-4">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="flex min-w-0 items-center gap-3">
+                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-sky-100 text-sky-700">
+                              <FileText className="h-5 w-5" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-slate-800">{form.contratoAssinadoUrl ? "Contrato pronto para consulta" : "Nenhum PDF anexado ainda"}</p>
+                              <p className="text-xs leading-relaxed text-slate-500">{form.contratoAssinadoUrl ? "Você pode substituir o arquivo a qualquer momento." : "Anexe o contrato assinado para manter o documento centralizado na obra."}</p>
+                            </div>
+                          </div>
+                          <Button type="button" size="sm" disabled={contratoUploading || contratoAnalisando}
+                            className="shrink-0 bg-sky-600 text-white hover:bg-sky-700"
+                            onClick={() => contratoFileRef.current?.click()}>
+                            {contratoUploading ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Upload className="mr-1.5 h-3.5 w-3.5" />}
+                            {form.contratoAssinadoUrl ? "Substituir PDF" : "Anexar PDF"}
+                          </Button>
+                        </div>
+                      </div>
+
+                      {form.contratoAssinadoUrl && (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <a href={form.contratoAssinadoUrl} target="_blank" rel="noopener noreferrer"
+                            className="inline-flex h-8 items-center rounded-md border border-sky-200 bg-white px-3 text-xs font-medium text-sky-700 shadow-xs transition-colors hover:bg-sky-50">
+                            <FileText className="mr-1.5 h-3.5 w-3.5" /> Visualizar PDF
+                          </a>
+                          <Button type="button" variant="outline" size="sm"
+                            className="border-violet-200 text-violet-700 hover:bg-violet-50"
+                            disabled={contratoAnalisando || contratoUploading}
+                            onClick={handleLerContratoIA}>
+                            {contratoAnalisando ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Sparkles className="mr-1.5 h-3.5 w-3.5" />}
+                            Ler dados com IA
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="rounded-xl border border-violet-200 bg-violet-50/60 p-4">
+                      <div className="flex items-center gap-2">
+                        <div className="rounded-lg bg-violet-100 p-2 text-violet-700"><Sparkles className="h-4 w-4" /></div>
+                        <div>
+                          <p className="text-sm font-semibold text-violet-950">Preenchimento assistido</p>
+                          <p className="text-xs text-violet-700">A IA sugere os dados. A revisão final é sempre sua.</p>
+                        </div>
+                      </div>
+                      <ol className="mt-4 space-y-3 text-xs text-slate-600">
+                        <li className="flex gap-2"><span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-violet-600 text-[10px] font-bold text-white">1</span><span>Anexe a versão assinada do contrato.</span></li>
+                        <li className="flex gap-2"><span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-violet-600 text-[10px] font-bold text-white">2</span><span>Use “Ler dados com IA” para identificar informações do PDF.</span></li>
+                        <li className="flex gap-2"><span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-violet-600 text-[10px] font-bold text-white">3</span><span>Revise as sugestões e aplique somente o que estiver correto.</span></li>
+                      </ol>
+                    </div>
+                  </div>
+                )}
+
+                {iaResult && (
+                  <div className="mt-4 rounded-xl border border-sky-200 bg-sky-50/60 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-semibold text-sky-900 flex items-center gap-1.5">
+                        <Sparkles className="h-4 w-4" /> Dados identificados no contrato
+                      </p>
+                      <Button type="button" size="sm" variant="ghost" className="h-7 px-2 text-xs text-slate-500" onClick={() => setIaResult(null)}>Descartar</Button>
+                    </div>
+                    <p className="mt-1 text-xs text-sky-800">Confira as informações abaixo antes de levá-las para o cadastro da obra.</p>
+                    <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      {Object.entries(iaResult).map(([k, v]) => (
+                        <div key={k} className="rounded-lg border border-sky-100 bg-white px-3 py-2">
+                          <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">{IA_FIELD_LABELS[k] || k}</p>
+                          <p className="mt-0.5 break-words text-xs font-semibold leading-relaxed text-slate-700">{String(v)}</p>
+                        </div>
+                      ))}
+                    </div>
+                    <Button type="button" size="sm" className="mt-3 w-full bg-sky-600 text-white hover:bg-sky-700" onClick={aplicarIaResult}>
+                      <CheckCircle className="mr-1.5 h-3.5 w-3.5" /> Aplicar ao formulário
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* ══════ ABA: MEDIÇÃO & PAGAMENTO (Rev. 5001/5003/5004 — travada no padrão da empresa) ══════ */}
+          <div className={`space-y-4 ${formTab === "criterios" ? "" : "hidden"}`}>
+            {!personalizarMedicao && (() => {
+              const padraoRaw = criterioPadraoQ.data?.valor ?? null;
+              const cp = parseCriterioMedicao(padraoRaw);
+              const TIPO_LBL: Record<string, string> = { avanco_fisico: "Avanço Físico", etapa_concluida: "Etapa Concluída", producao_unitaria: "Produção" };
+              const COND_LBL: Record<string, string> = { aceite_fiscalizacao: "Aceite da fiscalização", sem_pendencia_documental: "Sem pendência documental", sem_pendencia_sst: "Sem pendência SST", limpeza_area: "Área limpa e desmobilizada" };
+              const DESC_LBL: Record<string, string> = { retrabalho: "Retrabalhos", desperdicio_material: "Desperdício de material", avarias: "Avarias da equipe" };
+              const dm = (cp as any).diaMedicao ?? 25, pa = (cp as any).prazoAprovacaoDias ?? 5, pp = (cp as any).prazoPagamentoDias ?? 10;
+              return (
+                <div className="sm:col-span-2 rounded-lg border border-emerald-200 bg-emerald-50/40 p-3 space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h3 className="font-semibold text-sm text-emerald-900 flex items-center gap-1.5"><Lock className="h-3.5 w-3.5" /> Seguindo o padrão da empresa</h3>
+                      <p className="text-xs text-emerald-800/80 mt-0.5">Esta obra usa o Critério de Medição padrão (Configurações › Critérios do Sistema › Terceiros). Todos os contratos de terceiros desta obra saem com ele.</p>
+                    </div>
+                  </div>
+                  {criterioPadraoQ.isLoading ? (
+                    <p className="text-xs text-muted-foreground">Carregando padrão da empresa…</p>
+                  ) : cp.tipo ? (
+                    <div className="rounded-md bg-white border border-emerald-200 px-3 py-2.5 space-y-1.5 text-xs text-slate-700">
+                      <div><span className="font-semibold">Tipo:</span> {TIPO_LBL[cp.tipo] || cp.tipo}</div>
+                      <div><span className="font-semibold">Fluxo:</span> corte da medição dia <b>{dm}</b> → aprovação em até <b>{pa} dias úteis</b> → NF → pagamento em até <b>{pp} dias úteis</b> após a NF.</div>
+                      {cp.condicoes.length > 0 && <div><span className="font-semibold">Libera se:</span> {cp.condicoes.map(c => COND_LBL[c] || c).join(" · ")}</div>}
+                      {cp.descontos.length > 0 && <div><span className="font-semibold">Desconta:</span> {cp.descontos.map(d => DESC_LBL[d] || d).join(" · ")}</div>}
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2.5 py-1.5">A empresa ainda não tem padrão definido (Configurações › Critérios do Sistema › Terceiros). Sem padrão e sem critério na obra, a aprovação de cotações de serviço fica bloqueada.</p>
+                  )}
+                  <Button type="button" variant="outline" size="sm" className="border-emerald-300"
+                    onClick={() => {
+                      // Semeia os campos com o padrão pra editar em cima dele
+                      setForm(f => ({
+                        ...f,
+                        terceiroCriterioMedicao: f.terceiroCriterioMedicao ?? padraoRaw,
+                        terceiroDiaMedicao: f.terceiroDiaMedicao ?? (cp as any).diaMedicao ?? null,
+                        terceiroPrazoAprovacaoDias: f.terceiroPrazoAprovacaoDias ?? (cp as any).prazoAprovacaoDias ?? null,
+                      }));
+                      setPersonalizarMedicao(true);
+                    }}>
+                    Personalizar para esta obra
+                  </Button>
+                </div>
+              );
+            })()}
+            {personalizarMedicao && (
+              <div className="sm:col-span-2 flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2">
+                <p className="text-xs text-amber-800"><b>Condição personalizada desta obra</b> — os contratos de terceiros desta obra saem com o que estiver definido abaixo, não com o padrão da empresa.</p>
+                <Button type="button" variant="ghost" size="sm" className="text-amber-800 shrink-0"
+                  onClick={() => {
+                    setForm(f => ({ ...f, terceiroCriterioMedicao: null, terceiroDiaMedicao: null, terceiroPrazoAprovacaoDias: null, terceiroDiaPagamento: null, terceiroPagamentoConformeRecebimento: 0 }));
+                    setPersonalizarMedicao(false);
+                  }}>
+                  Voltar ao padrão da empresa
+                </Button>
+              </div>
+            )}
+            {personalizarMedicao && (<>
+            {/* Datas do fluxo: quando mede → quanto tempo p/ aprovar → quando paga */}
+            <div className="sm:col-span-2 rounded-lg border border-blue-200 bg-blue-50/40 p-3 space-y-3">
               <div>
-                <h3 className="font-semibold text-sm text-slate-700">Condição de Pagamento — Terceiros (padrão da obra)</h3>
-                <p className="text-xs text-muted-foreground mt-0.5">Todo contrato de terceiro novo desta obra herda estes valores automaticamente. Cada contrato pode sobrescrever em "Critérios do Contrato".</p>
+                <h3 className="font-semibold text-sm text-slate-700">1. Datas do Fluxo — Medição e Pagamento (desta obra)</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">Todo contrato de terceiro novo desta obra herda estas datas. Vazio = padrão do sistema (mede dia 25 / aprova em 5 dias / paga dia 10).</p>
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <Label className="text-xs">Dia da Medição</Label>
+                  <Label className="text-xs">Dia da Medição (no mês)</Label>
                   <Input type="number" min={1} max={31} placeholder="25" value={form.terceiroDiaMedicao ?? ""} onChange={e => setForm(f => ({ ...f, terceiroDiaMedicao: e.target.value === "" ? null : Math.min(31, Math.max(1, parseInt(e.target.value) || 25)) }))} />
                 </div>
                 <div>
-                  <Label className="text-xs">Aprovação (dias)</Label>
+                  <Label className="text-xs">Prazo p/ Aprovar (dias)</Label>
                   <Input type="number" min={1} max={60} placeholder="5" value={form.terceiroPrazoAprovacaoDias ?? ""} onChange={e => setForm(f => ({ ...f, terceiroPrazoAprovacaoDias: e.target.value === "" ? null : Math.min(60, Math.max(1, parseInt(e.target.value) || 5)) }))} />
                 </div>
                 <div>
@@ -1448,9 +1808,24 @@ export default function Obras() {
                 <input type="checkbox" className="mt-0.5" checked={form.terceiroPagamentoConformeRecebimento === 1} onChange={e => setForm(f => ({ ...f, terceiroPagamentoConformeRecebimento: e.target.checked ? 1 : 0 }))} />
                 <span className="text-xs text-slate-600 leading-relaxed"><span className="font-medium">Pagamento conforme recebimento do cliente</span> — sem dia fixo: os títulos entram com vencimento previsto no fim do mês seguinte e são pagos quando a medição do cliente for recebida.</span>
               </label>
-              <p className="text-[11px] text-muted-foreground">Ex. do fluxo padrão: mede até o dia 25, aprova até o dia 1º e paga até o dia 10 do mês seguinte. Vazio = padrão do sistema (25 / 5 / 10). O vencimento do título no Contas a Pagar cai sempre no mês seguinte ao da medição.</p>
+              <p className="text-xs font-medium text-blue-900 bg-white border border-blue-200 rounded-md px-2.5 py-1.5">
+                Resumo do fluxo: mede todo dia <span className="font-bold">{form.terceiroDiaMedicao ?? 25}</span> → aprovação em até <span className="font-bold">{form.terceiroPrazoAprovacaoDias ?? 5} dias</span> → {form.terceiroPagamentoConformeRecebimento === 1 ? <span className="font-bold">pagamento conforme recebimento do cliente</span> : <>pagamento todo dia <span className="font-bold">{form.terceiroDiaPagamento ?? 10}</span> do mês seguinte</>}. O vencimento do título no Contas a Pagar cai sempre no mês seguinte ao da medição. Cada contrato pode sobrescrever em "Critérios do Contrato".
+              </p>
             </div>
-
+            <div className="sm:col-span-2 rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-4">
+              <div>
+                <h3 className="font-semibold text-sm text-slate-700">2. Critério de Medição — Mão de Obra (desta obra)</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">Obra nova já nasce com o padrão da empresa (Configurações › Critérios do Sistema). Ajuste aqui somente se esta obra tiver condição diferente — o texto da cláusula entra automaticamente nos contratos de terceiros (MDO ou pacote material + MDO).</p>
+              </div>
+              <CriterioMedicaoMdoEditor
+                value={form.terceiroCriterioMedicao}
+                onChange={next => setForm(f => ({ ...f, terceiroCriterioMedicao: next }))}
+              />
+              {!parseCriterioMedicao(form.terceiroCriterioMedicao).tipo && (
+                <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2.5 py-1.5">Sem definição aqui, vale o Critério de Medição padrão da empresa (Configurações › Critérios do Sistema). Se nenhum dos dois existir, a aprovação de cotações de serviço desta obra fica bloqueada.</p>
+              )}
+            </div>
+            </>)}
           </div>
 
           {/* ══════ ABA: JORNADA ══════ */}
@@ -1943,6 +2318,8 @@ export default function Obras() {
             <Button onClick={handleSave} disabled={saving} className="bg-[#1B2A4A] hover:bg-[#243660] min-w-[100px]">
               {saving ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Salvando...</> : "Salvar"}
             </Button>
+          </div>
+            </div>
           </div>
         </div>
       </FullScreenDialog>
@@ -2651,6 +3028,15 @@ function ProjetosMedicaoSection({ companyId, obraId }: { companyId: number; obra
               </button>
               {(p.revisao ?? 1) > 1 && (
                 <Badge variant="outline" className="text-[10px] bg-violet-50 text-violet-700 border-violet-200">REV. {p.revisao}</Badge>
+              )}
+              {p.arquivoKey && (
+                <a
+                  href={`/obras/${obraId}/esquadrias/${p.id}`}
+                  className="text-xs px-2 py-1.5 rounded-md border border-indigo-300 bg-indigo-50 text-indigo-700 flex items-center gap-1 hover:bg-indigo-100"
+                  title="Marcar portas e janelas na planta (mapa de vãos p/ desconto e requadro)"
+                >
+                  <Ruler className="h-3.5 w-3.5" /> Esquadrias
+                </a>
               )}
               <button type="button" className="text-slate-300 hover:text-red-500 ml-auto" title="Excluir pavimento"
                 onClick={() => { if (excluirMut.isPending) return; excluirMut.mutate({ companyId, id: p.id }); }}>

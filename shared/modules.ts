@@ -105,12 +105,17 @@ export type ActiveModuleId =
   | "compras"
   | "orcamento"
   | "medicao"
+  | "apontamento"
   | "almoxarifado"
   | "gestao-documentos"
   | "operacional"
   | "frotas"
   | "comunicados-internos"
-  | "curriculos";
+  | "curriculos"
+  | "reembolso"
+  | "gestao-interna"
+  | "telefones-corporativos"
+  | "contratos-servico";
 
 export interface ModuleFeature {
   key: string;
@@ -129,6 +134,16 @@ export interface ModuleDefinition {
 }
 
 export const MODULE_DEFINITIONS: ModuleDefinition[] = [
+  {
+    id: "gestao-interna",
+    label: "Gestão Interna",
+    description: "Central operacional interna da empresa",
+    color: "slate",
+    icon: "Activity",
+    features: [
+      { key: "gestao-interna-home", label: "Gestão Interna", route: "/gestao-interna", icon: "Activity" },
+    ],
+  },
   {
     id: "rh-dp",
     label: "RH & DP",
@@ -313,7 +328,6 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
       { key: "integrasign", label: "IntegraSign", route: "/integrasign", icon: "PenLine" },
       // === PJ ===
       { key: "modulo-pj", label: "Contratos PJ", route: "/modulo-pj", icon: "Briefcase" },
-      { key: "pj-medicoes", label: "Medições PJ", route: "/pj-medicoes", icon: "FileSpreadsheet" },
       { key: "pj-conformidade", label: "Conformidade PJ", route: "/terceiros/pj/conformidade", icon: "ShieldCheck" },
       { key: "pj-dashboard-conformidade", label: "Dashboard Conformidade PJ", route: "/terceiros/pj/dashboard-conformidade", icon: "BarChart3" },
     ],
@@ -359,6 +373,16 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     icon: "FileBarChart",
     features: [
       { key: "medicao-contratos", label: "Contratos de Medição", route: "/medicao", icon: "FileBarChart" },
+    ],
+  },
+  {
+    id: "apontamento",
+    label: "Apontamento de Campo",
+    description: "Ronda diária de produção: o apontador registra o que foi executado trecho a trecho, com trava anti-duplicidade e vínculo automático de contrato.",
+    color: "lime",
+    icon: "ClipboardList",
+    features: [
+      { key: "apontamento-ronda", label: "Ronda do Dia", route: "/apontamento", icon: "ClipboardList" },
     ],
   },
   {
@@ -439,6 +463,18 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
       { key: "cadastro-auditoria",          label: "Auditoria do Sistema",      route: "/auditoria",               icon: "Eye" },
       { key: "cadastro-lixeira",            label: "Lixeira",                   route: "/lixeira",                 icon: "Trash2" },
       { key: "cadastro-revisoes",           label: "Revisões",                  route: "/revisoes",                icon: "History" },
+      { key: "cadastro-telefones",          label: "Telefones Corporativos",    route: "/telefones-corporativos",  icon: "Phone" },
+      { key: "cadastro-contratos-servico",  label: "Contratos de Serviço",      route: "/contratos-servico",        icon: "FileSignature" },
+    ],
+  },
+  {
+    id: "contratos-servico",
+    label: "Contratos de Serviço",
+    description: "Gestão de contratos recorrentes com cobrança variável por headcount, admissões, folha e mais.",
+    color: "blue",
+    icon: "FileSignature",
+    features: [
+      { key: "contratos-servico-main", label: "Contratos de Serviço", route: "/contratos-servico", icon: "FileSignature" },
     ],
   },
   {
@@ -503,7 +539,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
       { key: "compras-aprovacoes",     label: "Aprovações",          route: "/compras/aprovacoes",     icon: "CheckCircle" },
 
       { key: "compras-realocacao",     label: "Realocação",          route: "/compras/realocacao",     icon: "ArrowLeftRight" },
-      { key: "compras-comissoes",      label: "Comissões",           route: "/compras/comissoes",      icon: "Percent" },
+      { key: "compras-comissoes",      label: "Prêmios",             route: "/compras/comissoes",      icon: "Percent" },
       { key: "compras-configuracoes",  label: "Configurações",       route: "/compras/configuracoes",  icon: "Settings2" },
       { key: "compras-dashboard-obra", label: "Dashboard por Obra",  route: "/compras/dashboard-obra", icon: "BarChart3" },
       { key: "compras-painel-fd",      label: "Painel FD",           route: "/compras/painel-fd",      icon: "Wallet" },
@@ -573,6 +609,16 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     icon: "Briefcase",
     features: [
       { key: "curriculos", label: "Currículos", route: "/curriculos", icon: "Briefcase" },
+    ],
+  },
+  {
+    id: "reembolso",
+    label: "Reembolso",
+    description: "Reembolsos de despesas e fundos fixos (caixinha) com aprovação",
+    color: "emerald",
+    icon: "Receipt",
+    features: [
+      { key: "reembolso-painel", label: "Painel de Reembolsos", route: "/reembolso/painel", icon: "Receipt" },
     ],
   },
 ];

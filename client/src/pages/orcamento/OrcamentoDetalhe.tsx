@@ -1306,6 +1306,7 @@ function OrcamentoDetalheInner({ routeId }: { routeId: number }) {
                 </table>
               </div>
             </Card>
+
           </TabsContent>
 
           {/* ═══ ABA INSUMOS ═══════════════════════════════════════════ */}

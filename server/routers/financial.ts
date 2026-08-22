@@ -3,6 +3,7 @@ import { getDb, createAuditLog, getUserCompanyLinks, getCompaniesForUser } from 
 import { resolveCompanyIds } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
 import { randomUUID } from "crypto";
+import { lockSocioAdministrador } from "../services/socioAdminLock";
 
 const CC_MINUSCULAS = new Set(["e","de","da","do","das","dos","em","a","o","as","os","por","para","com","ao","na","no","nas","nos"]);
 function normalizarNomeCC(nome: string): string {
@@ -55,6 +56,8 @@ import { parseBancoBrasilExtratoPdf } from "../services/bbPdfParser";
 import { parseExtratoComIA } from "../services/extratoIaParser";
 import { detectarTemplateExtrato } from "./bankStatementTemplates";
 import { assertNumeroChequeDisponivel } from "./cheques";
+import { parseParcelaFinanceiraTexto } from "../../shared/parcelaFinanceira";
+import { distribuirTotalFechamentoCentavos } from "../utils/fechamentoFornecedor";
 import {
   computeThreeWayMatch, blockPaymentByThreeWay, releasePaymentByThreeWay,
   parseOFX, parseCNAB, suggestReconciliation, applyReconciliation,
@@ -253,6 +256,27 @@ async function dbExecute(db: any, query: string, params: unknown[] = []): Promis
 function inlineIds(ids: number[]): string {
   if (!ids || !ids.length) return "0";
   return ids.map(Number).join(",");
+}
+
+async function _assertNotInPaidSupplierClosing(db: any, companyId: number, entryIds: number[]) {
+  const ids = Array.from(new Set(entryIds.map(Number).filter((id) => Number.isInteger(id) && id > 0)));
+  if (ids.length === 0) return;
+  const linked = rows(await dbExecute(db,
+    `SELECT DISTINCT fp.entry_id AS "entryId", fp.fechamento_id AS "fechamentoId"
+       FROM fechamento_fornecedor_pagamentos fp
+       JOIN fechamento_fornecedor f
+         ON f.id=fp.fechamento_id AND f.company_id=fp.company_id AND f.status='pago'
+      WHERE fp.company_id=$1
+        AND fp.entry_id IN (${inlineIds(ids)})
+        AND fp.estornado_em IS NULL
+      LIMIT 1`,
+    [companyId]))[0];
+  if (linked) {
+    throw new TRPCError({
+      code: "CONFLICT",
+      message: `O lançamento #${linked.entryId} pertence ao fechamento pago #${linked.fechamentoId}. Concilie o fechamento completo pela linha consolidada, não um título isolado.`,
+    });
+  }
 }
 
 // Rev. 3750 — COBERTURA de cheque devolvido por IDENTIDADE do cheque (doc/nº + valor),
@@ -463,6 +487,10 @@ function _agruparContasPagarPorCicloForn(arr: any[], supplierCycleMap: Map<strin
   const groups = new Map<string, any>();
   for (const r of arr) {
     if (r.status === "pago" || r.status === "cancelado") { out.push(r); continue; }
+    // Exceção pontual e persistente: títulos marcados pelo usuário para revisão
+    // individual não entram no fechamento visual do fornecedor. O marcador fica
+    // no próprio lançamento, portanto não altera o ciclo nem os meses vizinhos.
+    if (String(r.observacoes ?? "").includes("[SEM_CONSOLIDADO_CICLO]")) { out.push(r); continue; }
     // Rev. 4072 — FD (Faturamento Direto) nunca entra no consolidado do fornecedor:
     // é o cliente quem paga o fornecedor diretamente, não a FC.
     if (_isFdModalidade(r.modalidadeFd)) { out.push(r); continue; }
@@ -512,6 +540,11 @@ function _agruparContasPagarPorCicloForn(arr: any[], supplierCycleMap: Map<strin
         itens: [] as any[],
         _cicloConfig: cycleConfig,
         _cicloWindow: win,
+        // Task #187 — supplierId estável para localizar/abrir fechamento persistido
+        _supplierId: cycleConfig.id ?? null,
+        // metadados preenchidos após enriquecimento no caller (getContasAPagarByYear)
+        fechamentoId: null as number | null,
+        fechamentoStatus: null as string | null,
       };
       groups.set(chave, g);
     }
@@ -539,8 +572,72 @@ function _agruparConciliacao(arr: any[], supplierCycleMap: Map<string, any> = ne
   };
   const passthrough: any[] = [];
   const groups = new Map<string, any>();
-  const cycleGroups = new Map<string, any>(); // Rev. 3437 — fechamento_forn
+  const cycleGroups = new Map<string, any>(); // Rev. 3437 — fechamento_forn (ciclo config)
+  // Task #187 — grupos por fechamento persistido PAGO (agrupamento por fechamentoId exato,
+  // ANTES de qualquer outra lógica de origem/ciclo). Valor = fechamento.valor_total (inclui
+  // ajustes), não a soma dos itens individuais. Rows enriquecidas pela query com fechamentoId.
+  const fechamentoGroups = new Map<number, any>(); // key = fechamentoId (number)
+  const fechamentoConsumedIds = new Set<number>(); // entry_ids já capturados por um fechamento
+
   for (const r of arr) {
+    // Task #187 — PRIORIDADE MÁXIMA: se a row tem fechamentoId (fechamento persistido pago),
+    // agrupar por fechamentoId exato, nunca misturar com grupos genéricos de origem/ciclo.
+    if (r.fechamentoId != null) {
+      const fid = Number(r.fechamentoId);
+      fechamentoConsumedIds.add(Number(r.id));
+      let fg = fechamentoGroups.get(fid);
+      if (!fg) {
+        // Ciclo: se disponível no supplierCycleMap pelo nome do fornecedor, use para label.
+        const supplierNome = r.fechamentoSupplierNome || r.fornecedorNome || "Fornecedor";
+        const janela = r.fechamentoJanela || "";
+        // Tenta determinar o ciclo pelo supplierCycleMap para gerar o label correto.
+        const fornNorm = _normNomeConc(String(supplierNome));
+        const cycleConfig = supplierCycleMap.size ? supplierCycleMap.get(fornNorm) : undefined;
+        const descricao = janela && cycleConfig
+          ? `${supplierNome} · ${_cicloWindowLabel(janela, cycleConfig.cicloPagamento)}`
+          : janela
+          ? `${supplierNome} · ${janela}`
+          : supplierNome;
+        const dataStr = typeof r.data === "string"
+          ? r.data.slice(0, 10)
+          : (r.data ? new Date(r.data).toISOString().slice(0, 10) : "");
+        fg = {
+          id: `grp:fech_pago|${fid}`,
+          agrupado: true,
+          grupoTipo: "fechamento_forn",
+          fechamentoId: fid,
+          descricao,
+          fornecedorNome: supplierNome,
+          obraNome: null,
+          // valor será sobrescrito pelo fechamentoTotal (inclui ajustes) ao final
+          valor: 0,
+          // fechamentoTotal: valor_total do fechamento (inclui ajustes), gravado na row
+          _fechamentoTotal: Number(r.fechamentoTotal) || 0,
+          tipo: "despesa",
+          status: r.status,
+          data: dataStr,
+          dataMin: dataStr || "9999-12-31",
+          dataMax: dataStr || "0000-01-01",
+          qtd: 0,
+          itensIds: [] as number[],
+          itens: [] as any[],
+        };
+        fechamentoGroups.set(fid, fg);
+      }
+      fg.qtd += 1;
+      fg.valor += Number(r.valor) || 0; // soma parcial (usada se fechamentoTotal ausente)
+      fg.itensIds.push(Number(r.id));
+      const dataStr = typeof r.data === "string"
+        ? r.data.slice(0, 10)
+        : (r.data ? new Date(r.data).toISOString().slice(0, 10) : "");
+      fg.itens.push({ id: r.id, descricao: r.descricao, fornecedorNome: r.fornecedorNome, valor: Number(r.valor) || 0, data: dataStr });
+      if (dataStr && dataStr < fg.dataMin) fg.dataMin = dataStr;
+      if (dataStr && dataStr > fg.dataMax) { fg.dataMax = dataStr; fg.data = dataStr; }
+      // Atualiza fechamentoTotal se disponível na row (todas as rows do mesmo fid devem trazer o mesmo)
+      if (r.fechamentoTotal != null) fg._fechamentoTotal = Number(r.fechamentoTotal);
+      continue;
+    }
+
     const tipoG = GRUP[String(r.origemModulo ?? "")];
     if (!tipoG) {
       // Rev. 3437 — checar se o fornecedor tem ciclo de fechamento configurado
@@ -687,6 +784,22 @@ function _agruparConciliacao(arr: any[], supplierCycleMap: Map<string, any> = ne
     delete cg._cicloWindow;
     out.push(cg);
   }
+  // Task #187 — finalizar grupos de fechamento persistido PAGO.
+  // O valor do grupo é o fechamento.valor_total (inclui ajustes), não a soma
+  // parcial dos itens que aparecem no período — garante que a UI mostrará o
+  // valor correto do boleto mesmo quando alguns itens caem fora do filtro de datas.
+  // Guarda também valorItens (soma dos entries em tela) para o usuário ver a diferença.
+  for (const fg of fechamentoGroups.values()) {
+    // fechamentoTotal é o valor_total do fechamento (inclui ajustes). Se disponível,
+    // sobrescreve a soma parcial (que pode ser menor se nem todos os itens estão em tela).
+    const valorItens = fg.valor; // soma dos items presentes no intervalo de datas
+    if (fg._fechamentoTotal > 0) {
+      fg.valor = fg._fechamentoTotal;
+    }
+    fg.valorItens = valorItens;
+    delete fg._fechamentoTotal;
+    out.push(fg);
+  }
   out.sort((a, b) => String(a.data || "").localeCompare(String(b.data || "")) || String(a.id).localeCompare(String(b.id)));
   return out;
 }
@@ -713,7 +826,52 @@ async function materializeRecorrentes(
   const recs = rows(recRes);
   let count = 0;
 
-  for (const rec of recs) {
+  for (const recSnapshot of recs) {
+    await db.transaction(async (tx: any) => {
+    const lockedRecRes = await dbExecute(tx,
+      `SELECT *
+         FROM financial_recurring_entries
+        WHERE id=$1 AND company_id=$2 AND ativo=1
+        FOR UPDATE`,
+      [recSnapshot.id, companyId]
+    );
+    const rec = rows(lockedRecRes)[0];
+    if (!rec) return;
+
+    const parcelaTemplate = parseParcelaFinanceiraTexto(rec.descricao);
+    let proximaParcelaNumero = parcelaTemplate?.numero ?? null;
+    let parcelaGrupoId: string | null = null;
+    if (parcelaTemplate) {
+      const parcelaExistenteRes = await dbExecute(tx,
+        `SELECT parcela_grupo_id AS "parcelaGrupoId",
+                MAX(parcela_numero)::int AS "ultimaParcela"
+           FROM financial_entries
+          WHERE company_id=$1
+            AND origem_modulo='recorrente'
+            AND origem_id=$2
+            AND parcela_total=$3
+          GROUP BY parcela_grupo_id
+          ORDER BY COUNT(*) DESC
+          LIMIT 1`,
+        [companyId, rec.id, parcelaTemplate.total]
+      );
+      const parcelaExistente = rows(parcelaExistenteRes)[0];
+      parcelaGrupoId = parcelaExistente?.parcelaGrupoId || randomUUID();
+      const ultimaParcela = Number(parcelaExistente?.ultimaParcela);
+      if (Number.isInteger(ultimaParcela) && ultimaParcela >= parcelaTemplate.numero) {
+        proximaParcelaNumero = ultimaParcela + 1;
+      }
+      if (proximaParcelaNumero != null && proximaParcelaNumero > parcelaTemplate.total) {
+        await dbExecute(tx,
+          `UPDATE financial_recurring_entries
+              SET ativo=0, updated_at=NOW()
+            WHERE id=$1 AND company_id=$2 AND ativo=1`,
+          [rec.id, companyId]
+        );
+        return;
+      }
+    }
+
     // Começa do proximo_vencimento OU calcula a partir de hoje usando dia_vencimento
     let venc: Date;
     if (rec.proximo_vencimento) {
@@ -729,42 +887,107 @@ async function materializeRecorrentes(
     // já é único por natureza e é o que existia historicamente.
     const dedupePorData = rec.frequencia === "semanal" || rec.frequencia === "quinzenal";
 
+    // Rev. 5124 — data limite: última data que a recorrência pode gerar.
+    // Comparação SEMPRE por string YYYY-MM-DD (nunca Date vs Date: mistura de
+    // meia-noite local × meia-noite UTC pulava a última parcela no fuso -03).
+    // pg devolve DATE como Date local-midnight → formatar pelos getters locais.
+    const ymdLocal = (v: any): string => {
+      if (v instanceof Date) {
+        const p = (n: number) => String(n).padStart(2, "0");
+        return `${v.getFullYear()}-${p(v.getMonth() + 1)}-${p(v.getDate())}`;
+      }
+      return String(v).slice(0, 10);
+    };
+    const limiteStr: string | null = rec.data_limite ? ymdLocal(rec.data_limite) : null;
+
+    // Rev. 5150 — parcela FINAL na data limite: quando o vencimento calculado passa
+    // do limite mas ainda cai no MESMO mês (ex.: parcelas dia 17 com limite 15/12),
+    // a última parcela deve ser gerada NA data limite (antes era simplesmente pulada
+    // e a recorrência encerrava sem a parcela final — caso WELINGTON dez/2026).
+    const dedupePorDataFn = rec.frequencia === "semanal" || rec.frequencia === "quinzenal";
+    const materializeParcela = async (vencStr: string): Promise<boolean> => {
+      const dedupeCond = dedupePorDataFn
+        ? `data_vencimento=$21`
+        : `TO_CHAR(data_vencimento,'YYYY-MM')=$21`;
+      const dedupeParam = dedupePorDataFn ? vencStr : vencStr.slice(0, 7);
+      const numeroParcela = parcelaTemplate && proximaParcelaNumero != null && proximaParcelaNumero <= parcelaTemplate.total
+        ? proximaParcelaNumero
+        : null;
+      const descricaoGerada = numeroParcela != null
+        ? String(rec.descricao).replace(
+            /\bparcela\s*\d+\s*\/\s*\d+\b/i,
+            `Parcela ${numeroParcela}/${parcelaTemplate!.total}`,
+          )
+        : rec.descricao;
+      const ins = await dbExecute(tx,
+        `INSERT INTO financial_entries
+          (company_id, obra_id, obra_nome, conta_id, conta_nome, tipo, natureza,
+           valor_previsto, data_competencia, data_vencimento, status,
+           origem_modulo, origem_id, origem_descricao, descricao, fornecedor_nome,
+           parcela_numero, parcela_total, parcela_grupo_id)
+         SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'recorrente',$12,$13,$14,$15,$16,$17,$18
+         WHERE NOT EXISTS (
+           SELECT 1 FROM financial_entries
+           WHERE company_id=$19 AND origem_modulo='recorrente' AND origem_id=$20 AND ${dedupeCond}
+         )
+         RETURNING id`,
+        [companyId, rec.obra_id, rec.obra_nome, rec.conta_id, rec.conta_nome,
+         rec.tipo, rec.natureza ?? "fixo", rec.valor, vencStr, vencStr,
+         rec.tipo === "receita" ? "a_receber" : "a_pagar",
+         rec.id, `Recorrência: ${descricaoGerada}`, descricaoGerada,
+         rec.fornecedor_nome ?? null,
+         numeroParcela, numeroParcela != null ? parcelaTemplate!.total : null,
+         numeroParcela != null ? parcelaGrupoId : null,
+         companyId, rec.id, dedupeParam]
+      );
+      const inseriu = rows(ins).length > 0;
+      if (inseriu && numeroParcela != null) proximaParcelaNumero = numeroParcela + 1;
+      return inseriu;
+    };
+
+    if (limiteStr && venc.toISOString().split("T")[0] > limiteStr) {
+      // Próximo vencimento já passou do limite → antes de encerrar, garante a
+      // parcela FINAL na data limite se o overshoot cai no mesmo mês do limite.
+      const vencStr0 = venc.toISOString().split("T")[0];
+      const horizonteStr = horizonte.toISOString().split("T")[0];
+      if (vencStr0.slice(0, 7) === limiteStr.slice(0, 7) && limiteStr <= horizonteStr) {
+        if (await materializeParcela(limiteStr)) count++;
+        await dbExecute(tx,
+          `UPDATE financial_recurring_entries SET ativo=0, updated_at=NOW() WHERE id=$1 AND ativo=1`,
+          [rec.id]
+        );
+      } else if (limiteStr <= horizonteStr) {
+        // limite dentro do horizonte e sem parcela final a gerar → encerra.
+        await dbExecute(tx,
+          `UPDATE financial_recurring_entries SET ativo=0, updated_at=NOW() WHERE id=$1 AND ativo=1`,
+          [rec.id]
+        );
+      }
+      // limite além do horizonte: NÃO desativa ainda — a execução que alcançar
+      // aquele mês gera a parcela final clampada e então encerra.
+      return;
+    }
+
     // Loop materializando até passar do horizonte
     let lastMaterialized: Date | null = null;
     let iter = 0;
     while (venc <= horizonte && iter < 200) {
       iter++;
       const vencStr = venc.toISOString().split("T")[0];
+      if (limiteStr && vencStr > limiteStr) {
+        // Rev. 5150 — overshoot no mesmo mês do limite → parcela final NA data limite.
+        if (vencStr.slice(0, 7) === limiteStr.slice(0, 7)) {
+          if (await materializeParcela(limiteStr)) count++;
+        }
+        break; // passou da data limite
+      }
       // Rev. 2945 — ATÔMICO: INSERT ... SELECT ... WHERE NOT EXISTS num único
-      // statement (antes era SELECT-then-INSERT em 2 idas-e-voltas, que sob
-      // chamadas CONCORRENTES de getContasAPagarByYear — agora também disparado
-      // pelo Fluxo de Caixa — passava pela checagem em ambas e inseria 2x,
-      // gerando as duplicatas de "recorrente"). Sem DDL. NB: dbExecute liga
-      // parâmetros por ORDEM DE APARIÇÃO ($N é ignorado) → numerar sequencial.
-      const dedupeCond = dedupePorData
-        ? `data_vencimento=$18`
-        : `TO_CHAR(data_vencimento,'YYYY-MM')=$18`;
-      const dedupeParam = dedupePorData ? vencStr : vencStr.slice(0, 7);
-      const ins = await dbExecute(db,
-        `INSERT INTO financial_entries
-          (company_id, obra_id, obra_nome, conta_id, conta_nome, tipo, natureza,
-           valor_previsto, data_competencia, data_vencimento, status,
-           origem_modulo, origem_id, origem_descricao, descricao, fornecedor_nome)
-         SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'recorrente',$12,$13,$14,$15
-         WHERE NOT EXISTS (
-           SELECT 1 FROM financial_entries
-           WHERE company_id=$16 AND origem_modulo='recorrente' AND origem_id=$17 AND ${dedupeCond}
-         )
-         RETURNING id`,
-        [companyId, rec.obra_id, rec.obra_nome, rec.conta_id, rec.conta_nome,
-         rec.tipo, rec.natureza ?? "fixo", rec.valor, vencStr, vencStr,
-         rec.tipo === "receita" ? "a_receber" : "a_pagar",
-         rec.id, `Recorrência: ${rec.descricao}`, rec.descricao,
-         rec.fornecedor_nome ?? null,
-         companyId, rec.id, dedupeParam]
-      );
-      if (rows(ins).length > 0) count++;
+      // statement (ver materializeParcela acima — Rev. 5150 extraiu p/ helper).
+      if (await materializeParcela(vencStr)) count++;
       lastMaterialized = venc;
+      if (parcelaTemplate && proximaParcelaNumero != null && proximaParcelaNumero > parcelaTemplate.total) {
+        break;
+      }
       const nextVenc = new Date(venc);
       if (rec.frequencia === "mensal") nextVenc.setMonth(nextVenc.getMonth() + 1);
       else if (rec.frequencia === "quinzenal") nextVenc.setDate(nextVenc.getDate() + 15);
@@ -788,12 +1011,22 @@ async function materializeRecorrentes(
       else if (rec.frequencia === "semanal") nextAfter.setDate(nextAfter.getDate() + 7);
       else if (rec.frequencia === "trimestral") nextAfter.setMonth(nextAfter.getMonth() + 3);
       else if (rec.frequencia === "anual") nextAfter.setFullYear(nextAfter.getFullYear() + 1);
-      else continue;
-      await dbExecute(db,
-        `UPDATE financial_recurring_entries SET proximo_vencimento=$1, ultimo_gerado=$2, updated_at=NOW() WHERE id=$3`,
-        [nextAfter.toISOString().split("T")[0], todayStr, rec.id]
+      else return;
+      // Rev. 5124 — se o PRÓXIMO vencimento já cai depois da data limite,
+      // encerra a recorrência (ativo=0) na mesma escrita — sem depender de
+      // uma futura chamada de materialização para desativar.
+      const nextAfterStr = nextAfter.toISOString().split("T")[0];
+      const encerrouPorLimite = !!limiteStr && nextAfterStr > limiteStr;
+      const encerrouPorParcelas = !!parcelaTemplate
+        && proximaParcelaNumero != null
+        && proximaParcelaNumero > parcelaTemplate.total;
+      const encerrou = encerrouPorLimite || encerrouPorParcelas;
+      await dbExecute(tx,
+        `UPDATE financial_recurring_entries SET proximo_vencimento=$1, ultimo_gerado=$2${encerrou ? ", ativo=0" : ""}, updated_at=NOW() WHERE id=$3`,
+        [nextAfterStr, todayStr, rec.id]
       );
     }
+    });
   }
   return count;
 }
@@ -2126,7 +2359,12 @@ async function _computeConciliacaoReport(db: any, companyId: number, contaBancar
               COALESCE(NULLIF(TRIM(ff.posto),''), NULLIF(TRIM(fm.fornecedor),'')) AS "frotaFornecedor",
               COALESCE(NULLIF(TRIM(pc.nome_fantasia),''), NULLIF(TRIM(pc.razao_social),'')) AS "parceiroFornecedor",
               COALESCE(NULLIF(TRIM(pjemp."nomeCompleto"),''), NULLIF(TRIM(pjc."razaoSocialPrestador"),'')) AS "pjFornecedor",
-              COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) AS data
+              COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) AS data,
+              -- Task #187: metadados de fechamento persistido pago (se esta entry vinculada)
+              ff_pag.fechamento_id AS "fechamentoId",
+              ff_cab.supplier_nome AS "fechamentoSupplierNome",
+              ff_cab.janela AS "fechamentoJanela",
+              ff_cab.valor_total AS "fechamentoTotal"
          FROM financial_entries e
          LEFT JOIN fleet_fuel_records ff ON e.origem_modulo='frota_abastecimento' AND ff.id = e.origem_id
          LEFT JOIN fleet_maintenances fm ON e.origem_modulo='frota_manutencao' AND fm.id = e.origem_id
@@ -2137,6 +2375,10 @@ async function _computeConciliacaoReport(db: any, companyId: number, contaBancar
          LEFT JOIN employees pjemp ON pjemp.id = pjp."employeeId" AND pjemp."companyId" = e.company_id
          LEFT JOIN pj_contracts pjc ON pjc.id = pjp."contractId" AND pjc."companyId" = e.company_id
          LEFT JOIN compras_ordens co ON e.origem_modulo IN ('compras','compra_oc') AND co.id = e.origem_id AND co.company_id = e.company_id
+         LEFT JOIN fechamento_fornecedor_pagamentos ff_pag
+           ON ff_pag.entry_id = e.id AND ff_pag.company_id = e.company_id AND ff_pag.estornado_em IS NULL
+         LEFT JOIN fechamento_fornecedor ff_cab
+           ON ff_cab.id = ff_pag.fechamento_id AND ff_cab.company_id = e.company_id AND ff_cab.status = 'pago'
         WHERE e.company_id=$1 AND COALESCE(e.conciliado,0)=0 AND e.status <> 'cancelado'
           AND e.conta_bancaria_id=$2
           AND ${sqlNotProjecao("e.origem_modulo")}
@@ -2171,7 +2413,12 @@ async function _computeConciliacaoReport(db: any, companyId: number, contaBancar
               COALESCE(NULLIF(TRIM(pjemp."nomeCompleto"),''), NULLIF(TRIM(pjc."razaoSocialPrestador"),'')) AS "pjFornecedor",
               COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) AS data,
               sug."sugLineId", sug."sugContaId", sug."sugBanco", sug."sugContaDesc",
-              sug."sugData", sug."sugDesc", sug."sugValor"
+              sug."sugData", sug."sugDesc", sug."sugValor",
+              -- Task #187: metadados de fechamento persistido pago (se esta entry vinculada)
+              ff_pag.fechamento_id AS "fechamentoId",
+              ff_cab.supplier_nome AS "fechamentoSupplierNome",
+              ff_cab.janela AS "fechamentoJanela",
+              ff_cab.valor_total AS "fechamentoTotal"
          FROM financial_entries e
          LEFT JOIN fleet_fuel_records ff ON e.origem_modulo='frota_abastecimento' AND ff.id = e.origem_id
          LEFT JOIN fleet_maintenances fm ON e.origem_modulo='frota_manutencao' AND fm.id = e.origem_id
@@ -2202,6 +2449,10 @@ async function _computeConciliacaoReport(db: any, companyId: number, contaBancar
                     b.id ASC
            LIMIT 1
          ) sug ON TRUE
+         LEFT JOIN fechamento_fornecedor_pagamentos ff_pag
+           ON ff_pag.entry_id = e.id AND ff_pag.company_id = e.company_id AND ff_pag.estornado_em IS NULL
+         LEFT JOIN fechamento_fornecedor ff_cab
+           ON ff_cab.id = ff_pag.fechamento_id AND ff_cab.company_id = e.company_id AND ff_cab.status = 'pago'
         WHERE e.company_id=$1 AND COALESCE(e.conciliado,0)=0 AND e.status <> 'cancelado'
           AND e.conta_bancaria_id IS NULL
           AND ${sqlNotProjecao("e.origem_modulo")}
@@ -3032,22 +3283,34 @@ export const financialRouter = router({
     // Override consciente via forcarDuplicado (ex.: cheques de bancos diferentes
     // com numeração coincidente).
     if (input.tipo === "despesa" && !input.forcarDuplicado) {
+      // Rev. 5030 — extração via parseChequeNumero (shared), que tem lookahead p/
+      // NÃO capturar dia de data ("TARIFA ... CHEQUE 30/07/2026" ≠ cheque nº 30).
+      const { parseChequeNumero } = await import("../../shared/chequeMotivos");
       const numeroChequeNovo = (input.chequeNumero?.trim())
-        || (input.formaPagamento === "cheque" ? (String(input.descricao ?? "").match(/cheque\s*n[ºo°.]?\s*(\d+)/i)?.[1] ?? null) : null);
+        || (input.formaPagamento === "cheque" ? parseChequeNumero(input.descricao) : null);
       if (numeroChequeNovo) {
         const numLimpo = numeroChequeNovo.replace(/^0+/, "") || numeroChequeNovo;
+        // Rev. 5030 — candidatos por valor; o nº do cheque é comparado em JS com o
+        // MESMO parseChequeNumero (o regex SQL antigo não tinha o lookahead e casava
+        // o dia da data — "CHEQUE 30/07/2026" batia como cheque nº 30, CONFLICT falso).
         const dupRes = await dbExecute(db,
-          `SELECT id, status, descricao, to_char(created_at AT TIME ZONE 'America/Sao_Paulo','DD/MM/YYYY') AS criado
+          `SELECT id, status, descricao, cheque_numero AS "chequeNumero", forma_pagamento AS "formaPagamento",
+                  to_char(created_at AT TIME ZONE 'America/Sao_Paulo','DD/MM/YYYY') AS criado
              FROM financial_entries
             WHERE company_id=$1 AND tipo='despesa' AND status <> 'cancelado'
               AND (COALESCE(valor_realizado, valor_previsto)::numeric = $2::numeric OR valor_previsto::numeric = $3::numeric)
-              AND (
-                regexp_replace(COALESCE(cheque_numero,''),'[^0-9]','','g') = $4
-                OR (COALESCE(forma_pagamento,'')='cheque' AND ltrim((regexp_match(COALESCE(descricao,''), 'cheque\\s*n[ºo°.]?\\s*(\\d+)', 'i'))[1], '0') = $5)
-              )
-            ORDER BY id DESC LIMIT 1`,
-          [input.companyId, input.valorRealizado ?? input.valorPrevisto, input.valorPrevisto, numLimpo, numLimpo]);
-        const dup: any = rows(dupRes)[0];
+              AND (COALESCE(cheque_numero,'') <> '' OR COALESCE(forma_pagamento,'')='cheque')
+            ORDER BY id DESC`,
+          [input.companyId, input.valorRealizado ?? input.valorPrevisto, input.valorPrevisto]);
+        const dup: any = (rows(dupRes) as any[]).find((r) => {
+          const numCol = String(r.chequeNumero || "").replace(/[^0-9]/g, "").replace(/^0+/, "");
+          if (numCol && numCol === numLimpo) return true;
+          if ((r.formaPagamento || "") === "cheque") {
+            const numDesc = parseChequeNumero(r.descricao);
+            if (numDesc && numDesc === numLimpo) return true;
+          }
+          return false;
+        });
         if (dup) {
           throw new TRPCError({
             code: "CONFLICT",
@@ -3502,7 +3765,15 @@ export const financialRouter = router({
               origem_modulo AS "origemModulo", origem_id AS "origemId", origem_descricao AS "origemDescricao",
               parcela_numero AS "parcelaNumero", parcela_total AS "parcelaTotal",
               parcela_grupo_id AS "parcelaGrupoId",
-              forma_pagamento AS "formaPagamento", comprovante_url AS "comprovanteUrl",
+              forma_pagamento AS "formaPagamento",
+              -- Rev. 5051 — comprovante anexado na BAIXA (financial_entry_baixas) não aparecia
+              -- na visualização: o detalhe só lia o campo legado do entry. Fallback p/ o
+              -- comprovante da baixa ativa mais recente.
+              COALESCE(comprovante_url,
+                (SELECT b.comprovante_url FROM financial_entry_baixas b
+                  WHERE b.entry_id = financial_entries.id AND b.estornada_em IS NULL
+                    AND b.comprovante_url IS NOT NULL
+                  ORDER BY b.id DESC LIMIT 1)) AS "comprovanteUrl",
               codigo_barras AS "codigoBarras",
               cheque_numero AS "chequeNumero", cheque_banco AS "chequeBanco", cheque_data_bom_para AS "chequeDataBomPara",
               conciliado, data_conciliacao AS "dataConciliacao", extrato_banco_descricao AS "extratoBancoDescricao",
@@ -5955,24 +6226,31 @@ export const financialRouter = router({
     }
     const valor = input.employeeId != null ? String(input.employeeId) : "";
     const quem = ctx.user?.name ?? "Sistema";
-    const ex = await dbExecute(db,
-      `SELECT id FROM system_criteria WHERE "companyId"=$1 AND chave='socio_administrador_employee_id' LIMIT 1`,
-      [input.companyId]
-    );
-    const existing = rows(ex)[0];
-    if (existing) {
-      await dbExecute(db,
-        `UPDATE system_criteria SET valor=$1, "atualizadoPor"=$2, "updatedAt"=NOW() WHERE id=$3`,
-        [valor, quem, existing.id]
+    // Rev. 5103 — Serializa a TROCA do sócio com os fluxos de assinatura do
+    // empregador (saveEmployerSigConfig / assinarLoteEmpregador / auto-sign)
+    // via advisory lock transaction-scoped por empresa. Impede TOCTOU entre a
+    // revalidação do critério e a gravação de config/documentos.
+    await db.transaction(async (tx: any) => {
+      await lockSocioAdministrador(tx, input.companyId);
+      const ex = await dbExecute(tx,
+        `SELECT id FROM system_criteria WHERE "companyId"=$1 AND chave='socio_administrador_employee_id' LIMIT 1`,
+        [input.companyId]
       );
-    } else {
-      await dbExecute(db,
-        `INSERT INTO system_criteria ("companyId", categoria, chave, valor, descricao, unidade, "atualizadoPor")
-         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-        [input.companyId, "societario", "socio_administrador_employee_id", valor,
-         "Sócio administrador responsável por assinar contratos e documentos online (IntegraSign/FCSign).", "id", quem]
-      );
-    }
+      const existing = rows(ex)[0];
+      if (existing) {
+        await dbExecute(tx,
+          `UPDATE system_criteria SET valor=$1, "atualizadoPor"=$2, "updatedAt"=NOW() WHERE id=$3`,
+          [valor, quem, existing.id]
+        );
+      } else {
+        await dbExecute(tx,
+          `INSERT INTO system_criteria ("companyId", categoria, chave, valor, descricao, unidade, "atualizadoPor")
+           VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+          [input.companyId, "societario", "socio_administrador_employee_id", valor,
+           "Sócio administrador responsável por assinar contratos e documentos online (IntegraSign/FCSign).", "id", quem]
+        );
+      }
+    });
     return { ok: true };
   }),
 
@@ -7627,64 +7905,66 @@ export const financialRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
-    // Rev. 3319 — GUARD DE CONTA (server-side): a linha do extrato e o lançamento precisam
-    // ser da MESMA conta bancária (ou o lançamento sem conta — conta_bancaria_id IS NULL —
-    // que casa com qualquer banco). O guard do front (panorama) é bypassável por chamada
-    // direta da API; aqui fechamos o cruzamento entre contas. No fluxo por-conta o lançamento
-    // já vem filtrado pela conta selecionada, então NUNCA bloqueia conciliações legítimas.
-    const lnContaRes = await dbExecute(db,
-      `SELECT conta_bancaria_id AS "contaBancariaId" FROM bank_statement_lines
-        WHERE id=$1 AND company_id=$2 AND excluido_em IS NULL`,
-      [input.statementLineId, input.companyId]);
-    if (rows(lnContaRes).length === 0) {
-      throw new TRPCError({ code: "NOT_FOUND", message: "Linha do extrato não encontrada ou já removida." });
-    }
-    const lineConta = Number((rows(lnContaRes)[0] as any).contaBancariaId);
-    const enContaRes = await dbExecute(db,
-      `SELECT conta_bancaria_id AS "contaBancariaId" FROM financial_entries
-        WHERE id=$1 AND company_id=$2`,
-      [input.entryId, input.companyId]);
-    if (rows(enContaRes).length === 0) {
-      throw new TRPCError({ code: "NOT_FOUND", message: "Lançamento não encontrado nesta empresa." });
-    }
-    const entryConta = (rows(enContaRes)[0] as any).contaBancariaId;
-    if (entryConta != null && Number(entryConta) !== lineConta) {
-      throw new TRPCError({ code: "CONFLICT", message: "Este lançamento é de outra conta bancária — não pode ser conciliado com esta linha do extrato." });
-    }
-    // Rev. 3179 — NUNCA conciliar uma linha SOFT-DELETADA (excluido_em IS NULL). Usa
-    // RETURNING + guard: se a linha foi limpa (ou não existe na empresa), ABORTA antes
-    // de tocar o financial_entries (senão o lançamento ficaria conciliado=1 apontando
-    // p/ uma linha invisível na tela — estado fantasma).
-    const lnRes = await dbExecute(db,
-      `UPDATE bank_statement_lines SET conciliado=1, entry_id=$1
-        WHERE id=$2 AND company_id=$3 AND excluido_em IS NULL
-        RETURNING id`,
-      [input.entryId, input.statementLineId, input.companyId]
-    );
-    if (rows(lnRes).length === 0) {
-      throw new TRPCError({ code: "NOT_FOUND", message: "Linha do extrato não encontrada ou já removida." });
-    }
-    await dbExecute(db,
-      `UPDATE financial_entries SET conciliado=1, data_conciliacao=CURRENT_DATE, conciliado_em=NOW(), conciliado_por_id=$1, conciliado_por_nome=$2 WHERE id=$3 AND company_id=$4`,
-      [ctx.user?.id ?? null, ctx.user?.name ?? null, input.entryId, input.companyId]
-    );
-    // Rev. 3445 — sem conta: vincular à conta da linha do extrato após conciliação.
-    if (entryConta == null) {
-      await dbExecute(db,
-        `UPDATE financial_entries SET conta_bancaria_id=$1 WHERE id=$2 AND company_id=$3 AND conta_bancaria_id IS NULL`,
-        [lineConta, input.entryId, input.companyId]);
-    }
-    // Rev. 2693 — se for perna de transferência, concilia a perna irmã junto.
-    await dbExecute(db,
-      `UPDATE financial_entries sib SET conciliado=1, data_conciliacao=CURRENT_DATE, conciliado_em=NOW(), conciliado_por_id=$1, conciliado_por_nome=$2
-       FROM financial_entries cur
-       WHERE cur.id=$3 AND cur.company_id=$4
-         AND cur.tipo='transferencia' AND cur.transferencia_grupo_id IS NOT NULL
-         AND sib.transferencia_grupo_id = cur.transferencia_grupo_id
-         AND sib.company_id = cur.company_id AND sib.id <> cur.id
-         AND COALESCE(sib.conciliado,0)=0`,
-      [ctx.user?.id ?? null, ctx.user?.name ?? null, input.entryId, input.companyId]
-    );
+    let lineConta = 0;
+    await (db as any).transaction(async (tx: any) => {
+      // Lock order: bank line → entry. The paid-closing payment path locks the entry,
+      // so whichever operation wins is visible to the loser before it writes.
+      const lnContaRes = await dbExecute(tx,
+        `SELECT conta_bancaria_id AS "contaBancariaId", conciliado
+           FROM bank_statement_lines
+          WHERE id=$1 AND company_id=$2 AND excluido_em IS NULL
+          FOR UPDATE`,
+        [input.statementLineId, input.companyId]);
+      if (rows(lnContaRes).length === 0) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Linha do extrato não encontrada ou já removida." });
+      }
+      if (Number((rows(lnContaRes)[0] as any).conciliado) === 1) {
+        throw new TRPCError({ code: "CONFLICT", message: "Linha do extrato já conciliada." });
+      }
+      lineConta = Number((rows(lnContaRes)[0] as any).contaBancariaId);
+      const enContaRes = await dbExecute(tx,
+        `SELECT conta_bancaria_id AS "contaBancariaId"
+           FROM financial_entries
+          WHERE id=$1 AND company_id=$2
+          FOR UPDATE`,
+        [input.entryId, input.companyId]);
+      if (rows(enContaRes).length === 0) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Lançamento não encontrado nesta empresa." });
+      }
+      await _assertNotInPaidSupplierClosing(tx, input.companyId, [input.entryId]);
+      const entryConta = (rows(enContaRes)[0] as any).contaBancariaId;
+      if (entryConta != null && Number(entryConta) !== lineConta) {
+        throw new TRPCError({ code: "CONFLICT", message: "Este lançamento é de outra conta bancária — não pode ser conciliado com esta linha do extrato." });
+      }
+      const lnRes = await dbExecute(tx,
+        `UPDATE bank_statement_lines SET conciliado=1, entry_id=$1
+          WHERE id=$2 AND company_id=$3 AND COALESCE(conciliado,0)=0 AND excluido_em IS NULL
+          RETURNING id`,
+        [input.entryId, input.statementLineId, input.companyId]
+      );
+      if (rows(lnRes).length === 0) {
+        throw new TRPCError({ code: "CONFLICT", message: "Linha do extrato mudou durante a conciliação." });
+      }
+      await dbExecute(tx,
+        `UPDATE financial_entries
+            SET conciliado=1, data_conciliacao=CURRENT_DATE, conciliado_em=NOW(),
+                conciliado_por_id=$1, conciliado_por_nome=$2,
+                conta_bancaria_id=COALESCE(conta_bancaria_id,$3)
+          WHERE id=$4 AND company_id=$5`,
+        [ctx.user?.id ?? null, ctx.user?.name ?? null, lineConta, input.entryId, input.companyId]
+      );
+      // Rev. 2693 — se for perna de transferência, concilia a perna irmã junto.
+      await dbExecute(tx,
+        `UPDATE financial_entries sib SET conciliado=1, data_conciliacao=CURRENT_DATE, conciliado_em=NOW(), conciliado_por_id=$1, conciliado_por_nome=$2
+         FROM financial_entries cur
+         WHERE cur.id=$3 AND cur.company_id=$4
+           AND cur.tipo='transferencia' AND cur.transferencia_grupo_id IS NOT NULL
+           AND sib.transferencia_grupo_id = cur.transferencia_grupo_id
+           AND sib.company_id = cur.company_id AND sib.id <> cur.id
+           AND COALESCE(sib.conciliado,0)=0`,
+        [ctx.user?.id ?? null, ctx.user?.name ?? null, input.entryId, input.companyId]
+      );
+    });
     autoVincularNfsPorLinhas(input.companyId, [input.statementLineId]).catch(() => {});
     // Rev. 4068 — AUTO-BAIXA do cheque no Controle de Cheques quando o lançamento
     // conciliado é o pagamento de um cheque (forma_pagamento='cheque'). Antes, conciliar
@@ -7705,7 +7985,8 @@ export const financialRouter = router({
         const candRes = await dbExecute(db,
           `SELECT id, numero_cheque AS "numeroCheque", lancamento_id AS "lancamentoId"
              FROM financial_cheques
-            WHERE company_id=$1 AND excluido_em IS NULL AND COALESCE(conciliado,0)=0
+            WHERE company_id=$1 AND excluido_em IS NULL
+              AND status='pendente' AND COALESCE(conciliado,0)=0
               AND ROUND(ABS(valor)*100)=$2
               AND (lancamento_id IS NULL OR lancamento_id=$3)`,
           [input.companyId, centsEntry, input.entryId]);
@@ -7731,7 +8012,8 @@ export const financialRouter = router({
                     conta_bancaria_tentativa_id=$2,
                     conta_bancaria_tentativa_nome=$3,
                     updated_at=NOW()
-              WHERE id=$4 AND company_id=$5 AND excluido_em IS NULL AND COALESCE(conciliado,0)=0
+              WHERE id=$4 AND company_id=$5 AND excluido_em IS NULL
+                AND status='pendente' AND COALESCE(conciliado,0)=0
               RETURNING id`,
             [input.entryId, lineConta, contaNome, chequeMatch.id, input.companyId]);
         }
@@ -7760,14 +8042,14 @@ export const financialRouter = router({
       `SELECT id, numero_cheque AS "numeroCheque", fornecedor_nome AS "fornecedorNome",
               valor, data_vencimento AS "dataVencimento", data_compensacao AS "dataCompensacao",
               obra_id AS "obraId", obra_nome AS "obraNome", lancamento_id AS "lancamentoId",
-              COALESCE(conciliado,0) AS conciliado
+               status, COALESCE(conciliado,0) AS conciliado
          FROM financial_cheques
         WHERE id=$1 AND company_id=$2 AND excluido_em IS NULL`,
       [input.chequeId, input.companyId]);
     if (rows(chqRes).length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "Cheque não encontrado nesta empresa." });
     const chq: any = rows(chqRes)[0];
-    if (Number(chq.conciliado) === 1 || chq.lancamentoId != null) {
-      throw new TRPCError({ code: "CONFLICT", message: "Este cheque já está conciliado / vinculado a um lançamento." });
+    if (chq.status !== "pendente" || Number(chq.conciliado) === 1 || chq.lancamentoId != null) {
+      throw new TRPCError({ code: "CONFLICT", message: "Este cheque não está mais pendente ou já foi conciliado / vinculado a um lançamento." });
     }
     // 2) Linha do extrato (tenancy + não removida) → conta bancária + data do pagamento.
     const lnRes = await dbExecute(db,
@@ -7823,10 +8105,11 @@ export const financialRouter = router({
             SET conciliado=1, data_conciliacao=CURRENT_DATE, lancamento_id=$1,
                 status = CASE WHEN status IN ('devolvido','sustado','cancelado') THEN status ELSE 'compensado' END,
                 conta_bancaria_tentativa_id=$2, conta_bancaria_tentativa_nome=$3, updated_at=NOW()
-          WHERE id=$4 AND company_id=$5 AND excluido_em IS NULL AND lancamento_id IS NULL
+          WHERE id=$4 AND company_id=$5 AND excluido_em IS NULL
+            AND status='pendente' AND COALESCE(conciliado,0)=0 AND lancamento_id IS NULL
           RETURNING id`,
         [entryId, lineConta, contaTentativaNome, input.chequeId, input.companyId]);
-      if (rows(updChq).length === 0) throw new TRPCError({ code: "CONFLICT", message: "Este cheque já foi conciliado / vinculado a um lançamento." });
+      if (rows(updChq).length === 0) throw new TRPCError({ code: "CONFLICT", message: "Este cheque deixou de estar pendente ou já foi conciliado / vinculado a um lançamento." });
       // Reserva ATÔMICA da linha (vencedor único; se outro já conciliou → rollback de tudo).
       const updLn = await dbExecute(tx,
         `UPDATE bank_statement_lines SET conciliado=1, entry_id=$1
@@ -7847,18 +8130,80 @@ export const financialRouter = router({
   // "Desconsolidar mês" conseguir REVERTER o grupo inteiro depois — sem isso, só o
   // representante voltaria e o grupo reapareceria quebrado. AÇÃO EXPLÍCITA do usuário
   // ("conciliação só sugestiva"): nada roda sozinho. ZERO ALTER/DROP/DELETE.
+  // Fix #8: optional fechamentoId — when present, derives exact entryIds server-side
+  // (ignores client composition) and validates |statement line amount| ≈ fechamento.valor_total.
   conciliarGrupoLancamentos: protectedProcedure.input(z.object({
     statementLineId: z.number(),
     entryIds: z.array(z.number().int()).min(1).max(5000),
     companyId: z.number(),
+    // Task #187 Fix #8: when set, treat as paid-closing reconciliation.
+    fechamentoId: z.number().int().positive().optional(),
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
-    const ids = Array.from(new Set(input.entryIds)).filter((n) => Number.isInteger(n) && n > 0);
+
+    // Fix #8: if fechamentoId is present, derive exact entryIds from server and validate
+    // the statement-line amount against fechamento.valor_total (tolerance R$0.05).
+    let resolvedIds: number[];
+    if (input.fechamentoId != null) {
+      // Tenant-check and load paid closing
+      const fech = rows(await dbExecute(db,
+        `SELECT id, status, valor_total AS "valorTotal"
+           FROM fechamento_fornecedor
+          WHERE id=$1 AND company_id=$2`,
+        [input.fechamentoId, input.companyId]))[0];
+      if (!fech) throw new TRPCError({ code: "NOT_FOUND", message: "Fechamento não encontrado." });
+      if (fech.status !== "pago") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `Conciliação via fechamento só é permitida para fechamentos pagos (atual: ${fech.status}).` });
+      }
+      // Derive exact active payment-linked entry IDs from server
+      const paymentEntries = rows(await dbExecute(db,
+        `SELECT DISTINCT fp.entry_id AS "entryId"
+           FROM fechamento_fornecedor_pagamentos fp
+          WHERE fp.fechamento_id=$1 AND fp.company_id=$2 AND fp.estornado_em IS NULL`,
+        [input.fechamentoId, input.companyId]));
+      if (paymentEntries.length === 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Fechamento não possui vínculos de pagamento ativos para conciliar." });
+      }
+      resolvedIds = paymentEntries.map((r: any) => Number(r.entryId)).filter((n) => n > 0);
+      // Validate statement-line amount vs fechamento.valor_total (tolerance R$0.05)
+      const lineRow = rows(await dbExecute(db,
+        `SELECT ABS(valor) AS absValor FROM bank_statement_lines
+          WHERE id=$1 AND company_id=$2 AND excluido_em IS NULL`,
+        [input.statementLineId, input.companyId]))[0];
+      if (!lineRow) throw new TRPCError({ code: "NOT_FOUND", message: "Linha do extrato não encontrada." });
+      const lineAmountCents = Math.round(Number(lineRow.absValor) * 100);
+      const fechTotalCents = Math.round(Number(fech.valorTotal) * 100);
+      if (Math.abs(lineAmountCents - fechTotalCents) > 5) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `O valor da linha do extrato (R$${Number(lineRow.absValor).toFixed(2)}) difere do total do fechamento (R$${Number(fech.valorTotal).toFixed(2)}) em mais de R$0,05. Verifique se esta é a linha correta.`,
+        });
+      }
+    } else {
+      resolvedIds = Array.from(new Set(input.entryIds)).filter((n) => Number.isInteger(n) && n > 0);
+    }
+
+    const ids = resolvedIds;
     if (ids.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Grupo sem lançamentos válidos." });
+    if (input.fechamentoId == null) {
+      await _assertNotInPaidSupplierClosing(db, input.companyId, ids);
+    }
     let conciliados = 0;
     await db.transaction(async (tx: any) => {
+      let lockedFechamentoConc: any = null;
+      if (input.fechamentoId != null) {
+        lockedFechamentoConc = rows(await dbExecute(tx,
+          `SELECT id, status, valor_total AS "valorTotal"
+             FROM fechamento_fornecedor
+            WHERE id=$1 AND company_id=$2
+            FOR UPDATE`,
+          [input.fechamentoId, input.companyId]))[0];
+        if (!lockedFechamentoConc || lockedFechamentoConc.status !== "pago") {
+          throw new TRPCError({ code: "CONFLICT", message: "O fechamento mudou de situação e não pode mais ser conciliado." });
+        }
+      }
       // 0) Self-heal: tabela-link p/ reversibilidade (idempotente). `revertido_em` evita
       //    DELETE no undo (honra a regra JAMAIS DELETE).
       await dbExecute(tx,
@@ -7877,12 +8222,31 @@ export const financialRouter = router({
       const lnRes = await dbExecute(tx,
         `UPDATE bank_statement_lines SET conciliado=1, entry_id=$1
           WHERE id=$2 AND company_id=$3 AND COALESCE(conciliado,0)=0 AND excluido_em IS NULL
-          RETURNING data, conta_bancaria_id AS "contaBancariaId"`,
+          RETURNING data, conta_bancaria_id AS "contaBancariaId", ABS(valor) AS "absValor"`,
         [ids[0], input.statementLineId, input.companyId]);
       if (rows(lnRes).length === 0) {
         throw new TRPCError({ code: "CONFLICT", message: "Linha do extrato já conciliada ou removida." });
       }
       const ln = rows(lnRes)[0] as any;
+      if (
+        lockedFechamentoConc != null &&
+        Math.abs(Math.round(Number(ln.absValor) * 100) - Math.round(Number(lockedFechamentoConc.valorTotal) * 100)) > 5
+      ) {
+        throw new TRPCError({ code: "CONFLICT", message: "O valor da linha do extrato mudou e não confere mais com o fechamento. Nenhuma alteração foi gravada." });
+      }
+      if (input.fechamentoId == null) {
+        const lockedGenericEntries = rows(await dbExecute(tx,
+          `SELECT id
+             FROM financial_entries
+            WHERE id IN (${inlineIds(ids)}) AND company_id=$1
+            ORDER BY id
+            FOR UPDATE`,
+          [input.companyId]));
+        if (lockedGenericEntries.length !== ids.length) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Um ou mais lançamentos do grupo não pertencem a esta empresa." });
+        }
+        await _assertNotInPaidSupplierClosing(tx, input.companyId, ids);
+      }
       const dataPg = typeof ln.data === "string" ? ln.data.slice(0, 10) : new Date(ln.data).toISOString().slice(0, 10);
       // Rev. 3319 — GUARD DE CONTA: só baixa membros da MESMA conta da linha (ou sem conta).
       // `dbExecute` liga params por ORDEM DE APARIÇÃO ($N é cosmético), então o lineConta vai
@@ -7910,6 +8274,12 @@ export const financialRouter = router({
         [dataPg, lineConta, ctx.user?.id ?? null, ctx.user?.name ?? null, ...ids, input.companyId, lineConta]);
       const okIds = rows(upd).map((r: any) => Number(r.id));
       conciliados = okIds.length;
+      if (input.fechamentoId != null && conciliados !== ids.length) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "O fechamento não pôde ser conciliado por inteiro. Verifique conta, situação e conciliações dos títulos; nenhuma alteração foi gravada.",
+        });
+      }
       if (conciliados === 0) {
         // Nenhum membro pôde ser baixado (já conciliados/cancelados): desfaz a reserva da linha.
         throw new TRPCError({ code: "CONFLICT", message: "Nenhum lançamento do grupo pôde ser conciliado (já conciliados ou cancelados)." });
@@ -7990,6 +8360,31 @@ export const financialRouter = router({
       throw new TRPCError({ code: "NOT_FOUND", message: "Lançamento não encontrado nesta empresa." });
     }
     await createAuditLog({ action: "financial_entry_comprovante_anexado", userId: ctx.user?.id, companyId: input.companyId, details: `Entry ${input.entryId} comprovante anexado` });
+    return { ok: true };
+  }),
+
+  // Rev. 5131 — Remove o comprovante de pagamento do título (pedido do user: opção
+  // de excluir direto no detalhe do Contas a Pagar). Limpa a URL e os campos de
+  // identificação extraídos. Tenant-safe; auditado. ZERO ALTER/DROP/DELETE.
+  removerComprovanteEntry: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    entryId: z.number(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const res = await dbExecute(db,
+      `UPDATE financial_entries SET
+         comprovante_url=NULL, comprovante_beneficiario=NULL, comprovante_documento=NULL,
+         comprovante_txid=NULL, comprovante_valor=NULL, comprovante_data=NULL,
+         comprovante_extraido_em=NULL, updated_at=NOW()
+        WHERE id=$1 AND company_id=$2 AND comprovante_url IS NOT NULL
+        RETURNING id`,
+      [input.entryId, input.companyId]);
+    if (rows(res).length === 0) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Título não encontrado nesta empresa (ou já está sem comprovante)." });
+    }
+    await createAuditLog({ action: "financial_entry_comprovante_removido", userId: ctx.user?.id, companyId: input.companyId, details: `Entry ${input.entryId} comprovante removido` });
     return { ok: true };
   }),
 
@@ -8541,6 +8936,7 @@ export const financialRouter = router({
       return true;
     });
     if (pares.length === 0) return { ok: true, conciliados: 0, total: input.pares.length, conciliadosLineIds: [] as number[] };
+    await _assertNotInPaidSupplierClosing(db, input.companyId, pares.map((p) => p.entryId));
     const params: unknown[] = [input.companyId, ctx.user?.id ?? null, ctx.user?.name ?? null];
     const valuesSql = pares
       .map((_, i) => `($${4 + i * 2}::int,$${5 + i * 2}::int)`)
@@ -8560,6 +8956,13 @@ export const financialRouter = router({
            AND COALESCE(l.conciliado,0) = 0 AND l.excluido_em IS NULL
           JOIN financial_entries e ON e.id = p.entry_id AND e.company_id = $1
            AND COALESCE(e.conciliado,0) = 0 AND e.status <> 'cancelado'
+            AND NOT EXISTS (
+              SELECT 1
+                FROM fechamento_fornecedor_pagamentos fp
+                JOIN fechamento_fornecedor f
+                  ON f.id=fp.fechamento_id AND f.company_id=fp.company_id AND f.status='pago'
+               WHERE fp.company_id=e.company_id AND fp.entry_id=e.id AND fp.estornado_em IS NULL
+            )
          FOR UPDATE OF l, e
       ),
       upd_l AS (
@@ -8686,13 +9089,39 @@ export const financialRouter = router({
     let afetados = 0;
     await db.transaction(async (tx: any) => {
       // 1) Reverte o flag de conciliação dos lançamentos AINDA vinculados (antes de
-      //    limpar o entry_id das linhas). Só o flag — preserva status/valor/data_pagamento.
+      //    limpar o entry_id das linhas). Rev. 5024 — lançamento criado pela própria
+      //    conciliação do cheque vira CANCELADO (senão fica 'pago' órfão e a
+      //    re-conciliação dá CONFLICT). Os demais preservam status/valor/baixa.
+      // Rev. 5030 — legados sem origem_modulo (anteriores à Rev. 5024) foram
+      // backfillados via audit log 'financial_cheque_conciliado'; NÃO ampliar este
+      // CASE para "qualquer entry com cheque vinculado": conciliarLancamento também
+      // grava financial_cheques.lancamento_id em títulos PREEXISTENTES do usuário,
+      // que jamais podem ser cancelados aqui (só perdem o flag de conciliação).
       await dbExecute(tx,
-        `UPDATE financial_entries e SET conciliado=0, data_conciliacao=NULL
+        `UPDATE financial_entries e SET conciliado=0, data_conciliacao=NULL,
+                status = CASE WHEN COALESCE(e.origem_modulo,'')='cheque_conciliacao'
+                  THEN 'cancelado' ELSE e.status END,
+                motivo_cancelamento = CASE WHEN COALESCE(e.origem_modulo,'')='cheque_conciliacao'
+                  THEN 'Estorno automático — mês desconsolidado; lançamento havia sido criado pela conciliação do cheque'
+                  ELSE e.motivo_cancelamento END
            FROM bank_statement_lines l
           WHERE l.company_id=$1 AND l.conta_bancaria_id=$2 AND l.data>=$3 AND l.data<=$4
             AND COALESCE(l.conciliado,0)=1 AND l.entry_id IS NOT NULL AND l.excluido_em IS NULL
             AND e.id=l.entry_id AND e.company_id=l.company_id`,
+        [input.companyId, input.contaBancariaId, input.dataInicio, input.dataFim]);
+      // 1a) Rev. 5024 — libera os cheques do Controle de Cheques baixados por esses
+      //     lançamentos (compensado volta a pendente; devolvido/sustado só soltam o vínculo).
+      await dbExecute(tx,
+        `UPDATE financial_cheques c
+            SET conciliado=0, data_conciliacao=NULL, lancamento_id=NULL,
+                data_compensacao = CASE WHEN c.status='compensado' THEN NULL ELSE c.data_compensacao END,
+                status = CASE WHEN c.status='compensado' THEN 'pendente' ELSE c.status END,
+                conta_bancaria_tentativa_id=NULL, conta_bancaria_tentativa_nome=NULL,
+                updated_at=NOW()
+           FROM bank_statement_lines l
+          WHERE l.company_id=$1 AND l.conta_bancaria_id=$2 AND l.data>=$3 AND l.data<=$4
+            AND COALESCE(l.conciliado,0)=1 AND l.entry_id IS NOT NULL AND l.excluido_em IS NULL
+            AND c.company_id=l.company_id AND c.excluido_em IS NULL AND c.lancamento_id=l.entry_id`,
         [input.companyId, input.contaBancariaId, input.dataInicio, input.dataFim]);
       // 1b) Rev. 3239/3318 — reverte os MEMBROS de conciliações EM GRUPO (VR/combustível/
       //     manutenção) via a tabela-link `financial_conciliacao_grupo`. O entry_id da linha
@@ -8700,12 +9129,32 @@ export const financialRouter = router({
       //     órfãos. Só roda quando a tabela existe (vide pré-checagem `temGrupo` acima).
       if (temGrupo) {
         await dbExecute(tx,
-          `UPDATE financial_entries e SET conciliado=0, data_conciliacao=NULL
+          `UPDATE financial_entries e SET conciliado=0, data_conciliacao=NULL,
+                  status = CASE WHEN COALESCE(e.origem_modulo,'')='cheque_conciliacao'
+                    THEN 'cancelado' ELSE e.status END,
+                  motivo_cancelamento = CASE WHEN COALESCE(e.origem_modulo,'')='cheque_conciliacao'
+                    THEN 'Estorno automático — mês desconsolidado; lançamento havia sido criado pela conciliação do cheque'
+                    ELSE e.motivo_cancelamento END
              FROM financial_conciliacao_grupo g
              JOIN bank_statement_lines l ON l.id=g.statement_line_id AND l.company_id=g.company_id
             WHERE g.company_id=$1 AND l.conta_bancaria_id=$2 AND l.data>=$3 AND l.data<=$4
               AND g.revertido_em IS NULL AND COALESCE(l.conciliado,0)=1 AND l.excluido_em IS NULL
               AND e.id=g.entry_id AND e.company_id=g.company_id`,
+          [input.companyId, input.contaBancariaId, input.dataInicio, input.dataFim]);
+        // Rev. 5024b — libera também os cheques baixados por MEMBROS do grupo
+        // (não só o representante l.entry_id, coberto no passo 1a).
+        await dbExecute(tx,
+          `UPDATE financial_cheques c
+              SET conciliado=0, data_conciliacao=NULL, lancamento_id=NULL,
+                  data_compensacao = CASE WHEN c.status='compensado' THEN NULL ELSE c.data_compensacao END,
+                  status = CASE WHEN c.status='compensado' THEN 'pendente' ELSE c.status END,
+                  conta_bancaria_tentativa_id=NULL, conta_bancaria_tentativa_nome=NULL,
+                  updated_at=NOW()
+             FROM financial_conciliacao_grupo g
+             JOIN bank_statement_lines l ON l.id=g.statement_line_id AND l.company_id=g.company_id
+            WHERE g.company_id=$1 AND l.conta_bancaria_id=$2 AND l.data>=$3 AND l.data<=$4
+              AND g.revertido_em IS NULL AND COALESCE(l.conciliado,0)=1 AND l.excluido_em IS NULL
+              AND c.company_id=g.company_id AND c.excluido_em IS NULL AND c.lancamento_id=g.entry_id`,
           [input.companyId, input.contaBancariaId, input.dataInicio, input.dataFim]);
         // Marca os vínculos como revertidos (SEM DELETE — honra a regra).
         await dbExecute(tx,
@@ -8770,14 +9219,36 @@ export const financialRouter = router({
     let afetados = 0;
     // dbExecute liga params por ORDEM DE APARIÇÃO ($N é cosmético) → manter ascendente.
     await db.transaction(async (tx: any) => {
-      // 1) Reverte o flag de conciliação dos lançamentos vinculados às linhas a remover
-      //    (antes de soft-deletar). Só o flag — preserva status/valor/data_pagamento.
+      // 1) Rev. 5024 — mesma regra da desconciliarLinha: lançamento CRIADO pela própria
+      //    conciliação do cheque (origem_modulo='cheque_conciliacao') vira CANCELADO
+      //    (senão fica 'pago' órfão no Contas a Pagar e a re-conciliação dá CONFLICT
+      //    "Já existe o lançamento #N para o cheque nº X"). Os demais lançamentos só
+      //    perdem o flag — preserva status/valor/baixa.
       await dbExecute(tx,
-        `UPDATE financial_entries e SET conciliado=0, data_conciliacao=NULL
+        `UPDATE financial_entries e SET conciliado=0, data_conciliacao=NULL,
+                status = CASE WHEN COALESCE(e.origem_modulo,'')='cheque_conciliacao'
+                  THEN 'cancelado' ELSE e.status END,
+                motivo_cancelamento = CASE WHEN COALESCE(e.origem_modulo,'')='cheque_conciliacao'
+                  THEN 'Estorno automático — extrato excluído/limpo; lançamento havia sido criado pela conciliação do cheque'
+                  ELSE e.motivo_cancelamento END
            FROM bank_statement_lines l
           WHERE l.company_id=$1 AND l.conta_bancaria_id=$2 AND l.data>=$3 AND l.data<=$4
             AND l.excluido_em IS NULL AND COALESCE(l.conciliado,0)=1 AND l.entry_id IS NOT NULL
             AND e.id=l.entry_id AND e.company_id=l.company_id`,
+        [input.companyId, input.contaBancariaId, input.dataInicio, input.dataFim]);
+      // 1b) Rev. 5024 — LIBERA os cheques do Controle de Cheques baixados por esses
+      //     lançamentos (conciliado=0, solta lancamento_id; compensado volta a pendente).
+      await dbExecute(tx,
+        `UPDATE financial_cheques c
+            SET conciliado=0, data_conciliacao=NULL, lancamento_id=NULL,
+                data_compensacao = CASE WHEN c.status='compensado' THEN NULL ELSE c.data_compensacao END,
+                status = CASE WHEN c.status='compensado' THEN 'pendente' ELSE c.status END,
+                conta_bancaria_tentativa_id=NULL, conta_bancaria_tentativa_nome=NULL,
+                updated_at=NOW()
+           FROM bank_statement_lines l
+          WHERE l.company_id=$1 AND l.conta_bancaria_id=$2 AND l.data>=$3 AND l.data<=$4
+            AND l.excluido_em IS NULL AND COALESCE(l.conciliado,0)=1 AND l.entry_id IS NOT NULL
+            AND c.company_id=l.company_id AND c.excluido_em IS NULL AND c.lancamento_id=l.entry_id`,
         [input.companyId, input.contaBancariaId, input.dataInicio, input.dataFim]);
       // 2) Soft-delete das linhas do extrato no escopo (zera conciliado/entry_id também).
       const res = await dbExecute(tx,
@@ -8829,12 +9300,32 @@ export const financialRouter = router({
     let afetados = 0;
     await db.transaction(async (tx: any) => {
       // 1) Reverte conciliação dos lançamentos vinculados às linhas a remover.
+      //    Rev. 5024 — lançamento criado pela conciliação do cheque vira CANCELADO
+      //    (mesma regra da desconciliarLinha; evita órfão 'pago' + CONFLICT ao reconciliar).
       await dbExecute(tx,
-        `UPDATE financial_entries e SET conciliado=0, data_conciliacao=NULL
+        `UPDATE financial_entries e SET conciliado=0, data_conciliacao=NULL,
+                status = CASE WHEN COALESCE(e.origem_modulo,'')='cheque_conciliacao'
+                  THEN 'cancelado' ELSE e.status END,
+                motivo_cancelamento = CASE WHEN COALESCE(e.origem_modulo,'')='cheque_conciliacao'
+                  THEN 'Estorno automático — extrato excluído/limpo; lançamento havia sido criado pela conciliação do cheque'
+                  ELSE e.motivo_cancelamento END
            FROM bank_statement_lines l
           WHERE l.company_id=$1 AND l.data>=$2 AND l.data<=$3
             AND l.excluido_em IS NULL AND COALESCE(l.conciliado,0)=1 AND l.entry_id IS NOT NULL
             AND e.id=l.entry_id AND e.company_id=l.company_id`,
+        [input.companyId, input.dataInicio, input.dataFim]);
+      // 1b) Rev. 5024 — libera os cheques baixados por esses lançamentos.
+      await dbExecute(tx,
+        `UPDATE financial_cheques c
+            SET conciliado=0, data_conciliacao=NULL, lancamento_id=NULL,
+                data_compensacao = CASE WHEN c.status='compensado' THEN NULL ELSE c.data_compensacao END,
+                status = CASE WHEN c.status='compensado' THEN 'pendente' ELSE c.status END,
+                conta_bancaria_tentativa_id=NULL, conta_bancaria_tentativa_nome=NULL,
+                updated_at=NOW()
+           FROM bank_statement_lines l
+          WHERE l.company_id=$1 AND l.data>=$2 AND l.data<=$3
+            AND l.excluido_em IS NULL AND COALESCE(l.conciliado,0)=1 AND l.entry_id IS NOT NULL
+            AND c.company_id=l.company_id AND c.excluido_em IS NULL AND c.lancamento_id=l.entry_id`,
         [input.companyId, input.dataInicio, input.dataFim]);
       // 2) Soft-delete de todas as linhas do extrato no período.
       const res = await dbExecute(tx,
@@ -8937,43 +9428,50 @@ export const financialRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    let contaBancariaId = 0;
+    await (db as any).transaction(async (tx: any) => {
+      // Lock order matches conciliarLancamento: bank line → entry.
+      const lnRes = await dbExecute(tx,
+        `SELECT id, conta_bancaria_id AS "contaBancariaId"
+           FROM bank_statement_lines
+          WHERE id=$1 AND company_id=$2 AND excluido_em IS NULL AND COALESCE(conciliado,0)=0
+          FOR UPDATE`,
+        [input.statementLineId, input.companyId]);
+      if (rows(lnRes).length === 0) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Linha do extrato não encontrada ou já conciliada." });
+      }
+      contaBancariaId = Number((rows(lnRes)[0] as any).contaBancariaId);
 
-    // 1. Busca linha do extrato (tenant guard) → obtém conta_bancaria_id
-    const lnRes = await dbExecute(db,
-      `SELECT id, conta_bancaria_id AS "contaBancariaId"
-       FROM bank_statement_lines
-       WHERE id=$1 AND company_id=$2 AND excluido_em IS NULL AND COALESCE(conciliado,0)=0`,
-      [input.statementLineId, input.companyId]);
-    if (rows(lnRes).length === 0)
-      throw new TRPCError({ code: "NOT_FOUND", message: "Linha do extrato não encontrada ou já conciliada." });
-    const contaBancariaId = Number((rows(lnRes)[0] as any).contaBancariaId);
+      const enRes = await dbExecute(tx,
+        `SELECT id, conta_bancaria_id AS "contaBancariaId"
+           FROM financial_entries
+          WHERE id=$1 AND company_id=$2 AND status <> 'cancelado' AND COALESCE(conciliado,0)=0
+          FOR UPDATE`,
+        [input.entryId, input.companyId]);
+      if (rows(enRes).length === 0) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Lançamento não encontrado ou já conciliado." });
+      }
+      await _assertNotInPaidSupplierClosing(tx, input.companyId, [input.entryId]);
+      if ((rows(enRes)[0] as any).contaBancariaId != null) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Este lançamento já tem conta bancária definida — use a conciliação normal." });
+      }
 
-    // 2. Busca lançamento (tenant guard) → deve estar sem conta + não conciliado
-    const enRes = await dbExecute(db,
-      `SELECT id, conta_bancaria_id AS "contaBancariaId"
-       FROM financial_entries
-       WHERE id=$1 AND company_id=$2 AND status <> 'cancelado' AND COALESCE(conciliado,0)=0`,
-      [input.entryId, input.companyId]);
-    if (rows(enRes).length === 0)
-      throw new TRPCError({ code: "NOT_FOUND", message: "Lançamento não encontrado ou já conciliado." });
-    if ((rows(enRes)[0] as any).contaBancariaId != null)
-      throw new TRPCError({ code: "BAD_REQUEST", message: "Este lançamento já tem conta bancária definida — use a conciliação normal." });
+      const updLine = await dbExecute(tx,
+        `UPDATE bank_statement_lines SET conciliado=1, entry_id=$1
+          WHERE id=$2 AND company_id=$3 AND excluido_em IS NULL AND COALESCE(conciliado,0)=0
+          RETURNING id`,
+        [input.entryId, input.statementLineId, input.companyId]);
+      if (rows(updLine).length === 0) {
+        throw new TRPCError({ code: "CONFLICT", message: "Linha do extrato mudou durante a conciliação." });
+      }
 
-    // 3. Concilia a linha (RETURNING como guard de dupla-conciliação)
-    const updLine = await dbExecute(db,
-      `UPDATE bank_statement_lines SET conciliado=1, entry_id=$1
-       WHERE id=$2 AND company_id=$3 AND excluido_em IS NULL RETURNING id`,
-      [input.entryId, input.statementLineId, input.companyId]);
-    if (rows(updLine).length === 0)
-      throw new TRPCError({ code: "NOT_FOUND", message: "Linha do extrato não encontrada ao conciliar." });
-
-    // 4. Vincula conta + marca conciliado no lançamento
-    await dbExecute(db,
-      `UPDATE financial_entries
-       SET conta_bancaria_id=$1, conciliado=1, data_conciliacao=CURRENT_DATE,
-           conciliado_em=NOW(), conciliado_por_id=$2, conciliado_por_nome=$3
-       WHERE id=$4 AND company_id=$5`,
-      [contaBancariaId, ctx.user?.id ?? null, ctx.user?.name ?? null, input.entryId, input.companyId]);
+      await dbExecute(tx,
+        `UPDATE financial_entries
+            SET conta_bancaria_id=$1, conciliado=1, data_conciliacao=CURRENT_DATE,
+                conciliado_em=NOW(), conciliado_por_id=$2, conciliado_por_nome=$3
+          WHERE id=$4 AND company_id=$5`,
+        [contaBancariaId, ctx.user?.id ?? null, ctx.user?.name ?? null, input.entryId, input.companyId]);
+    });
 
     await createAuditLog({ action: "financial_conciliar_sem_conta", userId: ctx.user?.id, companyId: input.companyId, details: `Entry #${input.entryId} vinculado à conta ${contaBancariaId} e conciliado com linha #${input.statementLineId}` });
     return { ok: true, contaBancariaId };
@@ -9296,7 +9794,8 @@ export const financialRouter = router({
             `UPDATE financial_entries
                 SET conciliado=0, data_conciliacao=NULL,
                     status = CASE
-                      WHEN COALESCE(origem_modulo,'')='cheque_conciliacao' THEN 'cancelado'
+                      WHEN COALESCE(origem_modulo,'')='cheque_conciliacao'
+                        THEN 'cancelado'
                       WHEN status='pago'     THEN 'a_pagar'
                       WHEN status='recebido' THEN 'a_receber'
                       ELSE status END,
@@ -9319,7 +9818,8 @@ export const financialRouter = router({
           `UPDATE financial_entries
               SET conciliado=0, data_conciliacao=NULL,
                   status = CASE
-                    WHEN COALESCE(origem_modulo,'')='cheque_conciliacao' THEN 'cancelado'
+                    WHEN COALESCE(origem_modulo,'')='cheque_conciliacao'
+                      THEN 'cancelado'
                     WHEN status='pago'     THEN 'a_pagar'
                     WHEN status='recebido' THEN 'a_receber'
                     ELSE status END,
@@ -9631,6 +10131,7 @@ export const financialRouter = router({
               obra_nome AS "obraNome", frequencia, dia_vencimento AS "diaVencimento",
               forma_pagamento AS "formaPagamento", fornecedor_nome AS "fornecedorNome",
               ativo, proximo_vencimento AS "proximoVencimento",
+              data_limite AS "dataLimite",
               ultimo_gerado AS "ultimoGerado", observacoes,
               criado_por_nome AS "criadoPorNome", created_at AS "createdAt"
        FROM financial_recurring_entries WHERE company_id=$1 ORDER BY ativo DESC, descricao ASC`,
@@ -9654,24 +10155,45 @@ export const financialRouter = router({
     formaPagamento: z.string().optional(),
     fornecedorNome: z.string().optional(),
     observacoes: z.string().optional(),
+    // Rev. 5124 — data limite opcional: última data em que a recorrência gera parcela
+    dataLimite: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+    // Rev. 5142 — primeiro vencimento explícito: antes o sistema SEMPRE começava
+    // no mês seguinte, pulando a parcela do mês corrente (reclamação: pagou em
+    // agosto e só apareceram setembro/outubro).
+    primeiroVencimento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const now = new Date();
-    const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, Math.min(input.diaVencimento, 28));
+    // Rev. 5150 — default do 1º vencimento: se o dia de vencimento deste mês ainda
+    // não passou, começa NESTE mês (antes sempre pulava p/ o mês seguinte, e a
+    // conta que vencia no próprio mês do cadastro nunca era lançada).
+    const diaSafe = Math.min(input.diaVencimento, 28);
+    const esteMes = new Date(now.getFullYear(), now.getMonth(), diaSafe);
+    const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, diaSafe);
+    const defaultVenc = diaSafe >= now.getDate() ? esteMes : nextMonth;
+    const primeiroVenc = input.primeiroVencimento || defaultVenc.toISOString().split("T")[0];
     const res = await dbExecute(db, 
       `INSERT INTO financial_recurring_entries
         (company_id, descricao, valor, tipo, natureza, conta_id, conta_nome, obra_id, obra_nome,
          frequencia, dia_vencimento, forma_pagamento, fornecedor_nome, observacoes,
-         proximo_vencimento, criado_por_id, criado_por_nome)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING id`,
+         proximo_vencimento, data_limite, criado_por_id, criado_por_nome)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING id`,
       [input.companyId, input.descricao, input.valor, input.tipo, input.natureza,
        input.contaId ?? null, input.contaNome ?? null, input.obraId ?? null, input.obraNome ?? null,
        input.frequencia, input.diaVencimento, input.formaPagamento ?? null,
        input.fornecedorNome ?? null, input.observacoes ?? null,
-       nextMonth.toISOString().split("T")[0],
+       primeiroVenc,
+       input.dataLimite ?? null,
        ctx.user?.id ?? null, ctx.user?.name ?? ctx.user?.email ?? null]
     );
+    // Rev. 5125 — materializa as parcelas IMEDIATAMENTE ao criar a recorrência.
+    // Antes a geração era lazy (só rodava no getContasAPagarByYear ou no botão
+    // "Gerar Pendentes"), então quem criava pela tela de Lançamentos buscava a
+    // conta e não encontrava nada.
+    try { await materializeRecorrentes(db, input.companyId, 3); } catch (e) {
+      console.error("[createRecurringEntry] materialize pós-criação falhou:", e);
+    }
     await createAuditLog({
       userId: ctx.user?.id,
       userName: ctx.user?.name ?? ctx.user?.email,
@@ -9698,6 +10220,10 @@ export const financialRouter = router({
     fornecedorNome: z.string().optional(),
     observacoes: z.string().optional(),
     ativo: z.number().optional(),
+    // Rev. 5124 — null limpa a data limite; string YYYY-MM-DD define
+    dataLimite: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+    // Rev. 5142 — permite reagendar o próximo vencimento na edição
+    primeiroVencimento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
@@ -9708,7 +10234,8 @@ export const financialRouter = router({
       descricao: "descricao", valor: "valor", tipo: "tipo", contaNome: "conta_nome",
       obraNome: "obra_nome", frequencia: "frequencia", diaVencimento: "dia_vencimento",
       formaPagamento: "forma_pagamento", fornecedorNome: "fornecedor_nome",
-      observacoes: "observacoes", ativo: "ativo",
+      observacoes: "observacoes", ativo: "ativo", dataLimite: "data_limite",
+      primeiroVencimento: "proximo_vencimento",
     };
     for (const [k, col] of Object.entries(fields)) {
       if ((input as any)[k] !== undefined) { sets.push(`${col}=$${i++}`); vals.push((input as any)[k]); }
@@ -10305,7 +10832,26 @@ export const financialRouter = router({
               )::int AS "dupCount",
               -- Rev. 4084: NFS-e vinculada ao título (badge na lista)
               (SELECT nfse_numero FROM financial_nfse_vinculos WHERE entry_id = financial_entries.id AND status != 'cancelada' LIMIT 1) AS "nfseNumero",
-              (SELECT nfse_chave   FROM financial_nfse_vinculos WHERE entry_id = financial_entries.id AND status != 'cancelada' LIMIT 1) AS "nfseChave"
+               (SELECT nfse_chave   FROM financial_nfse_vinculos WHERE entry_id = financial_entries.id AND status != 'cancelada' LIMIT 1) AS "nfseChave",
+               -- Crédito do extrato transformado em título durante a conciliação,
+               -- sem documento fiscal: é movimentação bancária, não faturamento.
+               (
+                 origem_modulo = 'manual_receber'
+                 AND EXISTS (
+                   SELECT 1
+                     FROM bank_statement_lines bsl
+                    WHERE bsl.company_id = financial_entries.company_id
+                      AND bsl.entry_id = financial_entries.id
+                      AND bsl.excluido_em IS NULL
+                      AND bsl.desconsiderado_em IS NULL
+                 )
+                 AND NOT EXISTS (
+                   SELECT 1
+                     FROM financial_nfse_vinculos nfv
+                    WHERE nfv.entry_id = financial_entries.id
+                      AND nfv.status != 'cancelada'
+                 )
+               ) AS "receitaExtratoSemFatura"
        FROM financial_entries
        WHERE company_id IN (${inlineIds(ids)})
          AND tipo = 'receita'
@@ -10352,12 +10898,24 @@ export const financialRouter = router({
                    THEN 1 ELSE 0 END AS sweep,
               SUM(ABS(l.valor))::float8 AS total, COUNT(*)::int AS qtd
        FROM bank_statement_lines l
-       LEFT JOIN financial_entries e ON e.id = l.entry_id
+       LEFT JOIN financial_entries e
+         ON e.id = l.entry_id
+        AND e.company_id = l.company_id
        WHERE l.company_id IN (${inlineIds(ids)})
          AND l.excluido_em IS NULL AND l.desconsiderado_em IS NULL
          AND EXTRACT(year FROM l.data) = $1
-         AND (l.entry_id IS NULL OR e.tipo NOT IN ('receita','despesa')
-              OR e.origem_modulo IN ('aplicacao_financeira','transferencia_interna'))
+          AND (l.entry_id IS NULL OR e.tipo NOT IN ('receita','despesa')
+               OR e.origem_modulo IN ('aplicacao_financeira','transferencia_interna')
+               OR (
+                 e.tipo = 'receita'
+                 AND e.origem_modulo = 'manual_receber'
+                 AND NOT EXISTS (
+                   SELECT 1
+                     FROM financial_nfse_vinculos nfv
+                    WHERE nfv.entry_id = e.id
+                      AND nfv.status != 'cancelada'
+                 )
+               ))
        GROUP BY 1, 2, 3`,
       [input.ano]
     );
@@ -10929,10 +11487,25 @@ export const financialRouter = router({
         if (input.fornecedorNome) {
           const fr: any[] = rows(await dbExecute(tx,
             `SELECT id FROM fornecedores WHERE company_id=$1
-               AND (UPPER(TRIM(razao_social))=UPPER(TRIM($2)) OR UPPER(TRIM(nome_fantasia))=UPPER(TRIM($2)))
+               AND (UPPER(TRIM(razao_social))=UPPER(TRIM($2)) OR UPPER(TRIM(nome_fantasia))=UPPER(TRIM($3)))
              LIMIT 1`,
-            [input.companyId, input.fornecedorNome]));
+            [input.companyId, input.fornecedorNome, input.fornecedorNome]));
           fornecedorId = fr[0]?.id ?? null;
+        }
+        // Rev. 5168 — leva o BANCO da baixa para o Controle de Cheques (antes ficava "—").
+        let chqBancoNome: string | null = input.chequeBanco?.trim() || null;
+        let chqBancoCodigo: string | null = null;
+        let chqAgencia: string | null = input.chequeAgencia?.trim() || null;
+        if (input.contaBancariaId) {
+          const cb: any[] = rows(await dbExecute(tx,
+            `SELECT COALESCE(NULLIF(apelido,''), banco) AS nome, "codigoBanco" AS codigo, agencia
+             FROM company_bank_accounts WHERE id=$1 AND "companyId"=$2 LIMIT 1`,
+            [input.contaBancariaId, input.companyId]));
+          if (cb[0]) {
+            chqBancoNome = chqBancoNome || (cb[0].nome ? String(cb[0].nome).trim() : null);
+            chqBancoCodigo = cb[0].codigo ? String(cb[0].codigo).trim() : null;
+            chqAgencia = chqAgencia || (cb[0].agencia ? String(cb[0].agencia).trim() : null);
+          }
         }
         for (const c of chequesLote) {
           const venc = (c.dataVencimento || input.chequeDataBomPara || dataBaixa).slice(0, 10);
@@ -10942,13 +11515,14 @@ export const financialRouter = router({
           const res: any = await dbExecute(tx,
             `INSERT INTO financial_cheques
                (company_id, conta_bancaria_id, numero_cheque, fornecedor_nome, fornecedor_id, valor,
-                data_vencimento, status, observacao, mes_ref, ano_ref, origem_arquivo, lote_id)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,'pendente',$8,$9,$10,'contas_a_pagar',$11)
+                data_vencimento, status, observacao, mes_ref, ano_ref, origem_arquivo, lote_id,
+                banco_nome, banco_codigo, agencia)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,'pendente',$8,$9,$10,'contas_a_pagar',$11,$12,$13,$14)
              RETURNING id`,
             [input.companyId, input.contaBancariaId ?? null, c.numero.trim(), input.fornecedorNome ?? null,
              fornecedorId, c.valor, venc,
              `Baixa em Contas a Pagar — título ${input.id}${c.parcela ? ` (parcela ${c.parcela})` : ""}`,
-             mesRef, anoRef, loteId]
+             mesRef, anoRef, loteId, chqBancoNome, chqBancoCodigo, chqAgencia]
           );
           const cid = rows(res)[0]?.id;
           if (cid) chequesCriadosTx.push(cid);
@@ -11004,6 +11578,7 @@ export const financialRouter = router({
   // padrão de lock de registrarBaixa) + inserts dos cheques.
   pagarConsolidadoFornecedor: protectedProcedure.input(z.object({
     companyId: z.number(),
+    grupoId: z.string().startsWith("grp:fech|").max(500),
     itensIds: z.array(z.number()).min(1).max(500),
     dataPagamento: z.string().optional(),
     contaBancariaId: z.number().nullable().optional(),
@@ -11011,13 +11586,17 @@ export const financialRouter = router({
     fornecedorNome: z.string().optional(),
     observacoes: z.string().optional(),
     cheques: z.array(z.object({
-      numero: z.string(),
+      numero: z.string().trim().min(1).max(50),
       valor: z.number().positive("Valor do cheque inválido."),
-      dataVencimento: z.string(),
-    })).optional(),
+      dataVencimento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Vencimento do cheque inválido."),
+    })).min(1).max(120).optional(),
     // Rev. 4138 — IDs de cheques de terceiro (financial_cheques_recebidos) a alocar
     // atomicamente junto com o pagamento. Antes era fire-and-forget no cliente.
-    chequesTerceiroIds: z.array(z.number().int()).optional(),
+    chequesTerceiroIds: z.array(z.number().int().positive()).min(1).max(500).optional(),
+    // Task #187 — Fechamento persistido: quando informado, usa EXCLUSIVAMENTE os itens
+    // ativos do fechamento confirmado, valida a diferença explicada e cria os vínculos
+    // de pagamento. Sem ele, preserva compatibilidade legada (itensIds do cliente).
+    fechamentoId: z.number().int().positive().optional(),
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
@@ -11027,6 +11606,17 @@ export const financialRouter = router({
     }
     const dataBaixa = (input.dataPagamento || new Date().toISOString().slice(0, 10)).slice(0, 10);
     const isCheque = input.formaPagamento === "cheque";
+    const isChequeTerceiro = input.formaPagamento === "cheque_terceiro";
+    const chequesTerceiroIds = Array.from(new Set((input.chequesTerceiroIds ?? []).map(Number)));
+    if ((input.chequesTerceiroIds?.length ?? 0) !== chequesTerceiroIds.length) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "Há cheques de terceiro repetidos na seleção." });
+    }
+    if (chequesTerceiroIds.length > 0 && !isChequeTerceiro) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "Cheques de terceiro só podem ser enviados na forma de pagamento correspondente." });
+    }
+    if (isChequeTerceiro && chequesTerceiroIds.length === 0) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "Selecione os cheques de terceiro usados neste pagamento." });
+    }
     if (isCheque) {
       if (!input.cheques || input.cheques.length === 0) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Informe os cheques do pagamento." });
@@ -11037,22 +11627,174 @@ export const financialRouter = router({
         }
       }
     }
+
+    // Task #187 — Se fechamentoId informado, carrega itens do fechamento confirmado
+    // e valida diferença explicada. Os itensIds são derivados do servidor (não do cliente).
+    // Fix #5: compara valor_previsto live do entry contra o snapshot; valida por supplier_id.
+    let fechamentoParaPagar: any = null;
+    let itensIdsFechamento: number[] | null = null;
+    let snapshotPorEntry: Map<number, number> | null = null; // entryId → snapshotCents
+    let legacyCycleConfig: any = null;
+    if (input.fechamentoId != null) {
+      const fech = rows(await dbExecute(db,
+        `SELECT id, supplier_id AS "supplierId", supplier_fornecedor_id AS "supplierFornecedorId",
+                janela, ciclo, status,
+                valor_total AS "valorTotal", valor_itens AS "valorItens",
+                valor_ajustes AS "valorAjustes", supplier_nome AS "supplierNome"
+           FROM fechamento_fornecedor
+          WHERE id=$1 AND company_id=$2`,
+        [input.fechamentoId, input.companyId]))[0];
+      if (!fech) throw new TRPCError({ code: "NOT_FOUND", message: "Fechamento não encontrado." });
+      if (fech.status !== "conferido") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `Fechamento precisa estar no estado 'conferido' para pagamento (atual: ${fech.status}).` });
+      }
+      // Busca itens ativos do fechamento com snapshot
+      const itensRows = rows(await dbExecute(db,
+        `SELECT fi.entry_id AS "entryId", fi.valor_previsto_snapshot AS "snapshot",
+                e.valor_previsto AS "valorPrevistoLive"
+           FROM fechamento_fornecedor_itens fi
+           JOIN financial_entries e ON e.id=fi.entry_id AND e.company_id=fi.company_id
+          WHERE fi.fechamento_id=$1 AND fi.company_id=$2 AND fi.ativo=1`,
+        [input.fechamentoId, input.companyId]));
+      if (itensRows.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Fechamento sem itens ativos." });
+      itensIdsFechamento = itensRows.map((r: any) => Number(r.entryId));
+      // Fix #5: compare live valor_previsto against snapshot (tolerance R$0.01 per item)
+      snapshotPorEntry = new Map(itensRows.map((r: any) => [Number(r.entryId), Math.round(Number(r.snapshot) * 100)]));
+      for (const r of itensRows) {
+        const snapC = Math.round(Number(r.snapshot) * 100);
+        const liveC = Math.round(Number(r.valorPrevistoLive) * 100);
+        if (Math.abs(snapC - liveC) > 1) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: `O valor do lançamento #${r.entryId} mudou (snapshot R$${Number(r.snapshot).toFixed(2)}, atual R$${Number(r.valorPrevistoLive).toFixed(2)}). Reabra o fechamento para atualizar.` });
+        }
+      }
+      // Valida: total declarado = soma_itens + soma_ajustes (tolerância 5 centavos)
+      const somaItensCents = itensRows.reduce((s: number, r: any) => s + Math.round(Number(r.snapshot) * 100), 0);
+      const ajusteRows = rows(await dbExecute(db,
+        `SELECT SUM(valor) AS soma FROM fechamento_fornecedor_ajustes
+          WHERE fechamento_id=$1 AND company_id=$2 AND ativo=1`,
+        [input.fechamentoId, input.companyId]));
+      const somaAjustesCents = Math.round(Number(ajusteRows[0]?.soma ?? 0) * 100);
+      const totalConferidoCents = somaItensCents + somaAjustesCents;
+      const totalDeclaradoCents = Math.round(Number(fech.valorTotal) * 100);
+      if (Math.abs(totalConferidoCents - totalDeclaradoCents) > 5) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `Divergência: total dos itens+ajustes (R$${(totalConferidoCents/100).toFixed(2)}) ≠ total declarado (R$${(totalDeclaradoCents/100).toFixed(2)}). Reabra o fechamento e ajuste.` });
+      }
+      fechamentoParaPagar = fech;
+    }
+
+    // Quando não há fechamentoId, usa itensIds do cliente (compatibilidade legada).
+    const idsParaPagar = itensIdsFechamento ?? (input.itensIds as number[]).map(Number);
+
     const entries: any[] = rows(await dbExecute(db,
-      `SELECT id, tipo, valor_previsto AS "valorPrevisto", status
-         FROM financial_entries WHERE company_id=$1 AND id IN (${inlineIds((input.itensIds as number[]).map(Number))})`,
+      `SELECT e.id, e.tipo, e.valor_previsto AS "valorPrevisto", e.status,
+              e.data_competencia AS "dataCompetencia", e.data_vencimento AS "dataVencimento",
+              e.origem_modulo AS "origemModulo",
+              COALESCE(NULLIF(TRIM(e.fornecedor_nome), ''), co.fornecedor_nome) AS "fornecedorNome",
+              co.modalidade_fd AS "modalidadeFd",
+              co.fornecedor_id AS "ocFornecedorId"
+         FROM financial_entries e
+         LEFT JOIN compras_ordens co
+           ON e.origem_modulo IN ('compras','compra_oc')
+          AND co.id=e.origem_id AND co.company_id=e.company_id
+        WHERE e.company_id=$1 AND e.tipo='despesa'
+          AND e.id IN (${inlineIds(idsParaPagar)})`,
       [input.companyId]));
-    if (entries.length !== input.itensIds.length) {
+    if (entries.length !== idsParaPagar.length) {
       throw new TRPCError({ code: "NOT_FOUND", message: "Um ou mais lançamentos não pertencem a esta empresa." });
     }
-    const pendentes = entries.filter((e) => e.status !== "pago" && e.status !== "cancelado");
-    if (pendentes.length === 0) {
-      throw new TRPCError({ code: "BAD_REQUEST", message: "Todos os lançamentos deste grupo já foram pagos." });
+    if (entries.some((e) => e.status === "pago" || e.status === "cancelado")) {
+      throw new TRPCError({ code: "CONFLICT", message: "Uma das OCs selecionadas já foi paga ou cancelada. Atualize a tela e confira a seleção." });
     }
-    const totalGrupo = Math.round(pendentes.reduce((s, e) => s + (Number(e.valorPrevisto) || 0), 0) * 100) / 100;
+    const groupRaw = input.grupoId.slice("grp:fech|".length);
+    const groupSep = groupRaw.lastIndexOf("|");
+    if (groupSep <= 0 || groupSep === groupRaw.length - 1) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "Fechamento de fornecedor inválido." });
+    }
+    const fornecedorKey = groupRaw.slice(0, groupSep);
+    const janelaKey = groupRaw.slice(groupSep + 1);
+
+    // Fix #5: when fechamentoId is present, validate supplier identity via supplier_id not just name
+    if (fechamentoParaPagar != null) {
+      // Load supplier config for window validation using the stable supplier_id from the closing
+      const supplierForPag = rows(await dbExecute(db,
+        `SELECT id, COALESCE(NULLIF(TRIM(nome_fantasia),''), TRIM(razao_social)) AS nome,
+                fornecedor_id AS "fornecedorId",
+                ciclo_pagamento AS "cicloPagamento",
+                ciclo_data_referencia AS "cicloDataReferencia"
+           FROM empresas_terceiras
+          WHERE id=$1 AND "companyId"=$2 AND deleted_at IS NULL`,
+        [fechamentoParaPagar.supplierId, input.companyId]))[0];
+      const cicloPag = supplierForPag?.cicloPagamento ?? fechamentoParaPagar.ciclo;
+      const cicloRef = supplierForPag?.cicloDataReferencia ?? null;
+      const supplierFornecedorId: number | null = fechamentoParaPagar.supplierFornecedorId
+        ? Number(fechamentoParaPagar.supplierFornecedorId) : null;
+      for (const e of entries) {
+        if (_isFdModalidade(e.modalidadeFd)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: `O lançamento ${e.id} é Faturamento Direto e não pode ser pago via fechamento.` });
+        }
+        const dataStr = String(e.dataCompetencia ?? e.dataVencimento ?? "").slice(0, 10);
+        const janelaDaEntry = dataStr ? _cicloWindow(dataStr, cicloPag, cicloRef) : "0000-00";
+        if (janelaDaEntry !== fechamentoParaPagar.janela) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: `O lançamento ${e.id} pertence à janela ${janelaDaEntry}, diferente da janela do fechamento ${fechamentoParaPagar.janela}.` });
+        }
+        // Validate supplier identity: OC with fornecedor_id → exact match; others → name
+        const isOc = e.origemModulo === "compras" || e.origemModulo === "compra_oc";
+        const ocFornId = e.ocFornecedorId ? Number(e.ocFornecedorId) : null;
+        if (isOc && ocFornId != null && supplierFornecedorId != null) {
+          if (ocFornId !== supplierFornecedorId) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: `O lançamento ${e.id} pertence ao fornecedor de Compras #${ocFornId}, diferente do fechamento (fornecedor #${supplierFornecedorId}).` });
+          }
+        } else {
+          const eNorm = _normNomeConc(String(e.fornecedorNome || ""));
+          const fNorm = _normNomeConc(String(supplierForPag?.nome ?? fechamentoParaPagar.supplierNome ?? ""));
+          if (eNorm && fNorm && !eNorm.includes(fNorm) && !fNorm.includes(eNorm)) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: `O lançamento ${e.id} não pertence ao fornecedor do fechamento (${fechamentoParaPagar.supplierNome}).` });
+          }
+        }
+      }
+    } else {
+      // Legacy path: validate via parsed group name + window
+      const cycleRowsAll = rows(await dbExecute(db,
+        `SELECT id, COALESCE(NULLIF(TRIM(nome_fantasia),''), TRIM(razao_social)) AS nome,
+                ciclo_pagamento AS "cicloPagamento",
+                ciclo_data_referencia AS "cicloDataReferencia"
+           FROM empresas_terceiras
+          WHERE "companyId"=$1 AND deleted_at IS NULL
+            AND ciclo_pagamento IS NOT NULL AND ciclo_pagamento <> 'avista'`,
+        [input.companyId]));
+      legacyCycleConfig = cycleRowsAll.find((r: any) => _normNomeConc(String(r.nome || "")) === fornecedorKey);
+      if (!legacyCycleConfig) {
+        throw new TRPCError({ code: "CONFLICT", message: "O ciclo deste fornecedor mudou. Atualize a tela antes de pagar." });
+      }
+      for (const e of entries) {
+        const nome = _normNomeConc(String(e.fornecedorNome || ""));
+        const data = String(e.dataCompetencia ?? e.dataVencimento ?? "").slice(0, 10);
+        const janela = data ? _cicloWindow(data, legacyCycleConfig.cicloPagamento, legacyCycleConfig.cicloDataReferencia) : "0000-00";
+        if (_isFdModalidade(e.modalidadeFd) || !nome.includes(fornecedorKey) || janela !== janelaKey) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Uma das OCs selecionadas não pertence a este fechamento de fornecedor." });
+        }
+      }
+    }
+    const pendentes = entries;
+    // Fix #5: use snapshot for per-entry expected value when fechamentoId present
+    const valoresEsperadosCentavos = new Map(
+      pendentes.map((e: any) => {
+        if (snapshotPorEntry != null) {
+          return [Number(e.id), snapshotPorEntry.get(Number(e.id)) ?? Math.round((Number(e.valorPrevisto) || 0) * 100)];
+        }
+        return [Number(e.id), Math.round((Number(e.valorPrevisto) || 0) * 100)];
+      }),
+    );
+    // Task #187: quando há fechamento persistido, o total do boleto é fechamento.valor_total
+    // (inclui ajustes). O totalGrupo representa o valor que sai do banco, não a soma dos títulos.
+    const totalItens = Math.round(pendentes.reduce((s, e) => s + (Number(e.valorPrevisto) || 0), 0) * 100) / 100;
+    const totalGrupo = fechamentoParaPagar != null
+      ? Math.round(Number(fechamentoParaPagar.valorTotal) * 100) / 100
+      : totalItens;
     if (isCheque) {
       const totalCheques = Math.round((input.cheques!.reduce((s, c) => s + (Number(c.valor) || 0), 0)) * 100) / 100;
       if (Math.abs(totalCheques - totalGrupo) > 0.05) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: `A soma dos cheques (R$${totalCheques.toFixed(2)}) não bate com o total do grupo (R$${totalGrupo.toFixed(2)}).` });
+        throw new TRPCError({ code: "BAD_REQUEST", message: `A soma dos cheques (R$${totalCheques.toFixed(2)}) não bate com o total do fechamento (R$${totalGrupo.toFixed(2)}).` });
       }
       // Rev. 4596 — Poka-Yoke: bloqueia nº de cheque duplicado (mesma regra do
       // Controle de Cheques): já existente na base (mesma conta OU fornecedor)
@@ -11070,33 +11812,252 @@ export const financialRouter = router({
         });
       }
     }
+    const chequeProprioLoteId = isCheque ? randomUUID() : null;
+    const chequeTerceiroGrupoId = chequesTerceiroIds.length > 0 ? randomUUID() : null;
     const chequesCriados: number[] = [];
+    let chequesAlocados = 0;
     await (db as any).transaction(async (tx: any) => {
-      for (const e of pendentes) {
-        await _lockEntryBaixas(tx, input.companyId, e.id);
-        const valor = Number(e.valorPrevisto) || 0;
-        await dbExecute(tx,
+      const idsOrdenados = pendentes.map((e) => Number(e.id)).sort((a, b) => a - b);
+      for (const id of idsOrdenados) {
+        await _lockEntryBaixas(tx, input.companyId, id);
+      }
+      let lockedCycleConfig: any = null;
+      let lockedFechamento: any = null;
+      if (fechamentoParaPagar != null) {
+        lockedFechamento = rows(await dbExecute(tx,
+          `SELECT id, status, supplier_id AS "supplierId",
+                  supplier_fornecedor_id AS "supplierFornecedorId",
+                  supplier_nome AS "supplierNome", janela, ciclo,
+                  valor_total AS "valorTotal"
+             FROM fechamento_fornecedor
+            WHERE id=$1 AND company_id=$2
+            FOR UPDATE`,
+          [input.fechamentoId, input.companyId]))[0];
+        if (!lockedFechamento || lockedFechamento.status !== "conferido") {
+          throw new TRPCError({ code: "CONFLICT", message: "O fechamento mudou de situação. O pagamento não foi realizado; atualize a tela." });
+        }
+        if (
+          Number(lockedFechamento.supplierId) !== Number(fechamentoParaPagar.supplierId) ||
+          String(lockedFechamento.janela) !== String(fechamentoParaPagar.janela) ||
+          Math.abs(Math.round(Number(lockedFechamento.valorTotal) * 100) - Math.round(Number(fechamentoParaPagar.valorTotal) * 100)) > 0
+        ) {
+          throw new TRPCError({ code: "CONFLICT", message: "Os dados do fechamento mudaram. O pagamento não foi realizado; atualize a tela." });
+        }
+        lockedCycleConfig = rows(await dbExecute(tx,
+          `SELECT id, COALESCE(NULLIF(TRIM(nome_fantasia),''), TRIM(razao_social)) AS nome,
+                  fornecedor_id AS "fornecedorId",
+                  ciclo_pagamento AS "cicloPagamento",
+                  ciclo_data_referencia AS "cicloDataReferencia"
+             FROM empresas_terceiras
+            WHERE id=$1 AND "companyId"=$2
+            FOR SHARE`,
+          [Number(lockedFechamento.supplierId), input.companyId]))[0];
+        if (!lockedCycleConfig) {
+          throw new TRPCError({ code: "CONFLICT", message: "O fornecedor do fechamento não está mais disponível. O pagamento não foi realizado." });
+        }
+      } else {
+        lockedCycleConfig = rows(await dbExecute(tx,
+          `SELECT id, COALESCE(NULLIF(TRIM(nome_fantasia),''), TRIM(razao_social)) AS nome,
+                  ciclo_pagamento AS "cicloPagamento",
+                  ciclo_data_referencia AS "cicloDataReferencia"
+             FROM empresas_terceiras
+            WHERE id=$1 AND "companyId"=$2 AND deleted_at IS NULL
+              AND ciclo_pagamento IS NOT NULL AND ciclo_pagamento <> 'avista'
+            FOR SHARE`,
+          [Number(legacyCycleConfig.id), input.companyId]))[0];
+        if (!lockedCycleConfig || _normNomeConc(String(lockedCycleConfig.nome || "")) !== fornecedorKey) {
+          throw new TRPCError({ code: "CONFLICT", message: "O ciclo deste fornecedor mudou. O pagamento não foi realizado; atualize a tela." });
+        }
+      }
+      const lockedEntries = rows(await dbExecute(tx,
+        `SELECT e.id, e.tipo, e.valor_previsto AS "valorPrevisto", e.status, e.conciliado,
+                e.data_competencia AS "dataCompetencia", e.data_vencimento AS "dataVencimento",
+                 e.origem_modulo AS "origemModulo",
+                COALESCE(NULLIF(TRIM(e.fornecedor_nome), ''), co.fornecedor_nome) AS "fornecedorNome",
+                 co.modalidade_fd AS "modalidadeFd",
+                 co.fornecedor_id AS "ocFornecedorId"
+           FROM financial_entries e
+           LEFT JOIN compras_ordens co
+             ON e.origem_modulo IN ('compras','compra_oc')
+            AND co.id=e.origem_id AND co.company_id=e.company_id
+          WHERE e.company_id=$1 AND e.tipo='despesa'
+            AND e.id IN (${inlineIds(idsOrdenados)})
+          ORDER BY e.id
+          FOR UPDATE OF e`,
+        [input.companyId]));
+      if (
+        lockedEntries.length !== idsOrdenados.length ||
+        lockedEntries.some((e: any) => e.status === "pago" || e.status === "cancelado" || Number(e.conciliado) === 1)
+      ) {
+        throw new TRPCError({ code: "CONFLICT", message: "Uma das OCs mudou de situação ou já foi conciliada. O pagamento não foi realizado; atualize a tela e confira novamente." });
+      }
+      const algumValorMudou = lockedEntries.some((e: any) =>
+        Math.round((Number(e.valorPrevisto) || 0) * 100) !== valoresEsperadosCentavos.get(Number(e.id)),
+      );
+      if (algumValorMudou) {
+        throw new TRPCError({ code: "CONFLICT", message: "O valor de uma das OCs mudou. O pagamento não foi realizado; atualize a tela." });
+      }
+      if (lockedFechamento != null) {
+        const cicloPagamento = lockedCycleConfig.cicloPagamento ?? lockedFechamento.ciclo;
+        const cicloDataRef = lockedCycleConfig.cicloDataReferencia ?? null;
+        const supplierFornecedorId = lockedFechamento.supplierFornecedorId
+          ? Number(lockedFechamento.supplierFornecedorId)
+          : (lockedCycleConfig.fornecedorId ? Number(lockedCycleConfig.fornecedorId) : null);
+        for (const e of lockedEntries) {
+          if (_isFdModalidade(e.modalidadeFd)) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: `O lançamento ${e.id} é Faturamento Direto e não pode ser pago via fechamento.` });
+          }
+          const dataStr = String(e.dataCompetencia ?? e.dataVencimento ?? "").slice(0, 10);
+          const janelaAtual = dataStr ? _cicloWindow(dataStr, cicloPagamento, cicloDataRef) : "0000-00";
+          if (janelaAtual !== lockedFechamento.janela) {
+            throw new TRPCError({ code: "CONFLICT", message: `O lançamento ${e.id} mudou de janela. O pagamento não foi realizado; reabra o fechamento.` });
+          }
+          const isOc = e.origemModulo === "compras" || e.origemModulo === "compra_oc";
+          const ocFornecedorId = e.ocFornecedorId ? Number(e.ocFornecedorId) : null;
+          if (isOc && ocFornecedorId != null && supplierFornecedorId != null) {
+            if (ocFornecedorId !== supplierFornecedorId) {
+              throw new TRPCError({ code: "CONFLICT", message: `O lançamento ${e.id} mudou de fornecedor. O pagamento não foi realizado; reabra o fechamento.` });
+            }
+          } else {
+            const entryNome = _normNomeConc(String(e.fornecedorNome || ""));
+            const supplierNome = _normNomeConc(String(lockedCycleConfig.nome || lockedFechamento.supplierNome || ""));
+            if (entryNome && supplierNome && !entryNome.includes(supplierNome) && !supplierNome.includes(entryNome)) {
+              throw new TRPCError({ code: "CONFLICT", message: `O lançamento ${e.id} não pertence mais ao fornecedor do fechamento.` });
+            }
+          }
+        }
+      } else {
+        for (const e of lockedEntries) {
+          const nome = _normNomeConc(String(e.fornecedorNome || ""));
+          const data = String(e.dataCompetencia ?? e.dataVencimento ?? "").slice(0, 10);
+          const janela = data ? _cicloWindow(data, lockedCycleConfig.cicloPagamento, lockedCycleConfig.cicloDataReferencia) : "0000-00";
+          if (_isFdModalidade(e.modalidadeFd) || !nome.includes(fornecedorKey) || janela !== janelaKey) {
+            throw new TRPCError({ code: "CONFLICT", message: "Uma das OCs mudou e não pertence mais a este fechamento. O pagamento não foi realizado." });
+          }
+        }
+      }
+      let valoresBaixaCentavos: Map<number, number>;
+      if (lockedFechamento != null) {
+        try {
+          valoresBaixaCentavos = distribuirTotalFechamentoCentavos(
+            lockedEntries.map((e: any) => ({
+              entryId: Number(e.id),
+              valorBaseCentavos: valoresEsperadosCentavos.get(Number(e.id)) ?? 0,
+            })),
+            Math.round(Number(lockedFechamento.valorTotal) * 100),
+          );
+        } catch (e: any) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: e?.message || "Não foi possível ratear o total do fechamento entre os títulos.",
+          });
+        }
+      } else {
+        valoresBaixaCentavos = new Map(
+          lockedEntries.map((e: any) => [
+            Number(e.id),
+            valoresEsperadosCentavos.get(Number(e.id)) ?? Math.round(Number(e.valorPrevisto || 0) * 100),
+          ]),
+        );
+      }
+      const totalBaixasCentavos = Array.from(valoresBaixaCentavos.values()).reduce((sum, cents) => sum + cents, 0);
+      if (totalBaixasCentavos !== Math.round(totalGrupo * 100)) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "O rateio das baixas não confere com o total do fechamento. Nenhuma alteração foi gravada.",
+        });
+      }
+      if (chequesTerceiroIds.length > 0) {
+        const chequesDisponiveis = rows(await dbExecute(tx,
+          `SELECT id, valor
+             FROM financial_cheques_recebidos
+            WHERE company_id=$1
+              AND id IN (${inlineIds(chequesTerceiroIds)})
+              AND status='disponivel' AND excluido_em IS NULL
+            ORDER BY id
+            FOR UPDATE`,
+          [input.companyId]));
+        if (chequesDisponiveis.length !== chequesTerceiroIds.length) {
+          throw new TRPCError({ code: "CONFLICT", message: "Um ou mais cheques de terceiro não estão mais disponíveis. Atualize a seleção; nenhuma alteração foi gravada." });
+        }
+        const totalChequesTerceiro = Math.round(chequesDisponiveis.reduce((sum: number, c: any) => sum + Number(c.valor || 0), 0) * 100);
+        const totalGrupoCentavos = Math.round(totalGrupo * 100);
+        if (Math.abs(totalChequesTerceiro - totalGrupoCentavos) > 5) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `Os cheques de terceiro somam R$${(totalChequesTerceiro / 100).toFixed(2)}, mas o fechamento é de R$${totalGrupo.toFixed(2)}.`,
+          });
+        }
+      }
+      for (const e of lockedEntries) {
+        const valorBaseCentavos = valoresEsperadosCentavos.get(Number(e.id)) ?? Math.round(Number(e.valorPrevisto || 0) * 100);
+        const valorBaixaCentavos = valoresBaixaCentavos.get(Number(e.id)) ?? valorBaseCentavos;
+        const ajusteRateadoCentavos = valorBaixaCentavos - valorBaseCentavos;
+        const valor = valorBaixaCentavos / 100;
+        const descontoRateado = ajusteRateadoCentavos < 0 ? Math.abs(ajusteRateadoCentavos) / 100 : null;
+        const acrescimoRateado = ajusteRateadoCentavos > 0 ? ajusteRateadoCentavos / 100 : null;
+        const observacaoBaixa = input.fechamentoId != null && ajusteRateadoCentavos !== 0
+          ? `${input.observacoes ? input.observacoes + " · " : ""}Fechamento #${input.fechamentoId}: base R$${(valorBaseCentavos / 100).toFixed(2)}, ajuste rateado ${ajusteRateadoCentavos > 0 ? "+" : "-"}R$${(Math.abs(ajusteRateadoCentavos) / 100).toFixed(2)}.`
+          : (input.observacoes ?? `Pagamento consolidado — ${input.fornecedorNome || "fornecedor"} (${pendentes.length} título(s))`);
+        const baixaRes: any = await dbExecute(tx,
           `INSERT INTO financial_entry_baixas
              (entry_id, company_id, tipo, valor, data, conta_bancaria_id, forma_pagamento,
-              observacoes, quitou_total, criado_por_id, criado_por_nome)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+              descontos, outros, observacoes, quitou_total, criado_por_id, criado_por_nome)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+           RETURNING id`,
           [e.id, input.companyId, e.tipo, valor, dataBaixa,
            input.contaBancariaId ?? null, input.formaPagamento,
-           input.observacoes ?? `Pagamento consolidado — ${input.fornecedorNome || "fornecedor"} (${pendentes.length} título(s))`,
+           descontoRateado, acrescimoRateado, observacaoBaixa,
            1, ctx.user?.id ?? null, ctx.user?.name ?? null]
         );
+        const baixaId = rows(baixaRes)[0]?.id ?? null;
         await _aplicarRollupBaixas(tx, e.id, input.companyId);
+        // Task #187 — vincula baixa ao fechamento persistido (quando informado)
+        if (input.fechamentoId != null && baixaId != null) {
+          await dbExecute(tx,
+            `INSERT INTO fechamento_fornecedor_pagamentos
+               (fechamento_id, company_id, entry_id, baixa_id, valor, data_pagamento,
+                cheque_proprio_lote_id, cheque_terceiro_grupo_id)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+            [input.fechamentoId, input.companyId, e.id, baixaId, valor, dataBaixa,
+             chequeProprioLoteId, chequeTerceiroGrupoId]
+          );
+        }
+      }
+      // Task #187 — marca fechamento como pago (dentro da transação)
+      if (input.fechamentoId != null) {
+        await dbExecute(tx,
+          `UPDATE fechamento_fornecedor
+           SET status='pago', pago_em=NOW(), pago_por_id=$1, pago_por_nome=$2, updated_at=NOW()
+           WHERE id=$3 AND company_id=$4 AND status='conferido'`,
+          [ctx.user?.id ?? null, ctx.user?.name ?? null, input.fechamentoId, input.companyId]
+        );
       }
       if (isCheque) {
-        const loteId = randomUUID();
+        const loteId = chequeProprioLoteId!;
         let fornecedorId: number | null = null;
         if (input.fornecedorNome) {
           const fr: any[] = rows(await dbExecute(tx,
             `SELECT id FROM fornecedores WHERE company_id=$1
-               AND (UPPER(TRIM(razao_social))=UPPER(TRIM($2)) OR UPPER(TRIM(nome_fantasia))=UPPER(TRIM($2)))
+               AND (UPPER(TRIM(razao_social))=UPPER(TRIM($2)) OR UPPER(TRIM(nome_fantasia))=UPPER(TRIM($3)))
              LIMIT 1`,
-            [input.companyId, input.fornecedorNome]));
+            [input.companyId, input.fornecedorNome, input.fornecedorNome]));
           fornecedorId = fr[0]?.id ?? null;
+        }
+        // Rev. 5168 — leva o BANCO da baixa para o Controle de Cheques (antes ficava "—").
+        let chqBancoNome: string | null = input.chequeBanco?.trim() || null;
+        let chqBancoCodigo: string | null = null;
+        let chqAgencia: string | null = null;
+        if (input.contaBancariaId) {
+          const cb: any[] = rows(await dbExecute(tx,
+            `SELECT COALESCE(NULLIF(apelido,''), banco) AS nome, "codigoBanco" AS codigo, agencia
+             FROM company_bank_accounts WHERE id=$1 AND "companyId"=$2 LIMIT 1`,
+            [input.contaBancariaId, input.companyId]));
+          if (cb[0]) {
+            chqBancoNome = chqBancoNome || (cb[0].nome ? String(cb[0].nome).trim() : null);
+            chqBancoCodigo = cb[0].codigo ? String(cb[0].codigo).trim() : null;
+            chqAgencia = cb[0].agencia ? String(cb[0].agencia).trim() : null;
+          }
         }
         for (const c of input.cheques!) {
           const dt = new Date(c.dataVencimento + "T12:00:00Z");
@@ -11105,12 +12066,14 @@ export const financialRouter = router({
           const res: any = await dbExecute(tx,
             `INSERT INTO financial_cheques
                (company_id, conta_bancaria_id, numero_cheque, fornecedor_nome, fornecedor_id, valor,
-                data_vencimento, status, observacao, mes_ref, ano_ref, origem_arquivo, lote_id)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,'pendente',$8,$9,$10,'contas_a_pagar',$11)
+                data_vencimento, status, observacao, mes_ref, ano_ref, origem_arquivo, lote_id,
+                banco_nome, banco_codigo, agencia)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,'pendente',$8,$9,$10,'contas_a_pagar',$11,$12,$13,$14)
              RETURNING id`,
             [input.companyId, input.contaBancariaId ?? null, c.numero.trim(), input.fornecedorNome ?? null,
              fornecedorId, c.valor, c.dataVencimento,
-             `Pagamento consolidado de ${pendentes.length} título(s) em Contas a Pagar`, mesRef, anoRef, loteId]
+             `Pagamento consolidado de ${pendentes.length} título(s) em Contas a Pagar`, mesRef, anoRef, loteId,
+             chqBancoNome, chqBancoCodigo, chqAgencia]
           );
           const id = rows(res)[0]?.id;
           if (id) chequesCriados.push(id);
@@ -11120,31 +12083,982 @@ export const financialRouter = router({
       // client-side). pagamento_grupo_id = UUID único do lote; entry_id = primeiro entry
       // quitado (referência de auditoria). Todos os cheques do mesmo pagamento compartilham
       // o mesmo pagamento_grupo_id para rastreio completo mesmo em pagamentos multi-entry.
-      if (input.chequesTerceiroIds?.length) {
+      if (chequesTerceiroIds.length > 0) {
         const primeiroEntryId = pendentes[0]?.id ?? null;
-        const pagamentoGrupoId = randomUUID();
-        for (const chqId of input.chequesTerceiroIds) {
-          await dbExecute(tx,
-            `UPDATE financial_cheques_recebidos
-             SET status='alocado',
-                 fornecedor_alocado_nome=$1,
-                 entry_id=$2,
-                 pagamento_grupo_id=$3,
-                 atualizado_em=NOW()
-             WHERE id=$4 AND company_id=$5 AND status='disponivel' AND excluido_em IS NULL`,
-            [input.fornecedorNome ?? null, primeiroEntryId, pagamentoGrupoId, chqId, input.companyId]
-          );
+        const pagamentoGrupoId = chequeTerceiroGrupoId!;
+        const alocadosRes = await dbExecute(tx,
+          `UPDATE financial_cheques_recebidos
+              SET status='alocado',
+                  fornecedor_alocado_nome=$1,
+                  entry_id=$2,
+                  pagamento_grupo_id=$3,
+                  atualizado_em=NOW()
+            WHERE company_id=$4
+              AND id IN (${inlineIds(chequesTerceiroIds)})
+              AND status='disponivel' AND excluido_em IS NULL
+            RETURNING id`,
+          [input.fornecedorNome ?? null, primeiroEntryId, pagamentoGrupoId, input.companyId]
+        );
+        chequesAlocados = rows(alocadosRes).length;
+        if (chequesAlocados !== chequesTerceiroIds.length) {
+          throw new TRPCError({ code: "CONFLICT", message: "A alocação dos cheques de terceiro mudou durante o pagamento. Nenhuma alteração foi gravada." });
         }
       }
     });
-    const chequesAlocados = input.chequesTerceiroIds?.length ?? 0;
+    // Task #187: se há fechamento persistido, o audit detail informa o total do boleto
+    // (valor_total = itens + ajustes) além da soma pura dos títulos individuais.
+    const auditTotalDesc = fechamentoParaPagar != null && Math.abs(totalGrupo - totalItens) > 0.005
+      ? `R$${totalGrupo.toFixed(2)} (boleto, incl. ajustes R$${(totalGrupo - totalItens).toFixed(2)}; títulos R$${totalItens.toFixed(2)})`
+      : `R$${totalGrupo.toFixed(2)}`;
+    const auditFechDesc = fechamentoParaPagar != null ? ` [fechamento #${input.fechamentoId}]` : "";
     await createAuditLog({
       action: "financial_payable_consolidated_paid",
       userId: ctx.user?.id, companyId: input.companyId,
-      details: `Pagamento consolidado: ${pendentes.length} título(s) de ${input.fornecedorNome || "fornecedor"} — R$${totalGrupo.toFixed(2)} via ${input.formaPagamento}${isCheque ? ` (${input.cheques!.length} cheque(s) registrados no Controle de Cheques)` : ""}${chequesAlocados ? ` (${chequesAlocados} cheque(s) de terceiro alocados)` : ""}.`,
+      details: `Pagamento consolidado: ${pendentes.length} título(s) de ${input.fornecedorNome || "fornecedor"} — ${auditTotalDesc} via ${input.formaPagamento}${isCheque ? ` (${input.cheques!.length} cheque(s) registrados no Controle de Cheques)` : ""}${chequesAlocados ? ` (${chequesAlocados} cheque(s) de terceiro alocados)` : ""}${auditFechDesc}.`,
     });
-    return { ok: true, pagos: pendentes.length, total: totalGrupo, chequesCriados: chequesCriados.length, chequesAlocados, entryIds: pendentes.map((e: any) => e.id as number) };
+    return { ok: true, pagos: pendentes.length, total: totalGrupo, totalItens, chequesCriados: chequesCriados.length, chequesAlocados, entryIds: pendentes.map((e: any) => e.id as number), fechamentoId: input.fechamentoId ?? null };
   }),
+
+  // ─── Task #187 — FECHAMENTO CONSOLIDADO DE FORNECEDOR ────────────────────────
+  // Endpoints tenant-safe para o ciclo de vida do fechamento persistente.
+  // Estados: rascunho → conferido → pago | cancelado. Estorno: pago → conferido.
+  // Janela por data_competencia (nunca vencimento). FD nunca entra.
+
+  // Abre ou retorna rascunho existente (idempotente por company+supplier+janela).
+  // Se já existir um fechamento não-cancelado para a combinação, o retorna.
+  // Caso contrário, cria um rascunho novo a partir do grupo sintético informado.
+  abrirFechamentoFornecedor: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    supplierId: z.number().int().positive(),  // empresas_terceiras.id (estável)
+    janela: z.string().min(4).max(20),        // calculada pelo _cicloWindow do cliente
+    itensIds: z.array(z.number()).min(1).max(500), // entry_ids do grupo sintético
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+
+    // Valida o fornecedor: deve pertencer à empresa e ter ciclo configurado.
+    // Inclui fornecedor_id (vínculo com cadastro de Compras) para validação de identidade em OCs.
+    const supplierRow = rows(await dbExecute(db,
+      `SELECT id, COALESCE(NULLIF(TRIM(nome_fantasia),''), TRIM(razao_social)) AS nome,
+              fornecedor_id AS "fornecedorId",
+              ciclo_pagamento AS "cicloPagamento",
+              ciclo_num_parcelas AS "cicloNumParcelas",
+              ciclo_prazo_parcela AS "cicloPrazoParcela",
+              ciclo_forma_pagamento AS "cicloFormaPagamento",
+              ciclo_data_referencia AS "cicloDataReferencia"
+         FROM empresas_terceiras
+        WHERE id=$1 AND "companyId"=$2 AND deleted_at IS NULL
+          AND ciclo_pagamento IS NOT NULL AND ciclo_pagamento <> 'avista'`,
+      [input.supplierId, input.companyId]))[0];
+    if (!supplierRow) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Fornecedor não encontrado ou sem ciclo configurado." });
+    }
+
+    // Valida os itensIds: devem pertencer à empresa, ser despesas, não-canceladas, não-pagas
+    // e pertencer à janela de competência informada (anti-IDOR + integridade).
+    // Para OCs: valida fornecedor_id exato (quando disponível). Para outros: normalização de nome.
+    const fornNorm = _normNomeConc(String(supplierRow.nome || ""));
+    const supplierFornecedorId: number | null = supplierRow.fornecedorId ? Number(supplierRow.fornecedorId) : null;
+    const entriesCheck = rows(await dbExecute(db,
+      `SELECT e.id, e.status, e.valor_previsto AS "valorPrevisto",
+              e.data_competencia AS "dataCompetencia", e.data_vencimento AS "dataVencimento",
+              e.origem_modulo AS "origemModulo",
+              COALESCE(NULLIF(TRIM(e.fornecedor_nome), ''), co.fornecedor_nome) AS "fornecedorNome",
+              co.modalidade_fd AS "modalidadeFd",
+              co.fornecedor_id AS "ocFornecedorId"
+         FROM financial_entries e
+         LEFT JOIN compras_ordens co
+           ON e.origem_modulo IN ('compras','compra_oc')
+          AND co.id=e.origem_id AND co.company_id=e.company_id
+        WHERE e.company_id=$1 AND e.tipo='despesa'
+          AND e.id IN (${inlineIds(input.itensIds.map(Number))})`,
+      [input.companyId]));
+    if (entriesCheck.length !== input.itensIds.length) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Um ou mais lançamentos não pertencem a esta empresa." });
+    }
+    for (const e of entriesCheck) {
+      if (e.status === "cancelado") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `O lançamento ${e.id} está cancelado e não pode entrar em fechamento.` });
+      }
+      if (e.status === "pago") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `O lançamento ${e.id} já está pago. Apenas títulos em aberto podem entrar em fechamento.` });
+      }
+      if (_isFdModalidade(e.modalidadeFd)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Faturamento Direto não pode entrar em fechamento de fornecedor." });
+      }
+      // Valida que o lançamento pertence à janela de competência informada
+      const dataStr = String(e.dataCompetencia ?? e.dataVencimento ?? "").slice(0, 10);
+      const janelaCalc = dataStr ? _cicloWindow(dataStr, supplierRow.cicloPagamento, supplierRow.cicloDataReferencia) : "0000-00";
+      if (janelaCalc !== input.janela) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `O lançamento ${e.id} pertence à janela ${janelaCalc}, não a ${input.janela}.` });
+      }
+      // Validação de identidade do fornecedor:
+      // OC com fornecedor_id: exige match exato com empresas_terceiras.fornecedor_id.
+      // Outros (legado sem OC ou OC sem fornecedor_id): fallback por nome normalizado.
+      const isOc = e.origemModulo === "compras" || e.origemModulo === "compra_oc";
+      const ocFornId = e.ocFornecedorId ? Number(e.ocFornecedorId) : null;
+      if (isOc && ocFornId != null && supplierFornecedorId != null) {
+        if (ocFornId !== supplierFornecedorId) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: `O lançamento ${e.id} pertence ao fornecedor de Compras #${ocFornId}, não ao fornecedor #${supplierFornecedorId} configurado.` });
+        }
+      } else {
+        // Fallback: validação por nome normalizado (legado)
+        const eNorm = _normNomeConc(String(e.fornecedorNome || ""));
+        if (eNorm && fornNorm && !eNorm.includes(fornNorm) && !fornNorm.includes(eNorm)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: `O lançamento ${e.id} não pertence ao fornecedor informado (nome: "${e.fornecedorNome || "(sem nome)"}").` });
+        }
+      }
+    }
+
+    // Abertura atômica: tudo dentro de uma transação com advisory lock para serializar
+    // aberturas concorrentes do mesmo company+supplier+janela.
+    // O unique index uq_ff_active_janela garante falha de CONFLICT se duas tx chegarem ao mesmo tempo.
+    let fechamentoId: number = 0;
+    let criado = true;
+    try {
+      await (db as any).transaction(async (tx: any) => {
+        // Advisory lock: serializa abertura para este company+supplier+janela.
+        // Chave deterministicamente derivada dos três campos.
+        await dbExecute(tx, `SELECT pg_advisory_xact_lock(hashtext($1))`,
+          [`ff_open:${input.companyId}:${input.supplierId}:${input.janela}`]);
+
+        // Idempotente: dentro da tx, re-check se já existe um ativo (pode ter sido criado
+        // por outra tx que acabou antes de adquirirmos o lock).
+        const existing = rows(await dbExecute(tx,
+          `SELECT id, status FROM fechamento_fornecedor
+            WHERE company_id=$1 AND supplier_id=$2 AND janela=$3
+              AND status IN ('rascunho','conferido','pago')
+            LIMIT 1`,
+          [input.companyId, input.supplierId, input.janela]))[0];
+        if (existing) {
+          fechamentoId = Number(existing.id);
+          criado = false;
+          return; // sai da tx, não cria nada
+        }
+
+        // Cria o cabeçalho do rascunho
+        const somaItens = entriesCheck.reduce((s: number, e: any) => s + (Number(e.valorPrevisto) || 0), 0);
+        const dataFechamento = _cicloFechamentoDate(input.janela, supplierRow.cicloPagamento);
+
+        const fechRes = rows(await dbExecute(tx,
+          `INSERT INTO fechamento_fornecedor
+             (company_id, supplier_id, supplier_nome, supplier_fornecedor_id,
+              janela, ciclo, data_fechamento,
+              valor_itens, valor_ajustes, valor_total,
+              forma_pagamento, num_parcelas, prazo_parcela,
+              status, created_by_id, created_by_nome)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'rascunho',$14,$15)
+           RETURNING id`,
+          [input.companyId, input.supplierId, supplierRow.nome,
+           supplierFornecedorId,
+           input.janela, supplierRow.cicloPagamento, dataFechamento,
+           somaItens.toFixed(2), "0", somaItens.toFixed(2),
+           supplierRow.cicloFormaPagamento ?? null,
+           supplierRow.cicloNumParcelas ?? 1,
+           supplierRow.cicloPrazoParcela ?? 30,
+           ctx.user?.id ?? null, ctx.user?.name ?? null]
+        ));
+        fechamentoId = Number(fechRes[0]?.id);
+        if (!fechamentoId) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Falha ao criar fechamento." });
+
+        // Insere TODOS os itens atomicamente na mesma transação.
+        // Se qualquer item violar uq_ffi_entry_ativo (já está em outro fechamento ativo),
+        // a transação inteira é revertida — jamais deixa cabeçalho sem itens.
+        for (const e of entriesCheck) {
+          await dbExecute(tx,
+            `INSERT INTO fechamento_fornecedor_itens
+               (fechamento_id, company_id, entry_id, valor_previsto_snapshot, ativo)
+             VALUES ($1,$2,$3,$4,1)`,
+            [fechamentoId, input.companyId, e.id, Number(e.valorPrevisto).toFixed(2)]
+          );
+        }
+      });
+    } catch (err: any) {
+      // Unique violation no cabeçalho (uq_ff_active_janela): corrida ganhou outra tx, retorna existente.
+      const pgCode = err?.cause?.code ?? err?.code;
+      if (pgCode === "23505" && (err?.message?.includes("uq_ff_active_janela") || err?.message?.includes("uq_ffi_entry_ativo"))) {
+        if (err?.message?.includes("uq_ff_active_janela")) {
+          const existingAfterRace = rows(await dbExecute(db,
+            `SELECT id, status FROM fechamento_fornecedor
+              WHERE company_id=$1 AND supplier_id=$2 AND janela=$3
+                AND status IN ('rascunho','conferido','pago')
+              LIMIT 1`,
+            [input.companyId, input.supplierId, input.janela]))[0];
+          if (existingAfterRace) {
+            return { fechamentoId: Number(existingAfterRace.id), status: existingAfterRace.status, criado: false };
+          }
+        }
+        if (err?.message?.includes("uq_ffi_entry_ativo")) {
+          throw new TRPCError({ code: "CONFLICT", message: "Um ou mais lançamentos já pertencem a outro fechamento ativo. Cancele o fechamento anterior antes de criar um novo." });
+        }
+      }
+      throw err;
+    }
+
+    await createAuditLog({
+      action: "fechamento_fornecedor_aberto",
+      userId: ctx.user?.id, companyId: input.companyId,
+      details: criado
+        ? `Fechamento #${fechamentoId!} criado — ${supplierRow.nome} janela=${input.janela} ${entriesCheck.length} item(ns) R$${entriesCheck.reduce((s: number, e: any) => s + (Number(e.valorPrevisto) || 0), 0).toFixed(2)}.`
+        : `Fechamento #${fechamentoId!} já existia (idempotente) — ${supplierRow.nome} janela=${input.janela}.`,
+    });
+    return { fechamentoId: fechamentoId!, status: criado ? "rascunho" : "existente", criado };
+  }),
+
+  // Consulta um fechamento existente com itens, ajustes e metadados.
+  getFechamentoFornecedor: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    fechamentoId: z.number().int().positive(),
+  })).query(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+
+    const fech = rows(await dbExecute(db,
+      `SELECT id, company_id AS "companyId", supplier_id AS "supplierId",
+              supplier_nome AS "supplierNome", janela, ciclo,
+              data_fechamento AS "dataFechamento",
+              valor_itens AS "valorItens", valor_ajustes AS "valorAjustes",
+              valor_total AS "valorTotal",
+              boleto_codigo AS "boletoCodigo", boleto_vencimento AS "boletoVencimento",
+              forma_pagamento AS "formaPagamento",
+              num_parcelas AS "numParcelas", prazo_parcela AS "prazoParcela",
+              observacoes, status,
+              confirmado_em AS "confirmadoEm", confirmado_por_nome AS "confirmadoPorNome",
+              pago_em AS "pagoEm", pago_por_nome AS "pagoPorNome",
+              cancelado_em AS "canceladoEm", cancelado_motivo AS "canceladoMotivo",
+              created_at AS "createdAt"
+         FROM fechamento_fornecedor
+        WHERE id=$1 AND company_id=$2`,
+      [input.fechamentoId, input.companyId]))[0];
+    if (!fech) throw new TRPCError({ code: "NOT_FOUND", message: "Fechamento não encontrado." });
+
+    const itens = rows(await dbExecute(db,
+      `SELECT fi.id, fi.entry_id AS "entryId", fi.valor_previsto_snapshot AS "valorPrevisto",
+              fi.ativo, fi.removido_em AS "removidoEm",
+              e.descricao, e.status AS "entryStatus",
+              e.data_competencia AS "dataCompetencia", e.data_vencimento AS "dataVencimento",
+              e.obra_nome AS "obraNome",
+              e.origem_modulo AS "origemModulo",
+              co.numero_oc AS "ocNumero",
+              COALESCE(NULLIF(TRIM(e.fornecedor_nome),''), co.fornecedor_nome) AS "fornecedorNome"
+         FROM fechamento_fornecedor_itens fi
+         JOIN financial_entries e ON e.id=fi.entry_id AND e.company_id=fi.company_id
+         LEFT JOIN compras_ordens co
+           ON e.origem_modulo IN ('compras','compra_oc')
+          AND co.id=e.origem_id AND co.company_id=e.company_id
+        WHERE fi.fechamento_id=$1 AND fi.company_id=$2
+        ORDER BY fi.id ASC`,
+      [input.fechamentoId, input.companyId]));
+
+    const ajustes = rows(await dbExecute(db,
+      `SELECT id, tipo, descricao, valor, ativo, created_at AS "createdAt"
+         FROM fechamento_fornecedor_ajustes
+        WHERE fechamento_id=$1 AND company_id=$2
+        ORDER BY id ASC`,
+      [input.fechamentoId, input.companyId]));
+
+    const pagamentos = rows(await dbExecute(db,
+      `SELECT fp.id, fp.entry_id AS "entryId", fp.baixa_id AS "baixaId",
+              fp.valor, fp.data_pagamento AS "dataPagamento",
+              fp.estornado_em AS "estornadoEm"
+         FROM fechamento_fornecedor_pagamentos fp
+        WHERE fp.fechamento_id=$1 AND fp.company_id=$2
+        ORDER BY fp.id ASC`,
+      [input.fechamentoId, input.companyId]));
+
+    return { ...fech, itens, ajustes, pagamentos };
+  }),
+
+  // Salva composição (itens+ajustes+boleto) e recalcula totais — tudo em uma transação.
+  // Só permitido em status rascunho. Suporta remoção E adição de itens.
+  // Ajustes: replace completo (desativa anteriores, insere novos).
+  salvarComposicaoFechamento: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    fechamentoId: z.number().int().positive(),
+    // IDs de itens a REMOVER da composição (soft-delete; mantém ativo=0 para histórico)
+    itensRemover: z.array(z.number().int()).optional(),
+    // IDs de itens a ADICIONAR (entry_ids; validados server-side igual ao abrir)
+    itensAdicionar: z.array(z.number().int()).optional(),
+    // Fix #6: expanded kinds with explicit sign rules enforced server-side:
+    //   desconto|glosa: <=0  |  acrescimo|juros|taxa|frete: >=0  |  correcao|arredondamento|outro: signed
+    ajustes: z.array(z.object({
+      tipo: z.enum(["desconto", "glosa", "acrescimo", "juros", "taxa", "frete", "correcao", "arredondamento", "outro"]),
+      descricao: z.string().max(255).optional(),
+      valor: z.number().refine((v) => v !== 0, { message: "Ajuste com valor zero não é permitido." }),
+    })).max(50).optional(),
+    boletoCodigo: z.string().max(100).optional(),
+    boletoVencimento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    formaPagamento: z.string().max(30).optional(),
+    numParcelas: z.number().int().min(1).max(120).optional(),
+    prazoParcela: z.number().int().min(1).max(3650).optional(),
+    observacoes: z.string().max(1000).optional(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+
+    // Fix #6: enforce sign rules for adjustment types before hitting the DB.
+    if (input.ajustes?.length) {
+      const MUST_NEG = new Set(["desconto", "glosa"]);
+      const MUST_POS = new Set(["acrescimo", "juros", "taxa", "frete"]);
+      for (const aj of input.ajustes) {
+        if (MUST_NEG.has(aj.tipo) && aj.valor > 0) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: `Ajuste do tipo "${aj.tipo}" deve ter valor negativo (≤0). Recebido: ${aj.valor}.` });
+        }
+        if (MUST_POS.has(aj.tipo) && aj.valor < 0) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: `Ajuste do tipo "${aj.tipo}" deve ter valor positivo (≥0). Recebido: ${aj.valor}.` });
+        }
+      }
+    }
+
+    let valorItens: number;
+    let valorAjustes: number;
+    let valorTotal: number;
+
+    await (db as any).transaction(async (tx: any) => {
+      // Lock do cabeçalho: serializa edições concorrentes do mesmo fechamento.
+      const fech = rows(await dbExecute(tx,
+        `SELECT id, status, supplier_id AS "supplierId", janela, ciclo,
+                supplier_fornecedor_id AS "supplierFornecedorId"
+           FROM fechamento_fornecedor WHERE id=$1 AND company_id=$2
+           FOR UPDATE`,
+        [input.fechamentoId, input.companyId]))[0];
+      if (!fech) throw new TRPCError({ code: "NOT_FOUND", message: "Fechamento não encontrado." });
+      if (fech.status !== "rascunho") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `Fechamento só pode ser editado no estado rascunho (atual: ${fech.status}).` });
+      }
+
+      // Remove itens solicitados (soft-remove, mantém histórico)
+      if (input.itensRemover?.length) {
+        await dbExecute(tx,
+          `UPDATE fechamento_fornecedor_itens
+           SET ativo=0, removido_em=NOW(), removido_por_id=$1
+           WHERE fechamento_id=$2 AND company_id=$3
+             AND entry_id IN (${inlineIds(input.itensRemover.map(Number))}) AND ativo=1`,
+          [ctx.user?.id ?? null, input.fechamentoId, input.companyId]
+        );
+      }
+
+      // Adiciona itens novos — validados com as mesmas regras do abrir.
+      if (input.itensAdicionar?.length) {
+        // Busca o fornecedor para validar janela/identidade
+        const supplierRow = rows(await dbExecute(tx,
+          `SELECT id, COALESCE(NULLIF(TRIM(nome_fantasia),''), TRIM(razao_social)) AS nome,
+                  fornecedor_id AS "fornecedorId",
+                  ciclo_pagamento AS "cicloPagamento",
+                  ciclo_data_referencia AS "cicloDataReferencia"
+             FROM empresas_terceiras
+            WHERE id=$1 AND "companyId"=$2 AND deleted_at IS NULL`,
+          [fech.supplierId, input.companyId]))[0];
+        if (!supplierRow) throw new TRPCError({ code: "NOT_FOUND", message: "Fornecedor do fechamento não encontrado." });
+        const fornNorm = _normNomeConc(String(supplierRow.nome || ""));
+        const supplierFornecedorId: number | null = fech.supplierFornecedorId ? Number(fech.supplierFornecedorId) : null;
+
+        const addEntries = rows(await dbExecute(tx,
+          `SELECT e.id, e.status, e.valor_previsto AS "valorPrevisto",
+                  e.data_competencia AS "dataCompetencia", e.data_vencimento AS "dataVencimento",
+                  e.origem_modulo AS "origemModulo",
+                  COALESCE(NULLIF(TRIM(e.fornecedor_nome), ''), co.fornecedor_nome) AS "fornecedorNome",
+                  co.modalidade_fd AS "modalidadeFd",
+                  co.fornecedor_id AS "ocFornecedorId"
+             FROM financial_entries e
+             LEFT JOIN compras_ordens co
+               ON e.origem_modulo IN ('compras','compra_oc')
+              AND co.id=e.origem_id AND co.company_id=e.company_id
+            WHERE e.company_id=$1 AND e.tipo='despesa'
+              AND e.id IN (${inlineIds(input.itensAdicionar.map(Number))})`,
+          [input.companyId]));
+        if (addEntries.length !== input.itensAdicionar.length) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Um ou mais lançamentos a adicionar não pertencem a esta empresa." });
+        }
+        for (const e of addEntries) {
+          if (e.status === "cancelado") throw new TRPCError({ code: "BAD_REQUEST", message: `Lançamento ${e.id} está cancelado.` });
+          if (e.status === "pago") throw new TRPCError({ code: "BAD_REQUEST", message: `Lançamento ${e.id} já está pago.` });
+          if (_isFdModalidade(e.modalidadeFd)) throw new TRPCError({ code: "BAD_REQUEST", message: "Faturamento Direto não pode entrar em fechamento." });
+          const dataStr = String(e.dataCompetencia ?? e.dataVencimento ?? "").slice(0, 10);
+          const janelaCalc = dataStr ? _cicloWindow(dataStr, supplierRow.cicloPagamento, supplierRow.cicloDataReferencia) : "0000-00";
+          if (janelaCalc !== fech.janela) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: `Lançamento ${e.id} pertence à janela ${janelaCalc}, não a ${fech.janela}.` });
+          }
+          const isOc = e.origemModulo === "compras" || e.origemModulo === "compra_oc";
+          const ocFornId = e.ocFornecedorId ? Number(e.ocFornecedorId) : null;
+          if (isOc && ocFornId != null && supplierFornecedorId != null) {
+            if (ocFornId !== supplierFornecedorId) {
+              throw new TRPCError({ code: "BAD_REQUEST", message: `Lançamento ${e.id} pertence a fornecedor de Compras diferente do fechamento.` });
+            }
+          } else {
+            const eNorm = _normNomeConc(String(e.fornecedorNome || ""));
+            if (eNorm && fornNorm && !eNorm.includes(fornNorm) && !fornNorm.includes(eNorm)) {
+              throw new TRPCError({ code: "BAD_REQUEST", message: `Lançamento ${e.id} não pertence ao fornecedor deste fechamento.` });
+            }
+          }
+          // Reativa item removido anteriormente neste fechamento OU insere novo
+          const existingItem = rows(await dbExecute(tx,
+            `SELECT id, ativo FROM fechamento_fornecedor_itens
+              WHERE fechamento_id=$1 AND company_id=$2 AND entry_id=$3
+              LIMIT 1`,
+            [input.fechamentoId, input.companyId, e.id]))[0];
+          if (existingItem) {
+            if (Number(existingItem.ativo) === 1) continue; // já ativo, nada a fazer
+            // Reativa item removido neste mesmo fechamento
+            await dbExecute(tx,
+              `UPDATE fechamento_fornecedor_itens
+               SET ativo=1, removido_em=NULL, removido_por_id=NULL,
+                   valor_previsto_snapshot=$1
+               WHERE id=$2 AND company_id=$3`,
+              [Number(e.valorPrevisto).toFixed(2), existingItem.id, input.companyId]
+            );
+          } else {
+            // Insere novo item; viola uq_ffi_entry_ativo se já está em outro fechamento ativo
+            await dbExecute(tx,
+              `INSERT INTO fechamento_fornecedor_itens
+                 (fechamento_id, company_id, entry_id, valor_previsto_snapshot, ativo)
+               VALUES ($1,$2,$3,$4,1)`,
+              [input.fechamentoId, input.companyId, e.id, Number(e.valorPrevisto).toFixed(2)]
+            );
+          }
+        }
+      }
+
+      // Substitui ajustes: desativa os anteriores e insere novos
+      await dbExecute(tx,
+        `UPDATE fechamento_fornecedor_ajustes SET ativo=0
+          WHERE fechamento_id=$1 AND company_id=$2 AND ativo=1`,
+        [input.fechamentoId, input.companyId]
+      );
+      if (input.ajustes?.length) {
+        for (const aj of input.ajustes) {
+          await dbExecute(tx,
+            `INSERT INTO fechamento_fornecedor_ajustes
+               (fechamento_id, company_id, tipo, descricao, valor, ativo, created_by_id)
+             VALUES ($1,$2,$3,$4,$5,1,$6)`,
+            [input.fechamentoId, input.companyId, aj.tipo, aj.descricao ?? null,
+             aj.valor.toFixed(2), ctx.user?.id ?? null]
+          );
+        }
+      }
+
+      // Recalcula totais dentro da tx (dados coerentes com os itens/ajustes acima)
+      const somaItensRow = rows(await dbExecute(tx,
+        `SELECT COALESCE(SUM(valor_previsto_snapshot),0) AS soma
+           FROM fechamento_fornecedor_itens
+          WHERE fechamento_id=$1 AND company_id=$2 AND ativo=1`,
+        [input.fechamentoId, input.companyId]))[0];
+      const somaAjustesRow = rows(await dbExecute(tx,
+        `SELECT COALESCE(SUM(valor),0) AS soma
+           FROM fechamento_fornecedor_ajustes
+          WHERE fechamento_id=$1 AND company_id=$2 AND ativo=1`,
+        [input.fechamentoId, input.companyId]))[0];
+      valorItens = Number(somaItensRow?.soma ?? 0);
+      valorAjustes = Number(somaAjustesRow?.soma ?? 0);
+      valorTotal = valorItens + valorAjustes;
+
+      await dbExecute(tx,
+        `UPDATE fechamento_fornecedor
+         SET valor_itens=$1, valor_ajustes=$2, valor_total=$3,
+             boleto_codigo=COALESCE($4, boleto_codigo),
+             boleto_vencimento=COALESCE($5, boleto_vencimento),
+             forma_pagamento=COALESCE($6, forma_pagamento),
+             num_parcelas=COALESCE($7, num_parcelas),
+             prazo_parcela=COALESCE($8, prazo_parcela),
+             observacoes=COALESCE($9, observacoes),
+             updated_at=NOW()
+         WHERE id=$10 AND company_id=$11`,
+        [valorItens!.toFixed(2), valorAjustes!.toFixed(2), valorTotal!.toFixed(2),
+         input.boletoCodigo ?? null, input.boletoVencimento ?? null,
+         input.formaPagamento ?? null, input.numParcelas ?? null,
+         input.prazoParcela ?? null, input.observacoes ?? null,
+         input.fechamentoId, input.companyId]
+      );
+    });
+
+    return { ok: true, valorItens: valorItens!, valorAjustes: valorAjustes!, valorTotal: valorTotal! };
+  }),
+
+  // Confirma o fechamento (rascunho → conferido).
+  // Fix #4: executa dentro de tx com fechamento FOR UPDATE; re-lê itens ativos joined ao
+  // financial_entries ao vivo; rejeita se qualquer item está pago/cancelado, mudou de
+  // janela/fornecedor, é FD, ou o valor_previsto live diverge do snapshot por >R$0,01.
+  // Recalcula totais a partir dos snapshots + ajustes ativos antes de aceitar a confirmação.
+  confirmarFechamento: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    fechamentoId: z.number().int().positive(),
+    valorDeclarado: z.number().positive(), // valor que o usuário confirma pagar
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+
+    let supplierNomeOut: string = "";
+    let janelaOut: string = "";
+    await (db as any).transaction(async (tx: any) => {
+      // Lock do cabeçalho: serializa confirmação contra edições concorrentes
+      const fech = rows(await dbExecute(tx,
+        `SELECT id, status, valor_itens AS "valorItens", valor_ajustes AS "valorAjustes",
+                valor_total AS "valorTotal", supplier_nome AS "supplierNome",
+                supplier_id AS "supplierId", supplier_fornecedor_id AS "supplierFornecedorId",
+                janela, ciclo
+           FROM fechamento_fornecedor WHERE id=$1 AND company_id=$2
+           FOR UPDATE`,
+        [input.fechamentoId, input.companyId]))[0];
+      if (!fech) throw new TRPCError({ code: "NOT_FOUND", message: "Fechamento não encontrado." });
+      if (fech.status !== "rascunho") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `Fechamento precisa estar no estado rascunho para confirmar (atual: ${fech.status}).` });
+      }
+      supplierNomeOut = fech.supplierNome;
+      janelaOut = fech.janela;
+
+      // Re-lê ciclo do fornecedor para validação de janela
+      const supplierRow = rows(await dbExecute(tx,
+        `SELECT ciclo_pagamento AS "cicloPagamento",
+                ciclo_data_referencia AS "cicloDataReferencia",
+                fornecedor_id AS "fornecedorId"
+           FROM empresas_terceiras
+          WHERE id=$1 AND "companyId"=$2 AND deleted_at IS NULL`,
+        [fech.supplierId, input.companyId]))[0];
+      // Se fornecedor foi deletado, ainda permitir confirmação (dados já capturados no fechamento)
+      const cicloPagamento = supplierRow?.cicloPagamento ?? fech.ciclo;
+      const cicloDataRef = supplierRow?.cicloDataReferencia ?? null;
+      const supplierFornecedorId: number | null = fech.supplierFornecedorId ? Number(fech.supplierFornecedorId) : null;
+
+      // Re-lê itens ativos joined ao financial_entries ao vivo
+      const itensVivos = rows(await dbExecute(tx,
+        `SELECT fi.id AS "fiId", fi.entry_id AS "entryId",
+                fi.valor_previsto_snapshot AS "snapshot",
+                e.status AS "entryStatus",
+                e.valor_previsto AS "valorPrevisto",
+                e.data_competencia AS "dataCompetencia",
+                e.data_vencimento AS "dataVencimento",
+                e.origem_modulo AS "origemModulo",
+                COALESCE(NULLIF(TRIM(e.fornecedor_nome),''), co.fornecedor_nome) AS "fornecedorNome",
+                co.modalidade_fd AS "modalidadeFd",
+                co.fornecedor_id AS "ocFornecedorId"
+           FROM fechamento_fornecedor_itens fi
+           JOIN financial_entries e ON e.id=fi.entry_id AND e.company_id=fi.company_id
+           LEFT JOIN compras_ordens co
+             ON e.origem_modulo IN ('compras','compra_oc')
+            AND co.id=e.origem_id AND co.company_id=e.company_id
+          WHERE fi.fechamento_id=$1 AND fi.company_id=$2 AND fi.ativo=1`,
+        [input.fechamentoId, input.companyId]));
+      if (itensVivos.length === 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Fechamento deve ter pelo menos 1 item ativo para ser confirmado." });
+      }
+
+      // Valida cada item ao vivo
+      for (const item of itensVivos) {
+        if (item.entryStatus === "pago") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: `Lançamento #${item.entryId} já foi pago fora do fechamento. Reabra o fechamento e remova este item.` });
+        }
+        if (item.entryStatus === "cancelado") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: `Lançamento #${item.entryId} foi cancelado. Reabra o fechamento e remova este item.` });
+        }
+        if (_isFdModalidade(item.modalidadeFd)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: `Lançamento #${item.entryId} é Faturamento Direto e não pode permanecer no fechamento.` });
+        }
+        // Verifica se o item ainda pertence à janela
+        const dataStr = String(item.dataCompetencia ?? item.dataVencimento ?? "").slice(0, 10);
+        const janelaAtual = dataStr ? _cicloWindow(dataStr, cicloPagamento, cicloDataRef) : "0000-00";
+        if (janelaAtual !== fech.janela) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: `Lançamento #${item.entryId} mudou de janela (era ${fech.janela}, agora ${janelaAtual}). Reabra o fechamento e atualize a composição.` });
+        }
+        // Verifica identidade de fornecedor
+        const isOc = item.origemModulo === "compras" || item.origemModulo === "compra_oc";
+        const ocFornId = item.ocFornecedorId ? Number(item.ocFornecedorId) : null;
+        if (isOc && ocFornId != null && supplierFornecedorId != null) {
+          if (ocFornId !== supplierFornecedorId) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: `Lançamento #${item.entryId} mudou de fornecedor de Compras. Reabra o fechamento e atualize a composição.` });
+          }
+        } else {
+          // Fallback nome — só valida quando temos nome no item
+          const itemNorm = _normNomeConc(String(item.fornecedorNome || ""));
+          const supplierNomeNorm = _normNomeConc(String(fech.supplierNome || ""));
+          if (itemNorm && supplierNomeNorm && !itemNorm.includes(supplierNomeNorm) && !supplierNomeNorm.includes(itemNorm)) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: `Lançamento #${item.entryId} parece ser de fornecedor diferente. Reabra o fechamento e verifique a composição.` });
+          }
+        }
+        // Verifica divergência snapshot vs valor_previsto live (tolerância R$0,01)
+        const snapshotCents = Math.round(Number(item.snapshot) * 100);
+        const liveCents = Math.round(Number(item.valorPrevisto) * 100);
+        if (Math.abs(snapshotCents - liveCents) > 1) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: `O valor do lançamento #${item.entryId} mudou desde a composição (snapshot R$${Number(item.snapshot).toFixed(2)}, atual R$${Number(item.valorPrevisto).toFixed(2)}). Reabra o fechamento para atualizar o snapshot.` });
+        }
+      }
+
+      // Recalcula totais a partir dos snapshots ativos + ajustes ativos
+      const somaSnapshots = itensVivos.reduce((s: number, i: any) => s + Math.round(Number(i.snapshot) * 100), 0);
+      const ajustesAtivos = rows(await dbExecute(tx,
+        `SELECT COALESCE(SUM(valor),0) AS soma FROM fechamento_fornecedor_ajustes
+          WHERE fechamento_id=$1 AND company_id=$2 AND ativo=1`,
+        [input.fechamentoId, input.companyId]))[0];
+      const somaAjustesCents = Math.round(Number(ajustesAtivos?.soma ?? 0) * 100);
+      const totalCalculadoCents = somaSnapshots + somaAjustesCents;
+
+      // Valida total declarado vs calculado (tolerância 5 centavos)
+      const totalDeclaradoCents = Math.round(input.valorDeclarado * 100);
+      if (Math.abs(totalCalculadoCents - totalDeclaradoCents) > 5) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `Divergência: valor declarado R$${input.valorDeclarado.toFixed(2)} vs total calculado R$${(totalCalculadoCents / 100).toFixed(2)} (diferença máxima: R$0,05). Salve a composição e tente novamente.` });
+      }
+
+      // Atualiza totais recalculados e transiciona para conferido
+      await dbExecute(tx,
+        `UPDATE fechamento_fornecedor
+         SET status='conferido', confirmado_em=NOW(),
+             confirmado_por_id=$1, confirmado_por_nome=$2,
+             valor_itens=$3, valor_ajustes=$4,
+             valor_total=$5, updated_at=NOW()
+         WHERE id=$6 AND company_id=$7 AND status='rascunho'`,
+        [ctx.user?.id ?? null, ctx.user?.name ?? null,
+         (somaSnapshots / 100).toFixed(2),
+         (somaAjustesCents / 100).toFixed(2),
+         (totalDeclaradoCents / 100).toFixed(2),
+         input.fechamentoId, input.companyId]
+      );
+    });
+
+    await createAuditLog({
+      action: "fechamento_fornecedor_confirmado",
+      userId: ctx.user?.id, companyId: input.companyId,
+      details: `Fechamento #${input.fechamentoId} confirmado — ${supplierNomeOut} janela=${janelaOut} R$${input.valorDeclarado.toFixed(2)}.`,
+    });
+    return { ok: true, status: "conferido" };
+  }),
+
+  // Reabre um fechamento conferido para edição (conferido → rascunho). Não desfaz baixas.
+  // Só permite se o fechamento não estiver pago.
+  reabrirFechamento: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    fechamentoId: z.number().int().positive(),
+    motivo: z.string().max(500).optional(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+
+    const fech = rows(await dbExecute(db,
+      `SELECT id, status, supplier_nome AS "supplierNome", janela
+         FROM fechamento_fornecedor WHERE id=$1 AND company_id=$2`,
+      [input.fechamentoId, input.companyId]))[0];
+    if (!fech) throw new TRPCError({ code: "NOT_FOUND", message: "Fechamento não encontrado." });
+    if (fech.status !== "conferido") {
+      throw new TRPCError({ code: "BAD_REQUEST", message: `Só é possível reabrir um fechamento conferido (atual: ${fech.status}).` });
+    }
+
+    await dbExecute(db,
+      `UPDATE fechamento_fornecedor
+       SET status='rascunho', confirmado_em=NULL, confirmado_por_id=NULL,
+           confirmado_por_nome=NULL,
+           observacoes=CASE WHEN $1 IS NOT NULL
+                            THEN COALESCE(observacoes,'') || E'\n[Reaberto: ' || $1 || ']'
+                            ELSE observacoes END,
+           updated_at=NOW()
+       WHERE id=$2 AND company_id=$3 AND status='conferido'`,
+      [input.motivo ?? null, input.fechamentoId, input.companyId]
+    );
+
+    await createAuditLog({
+      action: "fechamento_fornecedor_reaberto",
+      userId: ctx.user?.id, companyId: input.companyId,
+      details: `Fechamento #${input.fechamentoId} reaberto — ${fech.supplierNome} janela=${fech.janela}${input.motivo ? " — motivo: " + input.motivo : ""}.`,
+    });
+    return { ok: true, status: "rascunho" };
+  }),
+
+  // Cancela um fechamento (qualquer estado exceto pago). Libera os itens para novo fechamento.
+  cancelarFechamento: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    fechamentoId: z.number().int().positive(),
+    motivo: z.string().min(1).max(500),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+
+    let fech: any = null;
+    await (db as any).transaction(async (tx: any) => {
+      fech = rows(await dbExecute(tx,
+        `SELECT id, status, supplier_nome AS "supplierNome", janela
+           FROM fechamento_fornecedor
+          WHERE id=$1 AND company_id=$2
+          FOR UPDATE`,
+        [input.fechamentoId, input.companyId]))[0];
+      if (!fech) throw new TRPCError({ code: "NOT_FOUND", message: "Fechamento não encontrado." });
+      if (fech.status === "cancelado") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Fechamento já está cancelado." });
+      }
+      if (fech.status === "pago") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Fechamento pago não pode ser cancelado diretamente. Use o estorno do pagamento primeiro." });
+      }
+      if (fech.status !== "rascunho" && fech.status !== "conferido") {
+        throw new TRPCError({ code: "CONFLICT", message: `Fechamento no estado '${fech.status}' não pode ser cancelado.` });
+      }
+
+      const cancelado = await dbExecute(tx,
+        `UPDATE fechamento_fornecedor
+         SET status='cancelado', cancelado_em=NOW(),
+             cancelado_por_id=$1, cancelado_por_nome=$2, cancelado_motivo=$3,
+             updated_at=NOW()
+         WHERE id=$4 AND company_id=$5 AND status IN ('rascunho','conferido')
+         RETURNING id`,
+        [ctx.user?.id ?? null, ctx.user?.name ?? null, input.motivo,
+         input.fechamentoId, input.companyId]
+      );
+      if (rows(cancelado).length !== 1) {
+        throw new TRPCError({ code: "CONFLICT", message: "O fechamento mudou de situação e não foi cancelado." });
+      }
+      // Só libera os itens depois de conquistar a transição do cabeçalho sob lock.
+      await dbExecute(tx,
+        `UPDATE fechamento_fornecedor_itens SET ativo=0, removido_em=NOW(), removido_por_id=$1
+          WHERE fechamento_id=$2 AND company_id=$3 AND ativo=1`,
+        [ctx.user?.id ?? null, input.fechamentoId, input.companyId]
+      );
+    });
+
+    await createAuditLog({
+      action: "fechamento_fornecedor_cancelado",
+      userId: ctx.user?.id, companyId: input.companyId,
+      details: `Fechamento #${input.fechamentoId} cancelado — ${fech.supplierNome} janela=${fech.janela} — motivo: ${input.motivo}.`,
+    });
+    return { ok: true, status: "cancelado" };
+  }),
+
+  // Estorna o pagamento de um fechamento pago (pago → conferido).
+  // Soft-estorna todas as baixas vinculadas via fechamento_fornecedor_pagamentos.
+  // Requer advisory lock por cada entry (mesmo padrão do estornarBaixaItem).
+  estornarFechamentoPago: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    fechamentoId: z.number().int().positive(),
+    motivo: z.string().min(1).max(500),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+
+    const fech = rows(await dbExecute(db,
+      `SELECT id, status, supplier_nome AS "supplierNome", janela
+         FROM fechamento_fornecedor WHERE id=$1 AND company_id=$2`,
+      [input.fechamentoId, input.companyId]))[0];
+    if (!fech) throw new TRPCError({ code: "NOT_FOUND", message: "Fechamento não encontrado." });
+    if (fech.status !== "pago") {
+      throw new TRPCError({ code: "BAD_REQUEST", message: `Apenas fechamentos pagos podem ser estornados (atual: ${fech.status}).` });
+    }
+
+    // Carrega vínculos de pagamento do fechamento
+    const vinculos = rows(await dbExecute(db,
+      `SELECT entry_id AS "entryId", baixa_id AS "baixaId",
+              cheque_proprio_lote_id AS "chequeProprioLoteId",
+              cheque_terceiro_grupo_id AS "chequeTerceiroGrupoId"
+         FROM fechamento_fornecedor_pagamentos
+        WHERE fechamento_id=$1 AND company_id=$2 AND estornado_em IS NULL
+        ORDER BY entry_id ASC`,
+      [input.fechamentoId, input.companyId]));
+    if (vinculos.length === 0) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhuma baixa vinculada encontrada para estornar." });
+    }
+    const lotesChequeProprio = [...new Set(vinculos.map((v: any) => String(v.chequeProprioLoteId || "")).filter(Boolean))];
+    const gruposChequeTerceiro = [...new Set(vinculos.map((v: any) => String(v.chequeTerceiroGrupoId || "")).filter(Boolean))];
+    if (lotesChequeProprio.length > 1 || gruposChequeTerceiro.length > 1) {
+      throw new TRPCError({ code: "CONFLICT", message: "O pagamento possui mais de um lote de cheques ativo. Revise o histórico antes de estornar." });
+    }
+
+    // Fix #9: refuse to estornar if any linked entry is currently conciliado with a bank line.
+    // Breaking bank reconciliation silently is unacceptable; user must desconciliar first.
+    const entryIdsForCheck = [...new Set(vinculos.map((v: any) => Number(v.entryId)))];
+    const conciliadoCheck = rows(await dbExecute(db,
+      `SELECT e.id, e.conciliado,
+              bsl.id AS "lineId", bsl.conciliado AS "lineConciliado"
+         FROM financial_entries e
+         LEFT JOIN bank_statement_lines bsl
+           ON bsl.entry_id = e.id AND bsl.company_id = e.company_id
+              AND COALESCE(bsl.conciliado, 0) = 1 AND bsl.excluido_em IS NULL
+        WHERE e.id IN (${inlineIds(entryIdsForCheck)}) AND e.company_id=$1`,
+      [input.companyId]));
+    const conciliadosLancamentos = conciliadoCheck.filter((r: any) => Number(r.conciliado) === 1);
+    const conciliadosLinhas = conciliadoCheck.filter((r: any) => r.lineId != null);
+    if (conciliadosLancamentos.length > 0) {
+      const ids = conciliadosLancamentos.map((r: any) => r.id).join(", ");
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: `Os lançamentos #${ids} estão conciliados com o extrato bancário. Desconcilie-os na tela de Conciliação antes de estornar o fechamento.`,
+      });
+    }
+    if (conciliadosLinhas.length > 0) {
+      const lineIds = conciliadosLinhas.map((r: any) => r.lineId).join(", ");
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: `As linhas do extrato bancário #${lineIds} estão conciliadas com lançamentos deste fechamento. Desconcilie-as antes de estornar.`,
+      });
+    }
+
+    let chequesPropriosCancelados: number[] = [];
+    let chequesTerceirosLiberados: number[] = [];
+    await (db as any).transaction(async (tx: any) => {
+      const lockedFech = rows(await dbExecute(tx,
+        `SELECT id, status
+           FROM fechamento_fornecedor
+          WHERE id=$1 AND company_id=$2
+          FOR UPDATE`,
+        [input.fechamentoId, input.companyId]))[0];
+      if (!lockedFech || lockedFech.status !== "pago") {
+        throw new TRPCError({ code: "CONFLICT", message: "O fechamento mudou de situação e não pode mais ser estornado." });
+      }
+
+      // Advisory lock por entry (ordem crescente, mesmo padrão anti-deadlock)
+      const entryIds = [...new Set(vinculos.map((v: any) => Number(v.entryId)))].sort((a, b) => a - b);
+      for (const eid of entryIds) {
+        await _lockEntryBaixas(tx, input.companyId, eid);
+      }
+      const lockedEntries = rows(await dbExecute(tx,
+        `SELECT id, conciliado
+           FROM financial_entries
+          WHERE id IN (${inlineIds(entryIds)}) AND company_id=$1
+          FOR UPDATE`,
+        [input.companyId]));
+      if (lockedEntries.length !== entryIds.length || lockedEntries.some((e: any) => Number(e.conciliado) === 1)) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "Um ou mais títulos foram conciliados enquanto o estorno era preparado. Desconcilie-os antes; nenhuma alteração foi gravada.",
+        });
+      }
+      const lockedLines = rows(await dbExecute(tx,
+        `SELECT id
+           FROM bank_statement_lines
+          WHERE company_id=$1 AND entry_id IN (${inlineIds(entryIds)})
+            AND COALESCE(conciliado,0)=1 AND excluido_em IS NULL
+          FOR UPDATE`,
+        [input.companyId]));
+      if (lockedLines.length > 0) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "Há linha bancária conciliada com este fechamento. Desconcilie-a antes; nenhuma alteração foi gravada.",
+        });
+      }
+
+      // Reverte, na mesma transação, os instrumentos que financiaram esta tentativa
+      // de pagamento. Os IDs de lote/grupo ficam preservados nos vínculos para auditoria.
+      if (lotesChequeProprio.length === 1) {
+        const loteId = lotesChequeProprio[0];
+        const cheques = rows(await dbExecute(tx,
+          `SELECT id, status, conciliado, excluido_em AS "excluidoEm"
+             FROM financial_cheques
+            WHERE company_id=$1 AND lote_id=$2
+            ORDER BY id
+            FOR UPDATE`,
+          [input.companyId, loteId]));
+        if (
+          cheques.length === 0 ||
+          cheques.some((c: any) => c.status !== "pendente" || Number(c.conciliado || 0) === 1 || c.excluidoEm != null)
+        ) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "Um cheque próprio deste fechamento foi compensado, conciliado, excluído ou alterado. Reverta esse movimento antes de estornar o fechamento.",
+          });
+        }
+        const cancelados = rows(await dbExecute(tx,
+          `UPDATE financial_cheques
+              SET status='cancelado',
+                  observacao=COALESCE(observacao,'') || E'\n[Cancelado no estorno do fechamento: ' || $1 || ']',
+                  updated_at=NOW()
+            WHERE company_id=$2 AND lote_id=$3 AND status='pendente'
+              AND COALESCE(conciliado,0)=0 AND excluido_em IS NULL
+            RETURNING id`,
+          [input.motivo, input.companyId, loteId]));
+        if (cancelados.length !== cheques.length) {
+          throw new TRPCError({ code: "CONFLICT", message: "Os cheques próprios mudaram durante o estorno. Nenhuma alteração foi gravada." });
+        }
+        chequesPropriosCancelados = cancelados.map((c: any) => Number(c.id));
+      }
+
+      if (gruposChequeTerceiro.length === 1) {
+        const grupoId = gruposChequeTerceiro[0];
+        const cheques = rows(await dbExecute(tx,
+          `SELECT id, status, pagamento_grupo_id AS "pagamentoGrupoId",
+                  compensado_em AS "compensadoEm", excluido_em AS "excluidoEm"
+             FROM financial_cheques_recebidos
+            WHERE company_id=$1 AND pagamento_grupo_id=$2
+            ORDER BY id
+            FOR UPDATE`,
+          [input.companyId, grupoId]));
+        if (
+          cheques.length === 0 ||
+          cheques.some((c: any) =>
+            c.status !== "alocado" ||
+            String(c.pagamentoGrupoId || "") !== grupoId ||
+            c.compensadoEm != null ||
+            c.excluidoEm != null
+          )
+        ) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "Um cheque de terceiro deste fechamento foi compensado, excluído ou realocado. Reverta esse movimento antes de estornar o fechamento.",
+          });
+        }
+        const liberados = rows(await dbExecute(tx,
+          `UPDATE financial_cheques_recebidos
+              SET status='disponivel',
+                  fornecedor_alocado_id=NULL,
+                  fornecedor_alocado_nome=NULL,
+                  entry_id=NULL,
+                  pagamento_grupo_id=NULL,
+                  atualizado_em=NOW()
+            WHERE company_id=$1 AND pagamento_grupo_id=$2
+              AND status='alocado' AND compensado_em IS NULL AND excluido_em IS NULL
+            RETURNING id`,
+          [input.companyId, grupoId]));
+        if (liberados.length !== cheques.length) {
+          throw new TRPCError({ code: "CONFLICT", message: "Os cheques de terceiro mudaram durante o estorno. Nenhuma alteração foi gravada." });
+        }
+        chequesTerceirosLiberados = liberados.map((c: any) => Number(c.id));
+      }
+
+      // Soft-estorna cada baixa vinculada
+      for (const v of vinculos) {
+        await dbExecute(tx,
+          `UPDATE financial_entry_baixas
+           SET estornada_em=NOW(), estornada_por_id=$1, estornada_por_nome=$2, estorno_motivo=$3
+           WHERE id=$4 AND company_id=$5 AND estornada_em IS NULL`,
+          [ctx.user?.id ?? null, ctx.user?.name ?? null,
+           `Estorno fechamento #${input.fechamentoId}: ${input.motivo}`,
+           v.baixaId, input.companyId]
+        );
+        await _aplicarRollupBaixas(tx, Number(v.entryId), input.companyId);
+        // Marca o vínculo como estornado
+        await dbExecute(tx,
+          `UPDATE fechamento_fornecedor_pagamentos SET estornado_em=NOW()
+            WHERE fechamento_id=$1 AND baixa_id=$2 AND company_id=$3`,
+          [input.fechamentoId, v.baixaId, input.companyId]
+        );
+      }
+
+      // Retorna fechamento ao estado conferido (sem baixa)
+      await dbExecute(tx,
+        `UPDATE fechamento_fornecedor
+         SET status='conferido', pago_em=NULL, pago_por_id=NULL, pago_por_nome=NULL,
+             observacoes=COALESCE(observacoes,'') || E'\n[Estornado: ' || $1 || ']',
+             updated_at=NOW()
+         WHERE id=$2 AND company_id=$3 AND status='pago'`,
+        [input.motivo, input.fechamentoId, input.companyId]
+      );
+    });
+
+    await createAuditLog({
+      action: "fechamento_fornecedor_estornado",
+      userId: ctx.user?.id, companyId: input.companyId,
+      details: `Fechamento #${input.fechamentoId} estornado — ${fech.supplierNome} janela=${fech.janela} — motivo: ${input.motivo} — ${vinculos.length} baixa(s) estornada(s)` +
+        `${chequesPropriosCancelados.length ? ` — cheques próprios cancelados: ${chequesPropriosCancelados.join(",")}` : ""}` +
+        `${chequesTerceirosLiberados.length ? ` — cheques de terceiro liberados: ${chequesTerceirosLiberados.join(",")}` : ""}.`,
+    });
+    return {
+      ok: true,
+      status: "conferido",
+      estornados: vinculos.length,
+      chequesPropriosCancelados: chequesPropriosCancelados.length,
+      chequesTerceirosLiberados: chequesTerceirosLiberados.length,
+    };
+  }),
+
+  // ─── fim Task #187 ────────────────────────────────────────────────────────────
 
   // Estorna UMA baixa (soft): marca estornada_em e recalcula o rollup (reabre o título
   // para 'a_pagar'/'a_receber' ou 'recebido_parcial' conforme as baixas restantes).
@@ -11421,11 +13335,17 @@ export const financialRouter = router({
               e.forma_pagamento AS "formaPagamento",
               e.origem_modulo AS "origemModulo", e.origem_id AS "origemId",
               e.origem_descricao AS "origemDescricao",
+              e.parcela_numero AS "parcelaNumero",
+              e.parcela_total AS "parcelaTotal",
+              e.parcela_grupo_id AS "parcelaGrupoId",
               COALESCE(NULLIF(TRIM(e.fornecedor_nome), ''), co.fornecedor_nome) AS "fornecedorNome",
               e.anexo_url AS "anexoUrl", e.anexo_nome AS "anexoNome",
+              e.anexos_json AS "anexosJson",
               e.conta_bancaria_id AS "contaBancariaId",
+               e.observacoes,
               e.tipo,
               co.modalidade_fd AS "modalidadeFd",
+              co.numero_oc AS "numeroOc",
               CASE WHEN e.data_vencimento < CURRENT_DATE AND e.status != 'pago' THEN CURRENT_DATE - e.data_vencimento ELSE 0 END AS "diasAtraso"
        FROM financial_entries e
        LEFT JOIN compras_ordens co ON e.origem_modulo IN ('compras','compra_oc') AND co.id = e.origem_id AND co.company_id = e.company_id
@@ -11443,7 +13363,7 @@ export const financialRouter = router({
     // de fechamento (ex.: Ferragens Santa Rita: cheque em até 5x/30d). Só afeta fornecedores
     // com ciclo configurado; os demais seguem individuais como sempre.
     const cycleRows = await dbExecute(db,
-      `SELECT COALESCE(NULLIF(TRIM(nome_fantasia),''), TRIM(razao_social)) AS nome,
+      `SELECT id, COALESCE(NULLIF(TRIM(nome_fantasia),''), TRIM(razao_social)) AS nome,
               ciclo_pagamento AS "cicloPagamento",
               ciclo_dia_fechamento AS "cicloDiaFechamento",
               ciclo_num_parcelas AS "cicloNumParcelas",
@@ -11458,7 +13378,35 @@ export const financialRouter = router({
     for (const r of rows(cycleRows)) {
       if (r.nome) supplierCycleMap.set(_normNomeConc(String(r.nome)), r);
     }
-    return _agruparContasPagarPorCicloForn(rows(res), supplierCycleMap);
+    // Task #187 — enriquece grupos com metadados de fechamento persistido (idempotente: 1 query para N grupos).
+    const grouped = _agruparContasPagarPorCicloForn(rows(res), supplierCycleMap);
+    // Coleta os grupos sintéticos para buscar fechamentos existentes em batch.
+    const gruposParaEnriquecer = grouped.filter((g: any) => g.agrupado && g.grupoTipo === "fechamento_forn" && g._cicloWindow && g._supplierId);
+    if (gruposParaEnriquecer.length > 0) {
+      try {
+        const supplierIds = [...new Set(gruposParaEnriquecer.map((g: any) => Number(g._supplierId)))];
+        const fechRows = rows(await dbExecute(db,
+          `SELECT id, supplier_id AS "supplierId", janela, status
+             FROM fechamento_fornecedor
+            WHERE company_id=$1
+              AND supplier_id IN (${inlineIds(supplierIds)})
+              AND status IN ('rascunho','conferido','pago')`,
+          [input.companyId]));
+        const fechMap = new Map<string, any>();
+        for (const f of fechRows) {
+          fechMap.set(`${f.supplierId}|${f.janela}`, f);
+        }
+        for (const g of gruposParaEnriquecer) {
+          const key = `${g._supplierId}|${g._cicloWindow}`;
+          const fech = fechMap.get(key);
+          if (fech) {
+            g.fechamentoId = fech.id;
+            g.fechamentoStatus = fech.status;
+          }
+        }
+      } catch (_) { /* não-fatal: metadados de fechamento são informativos */ }
+    }
+    return grouped;
   }),
 
   // Rev. 4082 — Lista os ciclos de fechamento configurados no cadastro dos fornecedores
@@ -11513,6 +13461,8 @@ export const financialRouter = router({
     const ORIGENS_FOLHA = [
       "folha_rh", "folha_clt", "folha", "payroll_agregado", "fechamento_ponto",
       "folha_projetada",
+      // Rev. 5038 — título exato da consolidação + previsões base folha anterior
+      "folha_oficial", "folha_prevista_vale", "folha_prevista_pagamento",
     ];
     const ORIGENS_ENC = ["encargos_projetado", "guia_tributaria"];
     const ORIGENS_VR  = ["beneficio_vr", "beneficio_vr_projetado"];
@@ -11531,8 +13481,8 @@ export const financialRouter = router({
          SUM(CASE WHEN origem_modulo = ANY(${arrSql(ORIGENS_VA)})    THEN valor_previsto::numeric ELSE 0 END) AS va,
          SUM(CASE WHEN origem_modulo = ANY(${arrSql(ORIGENS_13)})    THEN valor_previsto::numeric ELSE 0 END) AS decimo,
          SUM(CASE WHEN origem_modulo = ANY(${arrSql(ORIGENS_PJ)})    THEN valor_previsto::numeric ELSE 0 END) AS pj,
-         SUM(CASE WHEN origem_modulo IN ('folha_rh','folha_clt','folha','payroll_agregado','fechamento_ponto') THEN 1 ELSE 0 END) AS folha_real_count,
-         SUM(CASE WHEN origem_modulo IN ('folha_projetada') THEN 1 ELSE 0 END) AS folha_proj_count
+         SUM(CASE WHEN origem_modulo IN ('folha_rh','folha_clt','folha','payroll_agregado','fechamento_ponto','folha_oficial') THEN 1 ELSE 0 END) AS folha_real_count,
+         SUM(CASE WHEN origem_modulo IN ('folha_projetada','folha_prevista_vale','folha_prevista_pagamento') THEN 1 ELSE 0 END) AS folha_proj_count
        FROM financial_entries
        WHERE company_id IN (${inlineIds(ids)})
          AND tipo = 'despesa'

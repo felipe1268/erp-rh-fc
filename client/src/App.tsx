@@ -1,7 +1,7 @@
 import { Toaster } from "@/components/ui/sonner";
 import { AppDialogHost } from "@/lib/appDialog";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { Route, Switch, useLocation } from "wouter";
+import { Route, Switch, useLocation, Redirect } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { CompanyProvider } from "./contexts/CompanyContext";
@@ -104,6 +104,29 @@ function RouteGuard({ component: Component, route }: { component: ComponentType;
   return <Component />;
 }
 
+function AdminMasterRouteGuard({ component: Component }: { component: ComponentType }) {
+  const { isAdminMaster, isLoading } = usePermissions();
+
+  if (isLoading) return <PageLoader />;
+  if (!isAdminMaster) {
+    return (
+      <DashboardLayout>
+        <div className="flex flex-col items-center justify-center h-[60vh] text-center px-4">
+          <div className="bg-red-50 p-4 rounded-full mb-4">
+            <ShieldAlert className="h-10 w-10 text-red-600" />
+          </div>
+          <h1 className="text-2xl font-bold text-slate-900 mb-2">Acesso Restrito</h1>
+          <p className="text-slate-600 max-w-md">
+            A Gestão Interna é exclusiva do Admin Master.
+          </p>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  return <Component />;
+}
+
 // ============================================================
 // LAZY LOADING - Cada página é carregada sob demanda
 // Isso reduz o bundle inicial de ~6MB para ~200KB
@@ -172,6 +195,12 @@ function lazyWithRetry<T extends ComponentType<any>>(
 // Todas as outras páginas são lazy-loaded
 const Home = lazyWithRetry(() => import("./pages/Home"));
 const Oraculo = lazyWithRetry(() => import("./pages/Oraculo"));
+const ReembolsoPainel = lazyWithRetry(() => import("./pages/reembolso/ReembolsoPainel"));
+const TelefonesPage = lazyWithRetry(() => import("./pages/telefones/TelefonesPage"));
+const ContratosServicoPage = lazyWithRetry(() => import("./pages/contratosServico/ContratosServicoPage"));
+const GestaoInterna = lazyWithRetry(() => import("./pages/gestao-interna/GestaoInterna"));
+const PatrimonioPage      = lazyWithRetry(() => import("./pages/patrimonio/PatrimonioPage"));
+const PatrimonioDashboard = lazyWithRetry(() => import("./pages/patrimonio/PatrimonioDashboard"));
 const Empresas = lazyWithRetry(() => import("./pages/Empresas"));
 const Colaboradores = lazyWithRetry(() => import("./pages/Colaboradores"));
 const ColetaCampo = lazyWithRetry(() => import("./pages/ColetaCampo"));
@@ -189,6 +218,7 @@ const Obras = lazyWithRetry(() => import("./pages/Obras"));
 const Clientes = lazyWithRetry(() => import("./pages/Clientes"));
 const Gerenciadoras = lazyWithRetry(() => import("./pages/Gerenciadoras"));
 const ObraEfetivo = lazyWithRetry(() => import("./pages/ObraEfetivo"));
+const ObraEsquadrias = lazyWithRetry(() => import("./pages/ObraEsquadrias"));
 const FechamentoPonto = lazyWithRetry(() => import("./pages/FechamentoPonto"));
 const EspelhoPonto = lazyWithRetry(() => import("./pages/EspelhoPonto"));
 const FolhaPagamento = lazyWithRetry(() => import("./pages/FolhaPagamento"));
@@ -196,6 +226,7 @@ const EncargosSociais = lazyWithRetry(() => import("./pages/EncargosSociais"));
 const PayrollCompetencias = lazyWithRetry(() => import("./pages/PayrollCompetencias"));
 const ControleDocumentos = lazyWithRetry(() => import("./pages/ControleDocumentos"));
 const ValeAlimentacao = lazyWithRetry(() => import("./pages/ValeAlimentacao"));
+const ValeTransporte = lazyWithRetry(() => import("./pages/ValeTransporte"));
 const WhatsAppRH = lazyWithRetry(() => import("./pages/WhatsAppRH"));
 const Setores = lazyWithRetry(() => import("./pages/Setores"));
 const Funcoes = lazyWithRetry(() => import("./pages/Funcoes"));
@@ -207,6 +238,7 @@ const Epis = lazyWithRetry(() => import("./pages/Epis"));
 const EpiFichaFuncionario = lazyWithRetry(() => import("./pages/EpiFichaFuncionario"));
 const Lixeira = lazyWithRetry(() => import("./pages/Lixeira"));
 const AvisoPrevio = lazyWithRetry(() => import("./pages/AvisoPrevio"));
+const PlanoDesligamento = lazyWithRetry(() => import("./pages/PlanoDesligamento"));
 const PedidoDemissao = lazyWithRetry(() => import("./pages/PedidoDemissao"));
 const Ferias = lazyWithRetry(() => import("./pages/Ferias"));
 const DocumentosColaborador = lazyWithRetry(() => import("./pages/DocumentosColaborador"));
@@ -267,7 +299,6 @@ const ComunicadosInternos = lazyWithRetry(() => import("./pages/ComunicadosInter
 const Curriculos = lazyWithRetry(() => import("./pages/Curriculos"));
 const Dissidio = lazyWithRetry(() => import("./pages/Dissidio"));
 const ConvencaoColetivaIA = lazyWithRetry(() => import("./pages/ConvencaoColetivaIA"));
-const PJMedicoes = lazyWithRetry(() => import("./pages/PJMedicoes"));
 const ConformidadePJ = lazyWithRetry(() => import("./pages/ConformidadePJ"));
 const ConformidadePJDashboard = lazyWithRetry(() => import("./pages/ConformidadePJDashboard"));
 const PainelRH = lazyWithRetry(() => import("./pages/PainelRH"));
@@ -384,6 +415,9 @@ const PlanejamentoDetalhe = lazyWithRetry(() => import("./pages/planejamento/Pla
 
 // Gestão de Documentos
 const GestaoDocumentos = lazyWithRetry(() => import("./pages/gestaodocumentos/index"));
+
+// Apontamento de Campo (ronda diária de produção)
+const ApontamentoCampo = lazyWithRetry(() => import("./pages/apontamento/ApontamentoCampo"));
 
 // Medição de Contratos
 const MedicaoContratos = lazyWithRetry(() => import("./pages/medicao/MedicaoContratos"));
@@ -530,6 +564,7 @@ function Router() {
         <Route path={"/gerenciadoras"} component={() => <RouteGuard component={Gerenciadoras} route="/empresas" />} />
         <Route path={"/obras"} component={() => <RouteGuard component={Obras} route="/obras" />} />
         <Route path={"/obras/efetivo"} component={() => <RouteGuard component={ObraEfetivo} route="/obras/efetivo" />} />
+        <Route path={"/obras/:obraId/esquadrias/:pavimentoId"} component={() => <RouteGuard component={ObraEsquadrias} route="/obras" />} />
         <Route path={"/setores"} component={() => <RouteGuard component={Setores} route="/setores" />} />
         <Route path={"/funcoes"} component={() => <RouteGuard component={Funcoes} route="/funcoes" />} />
         <Route path={"/contas-bancarias"} component={() => <RouteGuard component={ContasBancarias} route="/contas-bancarias" />} />
@@ -556,12 +591,14 @@ function Router() {
         <Route path={"/solicitacao-mdo"} component={() => <RouteGuard component={SolicitacaoMDO} route="/solicitacao-mdo" />} />
         <Route path={"/controle-documentos"} component={() => <RouteGuard component={ControleDocumentos} route="/controle-documentos" />} />
         <Route path={"/vale-alimentacao"} component={() => <RouteGuard component={ValeAlimentacao} route="/vale-alimentacao" />} />
+        <Route path={"/vale-transporte"} component={() => <RouteGuard component={ValeTransporte} route="/vale-transporte" />} />
         <Route path={"/whatsapp-rh"} component={() => <RouteGuard component={WhatsAppRH} route="/whatsapp-rh" />} />
         <Route path={"/configuracoes"} component={() => <MasterOnlyGuard component={Configuracoes} />} />
         <Route path={"/configuracoes/menu"} component={() => <MasterOnlyGuard component={MenuConfig} />} />
         <Route path={"/migracao"} component={() => <RouteGuard component={Migration} route="/colaboradores" />} />
         <Route path={"/lixeira"} component={() => <MasterOnlyGuard component={Lixeira} />} />
         <Route path={"/aviso-previo"} component={() => <RouteGuard component={AvisoPrevio} route="/aviso-previo" />} />
+        <Route path={"/plano-desligamento"} component={() => <RouteGuard component={PlanoDesligamento} route="/plano-desligamento" />} />
         <Route path={"/pedido-demissao"} component={() => <RouteGuard component={PedidoDemissao} route="/pedido-demissao" />} />
         <Route path={"/ferias"} component={() => <RouteGuard component={Ferias} route="/ferias" />} />
         <Route path={"/documentos-colaborador"} component={() => <RouteGuard component={DocumentosColaborador} route="/documentos-colaborador" />} />
@@ -629,7 +666,6 @@ function Router() {
         <Route path={"/feriados"} component={() => <RouteGuard component={Feriados} route="/feriados" />} />
         <Route path={"/dissidio"} component={() => <RouteGuard component={Dissidio} route="/dissidio" />} />
         <Route path={"/convencao-ia"} component={() => <RouteGuard component={ConvencaoColetivaIA} route="/convencao-ia" />} />
-        <Route path={"/pj-medicoes"} component={() => <RouteGuard component={PJMedicoes} route="/pj-medicoes" />} />
         <Route path={"/terceiros/pj/conformidade"} component={() => <RouteGuard component={ConformidadePJ} route="/terceiros/pj/conformidade" />} />
         <Route path={"/terceiros/pj/dashboard-conformidade"} component={() => <RouteGuard component={ConformidadePJDashboard} route="/terceiros/pj/dashboard-conformidade" />} />
         <Route path="/habilidades" component={() => <RouteGuard component={Habilidades} route="/habilidades" />} />
@@ -695,6 +731,8 @@ function Router() {
         <Route path="/terceiros/contratos/novo" component={() => <RouteGuard component={ContratoNovo} route="/terceiros/painel" />} />
         <Route path="/terceiros/contratos/:id" component={() => <RouteGuard component={ContratoDetalhe} route="/terceiros/painel" />} />
         <Route path="/terceiros/medicoes" component={() => <RouteGuard component={MedicoesTerceiros} route="/terceiros/painel" />} />
+        {/* Rev. 5160 — a tela Medições PJ foi absorvida por Medições de Terceiros; redireciona links/abas antigas */}
+        <Route path="/pj-medicoes" component={() => <Redirect to="/terceiros/medicoes" />} />
         <Route path="/terceiros/previsao-caixa" component={() => <RouteGuard component={PrevisaoCaixaTerceiros} route="/terceiros/painel" />} />
         <Route path="/terceiros/advertencias" component={() => <RouteGuard component={AdvertenciasTerceiros} route="/terceiros/advertencias" />} />
         <Route path="/terceiros/painel" component={() => <RouteGuard component={PainelTerceiros} route="/terceiros/painel" />} />
@@ -724,6 +762,11 @@ function Router() {
         <Route path="/planejamento/:id"          component={() => <RouteGuard component={PlanejamentoDetalhe} route="/planejamento" />} />
         {/* Gestão de Documentos */}
         <Route path="/gestao-documentos"           component={() => <RouteGuard component={GestaoDocumentos} route="/gestao-documentos" />} />
+        {/* Apontamento de Campo: libera p/ quem tem Terceiros ou Medição Terceiros (mesmo público). */}
+        <Route path="/apontamento"               component={() => <RouteGuard component={ApontamentoCampo} route={["/apontamento", "/terceiros/medicoes"]} />} />
+        {/* Ronda — planta com o editor COMPLETO do levantamento, em rota própria do
+            Apontamento (independente da rota/guard do Medição; lá vira complementar). */}
+        <Route path="/apontamento/planta/:contratoId/:campoId" component={() => <RouteGuard component={MedicaoLevantamento} route={["/apontamento", "/medicao", "/terceiros/medicoes"]} />} />
         <Route path="/medicao"                   component={() => <RouteGuard component={MedicaoContratos} route="/medicao" />} />
         <Route path="/medicao/:id"               component={() => <RouteGuard component={MedicaoDetalhe} route="/medicao" />} />
         {/* Rev. 3127 — Levantamento é engine COMPARTILHADA cliente×terceiro (?origem=cliente|terceiro).
@@ -842,6 +885,12 @@ function Router() {
         {/* Importação de Dados */}
         <Route path="/import-data" component={() => <RouteGuard component={ImportData} route="/colaboradores" />} />
         <Route path="/comunicados-internos" component={() => <RouteGuard component={ComunicadosInternos} route="/comunicados-internos" />} />
+        <Route path="/reembolso/painel" component={() => <RouteGuard component={ReembolsoPainel} route="/reembolso/painel" />} />
+        <Route path="/telefones-corporativos" component={() => <RouteGuard component={TelefonesPage} route="/telefones-corporativos" />} />
+        <Route path="/contratos-servico" component={() => <RouteGuard component={ContratosServicoPage} route="/contratos-servico" />} />
+        <Route path="/gestao-interna" component={() => <AdminMasterRouteGuard component={GestaoInterna} />} />
+        <Route path="/patrimonio/dashboard" component={() => <AdminMasterRouteGuard component={PatrimonioDashboard} />} />
+        <Route path="/patrimonio" component={() => <AdminMasterRouteGuard component={PatrimonioPage} />} />
         <Route path="/curriculos" component={() => <RouteGuard component={Curriculos} route="/curriculos" />} />
         <Route path={"404"} component={NotFound} />
         <Route component={NotFound} />

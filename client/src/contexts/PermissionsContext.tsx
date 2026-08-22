@@ -166,6 +166,9 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   // ── Acesso ao módulo ──────────────────────────────────────────────────────
   const canAccessModule = (moduleId: ActiveModuleId | string): boolean => {
     if (isAdminMaster) return true;
+    // Rev. 5063 — Reembolso é liberado para TODO usuário logado (o que cada um
+    // vê lá dentro já é controlado pelo backend: comum só vê os próprios).
+    if (moduleId === "reembolso") return true;
     const perm = normalizedAccess[moduleId];
     if (perm != null) {
       if (perm.level === "admin" || perm.level === "viewer") return true;
@@ -352,6 +355,10 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     if (!hasGroup) return true;
 
     const basePath = route.split("?")[0];
+
+    // Rev. 5063 — Reembolso é liberado para todo usuário logado (backend
+    // já filtra: usuário comum só enxerga os próprios lançamentos).
+    if (basePath === "/reembolso/painel" || basePath.startsWith("/reembolso/")) return true;
 
     // Novo sistema (module_access salvo via Usuarios.tsx): tem prioridade total
     if (groupHasNewSystem) {

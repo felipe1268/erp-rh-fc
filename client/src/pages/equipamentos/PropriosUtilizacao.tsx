@@ -199,10 +199,15 @@ function KpiCard({ icon, label, value, sub, tone, big = false, onClick }: {
 }
 
 // ─── RankingQuem ─────────────────────────────────────────────────────────────
-function RankingQuem({ topQuem }: { topQuem: any[] }) {
+function RankingQuem({ topQuem, ciclos }: { topQuem: any[]; ciclos: any[] }) {
   const [expandAll, setExpandAll] = useState(false);
   const max = topQuem[0]?.count ?? 1;
   const visivel = expandAll ? topQuem : topQuem.slice(0, 5);
+  // Rev. 5061 — clicar na pessoa abre o detalhe das retiradas do período
+  const [pessoaSel, setPessoaSel] = useState<{ nome: string; fotoUrl?: string | null; empresaTerceira?: string | null } | null>(null);
+  const retiradasSel = pessoaSel
+    ? ciclos.filter(c => (c.quemSaiu || "Não informado") === pessoaSel.nome)
+    : [];
   return (
     <div className="bg-white border rounded-xl shadow-sm p-4">
       <h3 className="font-semibold text-slate-800 text-sm mb-3 flex items-center gap-2">
@@ -214,11 +219,15 @@ function RankingQuem({ topQuem }: { topQuem: any[] }) {
         : <>
           <ul className="space-y-2">
             {visivel.map((p, i) => (
-              <li key={p.nome} className="flex items-center gap-2">
+              <li key={p.nome} onClick={() => setPessoaSel({ nome: p.nome, fotoUrl: p.fotoUrl, empresaTerceira: p.empresaTerceira })}
+                className="flex items-center gap-2 cursor-pointer rounded-lg -mx-1 px-1 py-0.5 hover:bg-blue-50 active:bg-blue-100 transition">
                 <span className="text-[10px] font-bold text-slate-400 w-4 text-right shrink-0">{i + 1}</span>
                 <FotoFuncionario fotoUrl={p.fotoUrl} nome={p.nome} />
                 <div className="flex-1 min-w-0">
                   <div className="text-xs text-slate-700 truncate leading-tight">{p.nome}</div>
+                  {p.empresaTerceira && (
+                    <div className="text-[10px] text-violet-600 font-semibold truncate leading-tight">🏢 {p.empresaTerceira}</div>
+                  )}
                   <div className="w-full bg-slate-100 rounded-full h-1 mt-1">
                     <div className="bg-blue-500 h-1 rounded-full" style={{ width: `${(p.count / max) * 100}%` }} />
                   </div>
@@ -235,6 +244,57 @@ function RankingQuem({ topQuem }: { topQuem: any[] }) {
           )}
         </>
       }
+      {/* Rev. 5061 — detalhe das retiradas da pessoa no período */}
+      {pessoaSel && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center" onClick={() => setPessoaSel(null)}>
+          <div className="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl max-h-[85vh] flex flex-col shadow-xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 px-4 py-3 border-b">
+              <FotoFuncionario fotoUrl={pessoaSel.fotoUrl} nome={pessoaSel.nome} />
+              <div className="flex-1 min-w-0">
+                <div className="font-bold text-slate-900 text-sm truncate">{pessoaSel.nome}</div>
+                {pessoaSel.empresaTerceira && (
+                  <div className="text-[11px] text-violet-600 font-semibold truncate">🏢 Terceiro · {pessoaSel.empresaTerceira}</div>
+                )}
+                <div className="text-[11px] text-slate-500">{retiradasSel.length} retirada{retiradasSel.length !== 1 ? "s" : ""} no período</div>
+              </div>
+              <button onClick={() => setPessoaSel(null)} className="p-1.5 rounded-lg hover:bg-slate-100 transition shrink-0">
+                <X className="h-5 w-5 text-slate-500" />
+              </button>
+            </div>
+            <div className="overflow-y-auto flex-1 divide-y">
+              {retiradasSel.length === 0 && <p className="text-xs text-slate-400 text-center py-6">Sem retiradas no período</p>}
+              {retiradasSel.map((c: any) => {
+                const fmt = (s: string | null) => {
+                  if (!s) return null;
+                  const d = String(s).slice(0, 16);
+                  return `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}${d.length >= 16 ? ` ${d.slice(11, 16)}` : ""}`;
+                };
+                return (
+                  <div key={c.id} className="px-4 py-2.5 flex items-start gap-3">
+                    {c.fotoUrl
+                      ? <img src={c.fotoUrl} alt="" className="h-9 w-9 rounded-lg object-cover shrink-0 border" />
+                      : <span className="h-9 w-9 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400 text-[10px] shrink-0 border">—</span>}
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-semibold text-slate-800 leading-tight">{c.descricao}{c.codigoPatrimonio ? ` · ${c.codigoPatrimonio}` : ""}</div>
+                      <div className="text-[11px] text-slate-500 mt-0.5">
+                        Saiu {fmt(c.saiuEm)}{c.devolvidoEm ? ` · devolvido ${fmt(c.devolvidoEm)}` : ""}
+                      </div>
+                      <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-100">
+                          🏗 {c.obraNome || "Obra não informada"}
+                        </span>
+                        {!c.devolvidoEm && (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-100">Em campo</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -831,7 +891,7 @@ export default function PropriosUtilizacao() {
 
           {/* Rankings */}
           <div className="space-y-4">
-            <RankingQuem topQuem={topQuem} />
+            <RankingQuem topQuem={topQuem} ciclos={ciclos} />
             <div className="bg-white border rounded-xl shadow-sm p-4">
               <h3 className="font-semibold text-slate-800 text-sm mb-3 flex items-center gap-2">
                 <HardHat className="h-4 w-4 text-blue-600" /> Mais movimentados

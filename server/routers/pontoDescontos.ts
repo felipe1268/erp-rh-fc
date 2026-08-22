@@ -498,10 +498,10 @@ export const pontoDescontosRouter = router({
             totalAtrasos++;
             totalMinutosAtraso += minutosDesconto;
             totalDescontosEmp += valorAtraso;
-            // Se atraso vira falta (>= limite), perde DSR daquela semana
-            if (atrasoMinutos >= criteria.pontoFaltaAposAtraso) {
-              semanasComFalta.add(getSundayOfWeek(data));
-            }
+            // Rev. 5046 — DSR perdido SÓ na falta COMPLETA (dia sem nenhuma batida).
+            // Decisão do usuário 13/08/2026: dia trabalhado parcialmente (atraso grande
+            // ou saída antecipada) desconta só as horas do déficit, sem perder o DSR.
+            // (Antes: atraso >= pontoFaltaAposAtraso também derrubava o DSR da semana.)
 
             // Se atraso > limite, considerar como falta
             if (atrasoMinutos >= criteria.pontoFaltaAposAtraso) {

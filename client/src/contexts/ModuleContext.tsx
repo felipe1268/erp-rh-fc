@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useMemo, ReactNode } from "react";
 import { useLocation } from "wouter";
 
-export type ModuleId = "rh-dp" | "sst" | "juridico" | "juridico-trabalhista" | "juridico-tributario" | "juridico-civil" | "avaliacao" | "terceiros" | "parceiros" | "orcamento" | "planejamento" | "medicao" | "medicao-terceiros" | "cadastro" | "compras" | "almoxarifado" | "financeiro" | "gestao-documentos" | "operacional" | "frotas" | "comunicados-internos" | "curriculos" | "oraculo" | "portal-cliente" | "fcsign" | "admin" | "all";
+export type ModuleId = "rh-dp" | "sst" | "juridico" | "juridico-trabalhista" | "juridico-tributario" | "juridico-civil" | "avaliacao" | "terceiros" | "parceiros" | "orcamento" | "planejamento" | "medicao" | "medicao-terceiros" | "apontamento" | "cadastro" | "compras" | "almoxarifado" | "financeiro" | "gestao-documentos" | "operacional" | "frotas" | "comunicados-internos" | "curriculos" | "oraculo" | "portal-cliente" | "fcsign" | "reembolso" | "gestao-interna" | "patrimonio" | "admin" | "all";
 
 interface ModuleContextType {
   activeModule: ModuleId;
@@ -36,9 +36,9 @@ const ROUTE_MODULE_MAP: Record<string, ModuleId> = {
   "/relogios-ponto": "rh-dp",
   "/convencoes-coletivas": "rh-dp",
   "/aviso-previo": "rh-dp",
+  "/plano-desligamento": "rh-dp",
   "/ferias": "rh-dp",
   "/modulo-pj": "terceiros" as ModuleId,
-  "/pj-medicoes": "medicao-terceiros" as ModuleId,
   "/terceiros/pj/conformidade": "terceiros" as ModuleId,
   "/solicitacao-he": "rh-dp",
   "/contas-bancarias": "rh-dp",
@@ -89,6 +89,7 @@ const ROUTE_MODULE_MAP: Record<string, ModuleId> = {
   "/orcamento/biblioteca":   "orcamento" as ModuleId,
   "/planejamento":           "planejamento" as ModuleId,
   "/medicao":                "medicao" as ModuleId,
+  "/apontamento":            "apontamento" as ModuleId,
   "/comparativo-convencoes": "rh-dp" as ModuleId,
   "/convencao-ia":           "rh-dp" as ModuleId,
   "/compras/painel":           "compras" as ModuleId,
@@ -169,6 +170,10 @@ const ROUTE_MODULE_MAP: Record<string, ModuleId> = {
   "/lixeira": "cadastro",
   "/revisoes": "cadastro",
   "/clientes/portal": "portal-cliente",
+  // Reembolso (Rev. 5052)
+  "/reembolso/painel": "reembolso" as ModuleId,
+  // Gestão Interna
+  "/gestao-interna": "gestao-interna" as ModuleId,
 };
 
 const MODULE_LABELS: Record<ModuleId, string> = {
@@ -185,6 +190,7 @@ const MODULE_LABELS: Record<ModuleId, string> = {
   "planejamento": "Planejamento",
   "medicao": "Medição",
   "medicao-terceiros": "Medição Terceiros",
+  "apontamento": "Apontamento de Campo",
   "cadastro": "Cadastro",
   "compras": "Compras",
   "almoxarifado": "Almoxarifado",
@@ -197,6 +203,9 @@ const MODULE_LABELS: Record<ModuleId, string> = {
   "oraculo": "Oráculo",
   "portal-cliente": "Portal do Cliente",
   "fcsign": "FCSign",
+  "reembolso": "Reembolso",
+  "gestao-interna": "Gestão Interna",
+  "patrimonio": "Patrimônio Imobiliário",
   "admin": "Administração",
   "all": "Todos os Módulos",
 };
@@ -207,7 +216,7 @@ export function ModuleProvider({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const [activeModule, setActiveModuleState] = useState<ModuleId>(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved && (saved === "rh-dp" || saved === "sst" || saved === "juridico" || saved === "juridico-trabalhista" || saved === "juridico-tributario" || saved === "juridico-civil" || saved === "avaliacao" || saved === "terceiros" || saved === "parceiros" || saved === "orcamento" || saved === "planejamento" || saved === "medicao" || saved === "medicao-terceiros" || saved === "cadastro" || saved === "compras" || saved === "almoxarifado" || saved === "financeiro" || saved === "gestao-documentos" || saved === "operacional" || saved === "frotas" || saved === "comunicados-internos" || saved === "curriculos" || saved === "oraculo" || saved === "portal-cliente" || saved === "fcsign" || saved === "all")) {
+    if (saved && (saved === "rh-dp" || saved === "sst" || saved === "juridico" || saved === "juridico-trabalhista" || saved === "juridico-tributario" || saved === "juridico-civil" || saved === "avaliacao" || saved === "terceiros" || saved === "parceiros" || saved === "orcamento" || saved === "planejamento" || saved === "medicao" || saved === "medicao-terceiros" || saved === "apontamento" || saved === "cadastro" || saved === "compras" || saved === "almoxarifado" || saved === "financeiro" || saved === "gestao-documentos" || saved === "operacional" || saved === "frotas" || saved === "comunicados-internos" || saved === "curriculos" || saved === "oraculo" || saved === "portal-cliente" || saved === "fcsign" || saved === "reembolso" || saved === "gestao-interna" || saved === "patrimonio" || saved === "all")) {
       return saved as ModuleId;
     }
     return "rh-dp";

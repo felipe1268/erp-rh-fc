@@ -4,6 +4,7 @@ import { TRPCError } from "@trpc/server";
 import { getDb, userCanSeeAvisoStatus, getUserCompanyLinks } from "../db";
 import { sql, SQL } from "drizzle-orm";
 import { resolveCompanyIds } from "../companyHelper";
+import { assertRaioXAccess } from "../raioXGuard";
 
 // Helper: gera cláusula SQL de filtro por IDs de empresa compatível com Drizzle
 // Drizzle não converte arrays JS para arrays PostgreSQL em ANY() — usa IN() parametrizado
@@ -273,6 +274,116 @@ function parsarLinhasSegurados(linhas: string[]): { segurados: SeguradoParsed[];
   const p6 = extrairNomesP6(linhas, true);
   if (p6.length >= 2) return { segurados: p6, padrao: "P6" };
   return { segurados: [], padrao: "nenhum" };
+}
+
+// ─── Movimento de Faturas (Rev. 4989) ────────────────────────────────
+// A Porto Seguro emite DOIS tipos de PDF: a "Relação Atualizada de Segurados"
+// (foto completa da apólice, 1x/mês) e o "Movimento de Faturas" (só as
+// inclusões/cancelamentos do decorrer do mês). O movimento NUNCA pode ser
+// tratado como relação completa — senão todo mundo que não está nele vira
+// falso "sem seguro". Aqui detectamos e processamos como DELTA.
+type MovimentoParsed = { tipo: "inclusao" | "cancelamento"; nome: string; cpf: string | null; dataMovimento: string | null; valores: string[] };
+
+function ehPdfMovimentacao(texto: string): boolean {
+  const t = texto.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  return /MOVIMENTO\s+DE\s+FATURAS/.test(t) || /TIPO\s+DE\s+MOVIMENTACAO/.test(t.replace(/\n/g, " "));
+}
+
+function parsarMovimentos(texto: string): MovimentoParsed[] {
+  const t = texto.replace(/\r/g, "");
+  // Cada registro termina em "DD/MM/YYYY <Tipo de Movimentação>"
+  const re = /(\d{2}\/\d{2}\/\d{4})\s*(Inclusao|Inclusão|Cancelamento|Exclusao|Exclusão)/gi;
+  const out: MovimentoParsed[] = [];
+  let last = 0; let m: RegExpExecArray | null;
+  while ((m = re.exec(t)) !== null) {
+    const bloco = t.slice(last, m.index);
+    last = re.lastIndex;
+    const tipoNorm = m[2].normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+    const tipo: MovimentoParsed["tipo"] = tipoNorm === "INCLUSAO" ? "inclusao" : "cancelamento";
+    const [dd, mm2, yyyy] = m[1].split("/");
+    const dataMovimento = `${yyyy}-${mm2}-${dd}`;
+    // CPF 9+2 dígitos — o hífen pode quebrar de linha ("357584368-\n60")
+    const cpfM = bloco.match(/(\d{3}\.?\d{3}\.?\d{3})\s*-\s*(\d{2})\b/);
+    const cpf = cpfM ? (cpfM[1] + cpfM[2]).replace(/\D/g, "") : null;
+    // Nome: sequência MAIÚSCULA após o CPF (pdf-parse insere espaços espúrios — "JA MES")
+    const aposCpf = (cpfM ? bloco.slice(bloco.indexOf(cpfM[0]) + cpfM[0].length) : bloco)
+      .replace(/Principal|C[ôo]njuge|Filho\(?a?\)?/gi, " "); // rótulo de parentesco cola no nome
+    const nomeM = aposCpf.match(/[A-ZÁÀÃÂÉÊÍÓÔÕÚÜÇÑ][A-ZÁÀÃÂÉÊÍÓÔÕÚÜÇÑ\s]{4,}/);
+    const nome = (nomeM ? nomeM[0] : "").replace(/\s+/g, " ").trim();
+    const valores = extrairValores(bloco);
+    if (cpf || nome.replace(/\s/g, "").length >= 5) out.push({ tipo, nome, cpf, dataMovimento, valores });
+  }
+  return out;
+}
+
+// Cruza os movimentos com o cadastro: CPF primeiro (formato misto → normaliza os
+// DOIS lados), nome como fallback (inclusive com espaços colapsados, por causa
+// do pdf-parse). Quem NÃO está no arquivo fica intocado — movimento é delta.
+async function executarCruzamentoMovimentacao(
+  db: any, ids: number[], companyId: number, competencia: string,
+  movimentos: MovimentoParsed[], incluirPJ?: boolean,
+) {
+  const emps = rows(await db.execute(sql`
+    SELECT id, "nomeCompleto", cpf, status, "tipoContrato"
+    FROM employees
+    WHERE "companyId" ${inIds(ids)} AND "deletedAt" IS NULL
+      ${incluirPJ ? sql`` : sql`AND COALESCE("tipoContrato",'CLT') NOT IN ('PJ','Socio')`}
+  `));
+  const empByCpf = new Map<string, any>();
+  for (const e of emps) {
+    const c = String(e.cpf ?? "").replace(/\D/g, "");
+    if (c.length === 11 && !empByCpf.has(c)) empByCpf.set(c, e);
+  }
+  const empsNorm = emps.map((e: any) => ({ ...e, _norm: normalizeName(e.nomeCompleto), _flat: normalizeName(e.nomeCompleto).replace(/\s/g, "") }));
+
+  const coberturas = rows(await db.execute(sql`
+    SELECT id, employee_id, status FROM seguro_vida_coberturas
+    WHERE company_id ${inIds(ids)} AND status IN ('ativo','pendente_inclusao','pendente_cancelamento')
+  `));
+
+  const resultado: any[] = [];
+  for (const mov of movimentos) {
+    let emp: any = mov.cpf ? empByCpf.get(mov.cpf) : null;
+    if (!emp && mov.nome) {
+      const nNorm = normalizeName(mov.nome);
+      const nFlat = nNorm.replace(/\s/g, "");
+      let melhor: any = null; let melhorSim = 0;
+      for (const e of empsNorm) {
+        const sim = Math.max(nameSimilarity(nNorm, e._norm), nFlat.length >= 8 && (e._flat === nFlat || e._flat.includes(nFlat) || nFlat.includes(e._flat)) ? 1 : 0);
+        if (sim > melhorSim) { melhorSim = sim; melhor = e; }
+      }
+      if (melhorSim >= 0.55) emp = melhor;
+    }
+    const cob = emp ? coberturas.find((c: any) => c.employee_id === emp.id) : null;
+    const base = {
+      nome: mov.nome, item: "", cpf: mov.cpf, dataMovimento: mov.dataMovimento,
+      tipoMovimento: mov.tipo, valores: mov.valores,
+      employeeId: emp?.id, nomeHR: emp?.nomeCompleto, coberturaId: cob?.id,
+    };
+    if (!emp) {
+      resultado.push({ ...base, status: "mov_sem_cadastro" });
+    } else if (mov.tipo === "inclusao") {
+      // Cobertura pendente_cancelamento + inclusão = reativação (não é "já coberto")
+      const jaCoberto = cob && cob.status !== "pendente_cancelamento";
+      resultado.push({ ...base, status: jaCoberto ? "ok" : "incluir_mov" });
+    } else {
+      resultado.push({ ...base, status: cob ? "cancelar_mov" : "mov_sem_cobertura" });
+    }
+  }
+
+  const totalInclusoes = resultado.filter(r => r.tipoMovimento === "inclusao").length;
+  const totalCancelamentos = resultado.filter(r => r.tipoMovimento === "cancelamento").length;
+  const totalNaoEncontrados = resultado.filter(r => r.status === "mov_sem_cadastro").length;
+  console.log(`[SeguroVida] movimentação ${competencia}: ${movimentos.length} movimento(s) — inclusões=${totalInclusoes}, cancelamentos=${totalCancelamentos}, semCadastro=${totalNaoEncontrados}`);
+  return {
+    competencia,
+    tipoArquivo: "movimentacao" as const,
+    totalSeguradosCorretora: movimentos.length,
+    totalInclusoes, totalCancelamentos, totalNaoEncontrados,
+    totalOk: resultado.filter(r => r.status === "ok").length,
+    totalSemSeguro: 0, totalPagarIndevido: 0, totalNovos: 0,
+    resultado,
+  };
 }
 
 function parseNomesBrutos(texto: string): SeguradoParsed[] {
@@ -900,7 +1011,9 @@ export const seguroVidaRouter = router({
 
   getCoberturaByEmployee: protectedProcedure
     .input(z.object({ companyId: z.number(), employeeId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      // Rev. 5192 — Raio-X guard.
+      await assertRaioXAccess(ctx as any, input.employeeId);
       const db = (await getDb())!;
 
       const cobertura = rows(await db.execute(sql`
@@ -1161,6 +1274,20 @@ export const seguroVidaRouter = router({
           const autoDetectado = !!detectedComp;
           console.log(`[SeguroVida] ${arq.filename}: competência ${autoDetectado ? "detectada" : "fallback"} = ${competenciaFinal}`);
 
+          // Rev. 4989 — Movimento de Faturas: processa como DELTA (inclusões/cancelamentos),
+          // nunca como relação completa (evita falsos "sem seguro" pra quem não está no arquivo)
+          if (ehPdfMovimentacao(texto)) {
+            const movimentos = parsarMovimentos(texto);
+            console.log(`[SeguroVida] ${arq.filename}: PDF de MOVIMENTAÇÃO detectado — ${movimentos.length} movimento(s)`);
+            if (movimentos.length === 0) {
+              resultados.push({ competencia: competenciaFinal, competenciaFallback: !autoDetectado, filename: arq.filename, erro: "PDF de movimentação detectado, mas nenhuma inclusão/cancelamento foi encontrada. Verifique o arquivo." });
+              continue;
+            }
+            const resultadoMov = await executarCruzamentoMovimentacao(db, ids, input.companyId, competenciaFinal, movimentos, input.incluirPJ);
+            resultados.push({ filename: arq.filename, autoDetectado, competenciaFallback: !autoDetectado, seguradoraDetectada: parseSeguradora(texto), ...resultadoMov });
+            continue;
+          }
+
           const linhas = texto.split("\n").map((l: string) => l.trim()).filter(Boolean);
           const { segurados: seguradosBrutos, padrao } = parsarLinhasSegurados(linhas);
           // Diagnóstico — sempre loga as primeiras 15 linhas para rastrear formato
@@ -1235,12 +1362,49 @@ export const seguroVidaRouter = router({
         dataAdmissao: z.string().optional(),
         valores:     z.array(z.string()).optional(),
         seguradora:  z.string().nullable().optional(),
+        dataMovimento: z.string().nullable().optional(),
+        tipoMovimento: z.string().optional(),
       })),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
       let criadas = 0;
       let mantidas = 0;
+
+      // Rev. 4989 — Tenancy: nunca confiar em companyId/companyIds do client.
+      const ids = resolveCompanyIds(input);
+      if (ctx.user.role !== "admin" && ctx.user.role !== "admin_master") {
+        const links = await getUserCompanyLinks(ctx.user.id);
+        const allowed = new Set<number>((links as any[]).map((l: any) => l.companyId).filter((v: any) => typeof v === "number"));
+        if (allowed.size > 0) {
+          for (const cid of ids) {
+            if (!allowed.has(cid)) {
+              throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+            }
+          }
+        }
+      }
+
+      // Ownership: coberturaId/employeeId vindos do client só valem se
+      // pertencerem às empresas autorizadas (anti-IDOR).
+      const cobIdsInput = input.resultado.map(r => r.coberturaId).filter((v): v is number => typeof v === "number");
+      const empIdsInput = input.resultado.map(r => r.employeeId).filter((v): v is number => typeof v === "number");
+      const cobsValidas = new Map<number, string>(); // id → status atual
+      if (cobIdsInput.length > 0) {
+        for (const c of rows(await db.execute(sql`
+          SELECT id, status FROM seguro_vida_coberturas
+          WHERE id IN (${sql.join([...new Set(cobIdsInput)].map(id => sql`${id}`), sql`, `)})
+            AND company_id ${inIds(ids)}
+        `))) cobsValidas.set(Number(c.id), String(c.status));
+      }
+      const empsValidos = new Set<number>();
+      if (empIdsInput.length > 0) {
+        for (const e of rows(await db.execute(sql`
+          SELECT id FROM employees
+          WHERE id IN (${sql.join([...new Set(empIdsInput)].map(id => sql`${id}`), sql`, `)})
+            AND "companyId" ${inIds(ids)} AND "deletedAt" IS NULL
+        `))) empsValidos.add(Number(e.id));
+      }
 
       // Deduplicar por coberturaId: quando múltiplos PDFs são importados juntos,
       // o mesmo funcionário pode aparecer em mais de um resultado.
@@ -1249,14 +1413,50 @@ export const seguroVidaRouter = router({
       for (const r of input.resultado) {
         const key = r.coberturaId ? `cob:${r.coberturaId}` : `emp:${r.employeeId}:${r.status}`;
         const existente = deduplicados.get(key);
-        if (!existente || (r.valores?.length ?? 0) > (existente.valores?.length ?? 0)) {
+        // Rev. 4989 — cancelamento de movimentação tem prioridade sobre linha "ok"
+        // da relação completa (o cancelamento é o evento mais recente do mês)
+        if (!existente
+          || (r.status === "cancelar_mov" && existente.status !== "cancelar_mov")
+          || (existente.status !== "cancelar_mov" && (r.valores?.length ?? 0) > (existente.valores?.length ?? 0))) {
           deduplicados.set(key, r);
         }
       }
       const resultadoFinal = [...deduplicados.values()];
 
+      let canceladas = 0;
+      let reativadas = 0;
       for (const r of resultadoFinal) {
-        if ((r.status === "ok" || r.status === "novo") && r.employeeId) {
+        // Rev. 4989 — Cancelamento vindo do PDF de movimentação do corretor
+        if (r.status === "cancelar_mov" && r.coberturaId) {
+          if (!cobsValidas.has(r.coberturaId)) continue; // anti-IDOR: cobertura fora do tenant
+          const res: any = await db.execute(sql`
+            UPDATE seguro_vida_coberturas SET
+              status              = 'cancelado',
+              data_cancelamento   = COALESCE(${r.dataMovimento ?? null}::date, CURRENT_DATE),
+              cancelado_por       = ${ctx.user.name ?? "Sistema"},
+              motivo_cancelamento = COALESCE(motivo_cancelamento, 'Cancelamento — movimentação do corretor (PDF)'),
+              atualizado_em       = NOW()
+            WHERE id = ${r.coberturaId} AND company_id ${inIds(ids)}
+              AND status <> 'cancelado'
+          `);
+          canceladas += Number(res?.rowCount ?? 0); // idempotente: re-confirmar não conta de novo
+          continue;
+        }
+        // Rev. 4989 — Inclusão sobre cobertura pendente_cancelamento: REATIVA
+        if (r.status === "incluir_mov" && r.coberturaId && cobsValidas.get(r.coberturaId) === "pendente_cancelamento") {
+          const res: any = await db.execute(sql`
+            UPDATE seguro_vida_coberturas SET
+              status = 'ativo', data_cancelamento = NULL, cancelado_por = NULL,
+              motivo_cancelamento = NULL, atualizado_em = NOW()
+            WHERE id = ${r.coberturaId} AND company_id ${inIds(ids)}
+              AND status = 'pendente_cancelamento'
+          `);
+          reativadas += Number(res?.rowCount ?? 0);
+          continue;
+        }
+        if ((r.status === "ok" || r.status === "novo" || r.status === "incluir_mov") && r.employeeId) {
+          if (!empsValidos.has(r.employeeId)) continue; // anti-IDOR: funcionário fora do tenant
+          if (r.coberturaId && !cobsValidas.has(r.coberturaId)) continue;
           const v = r.valores ?? [];
 
           // ---------------------------------------------------------------
@@ -1338,7 +1538,7 @@ export const seguroVidaRouter = router({
                 VALUES
                   (${input.companyId}, ${r.employeeId}, ${r.nome}, ${r.item || null},
                    ${input.apoliceVG ?? null}, ${input.apoliceAPC ?? null},
-                   'ativo', CURRENT_DATE, ${ctx.user.name ?? "Sistema"},
+                   'ativo', COALESCE(${r.dataMovimento ?? null}::date, CURRENT_DATE), ${ctx.user.name ?? "Sistema"},
                    ${seguradora},
                    ${morteNatural}, ${morteAcidental}, ${invAcidente}, ${invDoenca},
                    ${premioVG}, ${premioAPC})
@@ -1367,8 +1567,8 @@ export const seguroVidaRouter = router({
         }
       }
 
-      console.log(`[SeguroVida] confirmarCruzamento: ${criadas} criadas, ${mantidas} já existentes`);
-      return { criadas, mantidas };
+      console.log(`[SeguroVida] confirmarCruzamento: ${criadas} criadas, ${mantidas} já existentes, ${canceladas} canceladas, ${reativadas} reativadas`);
+      return { criadas, mantidas, canceladas, reativadas };
     }),
 
   listarImportacoes: protectedProcedure

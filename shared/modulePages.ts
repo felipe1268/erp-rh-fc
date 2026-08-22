@@ -319,7 +319,7 @@ export const MODULE_PAGE_CONFIG: Record<string, ModulePageConfig> = {
       { id: "emergencial",    label: "Compras Emergenciais",                       actions: ["view","create","edit","delete"] },
       { id: "financeiro",     label: "Contas a Pagar (Compras)",                   actions: ["view"] },
       { id: "realocacao",     label: "Realocação de Verba",                        actions: ["view","edit"] },
-      { id: "comissoes",      label: "Comissões de Compradores",                   actions: ["view","create","edit","delete"] },
+      { id: "comissoes",      label: "Prêmios de Compradores",                   actions: ["view","create","edit","delete"] },
       { id: "databook",       label: "Databook de Obra",                           actions: ["view"] },
       { id: "fornecedores",   label: "Fornecedores",                               actions: ["view","create","edit","delete"] },
       { id: "configuracoes",  label: "Configurações de Compras",                   actions: ["view","edit"] },
@@ -429,6 +429,59 @@ export const MODULE_PAGE_CONFIG: Record<string, ModulePageConfig> = {
   "curriculos": {
     pages: [
       { id: "curriculos",  label: "Banco de Currículos",  actions: ["view","create","edit","delete"] },
+    ],
+  },
+  "reembolso": {
+    pages: [
+      { id: "painel_reembolso",  label: "Painel de Reembolsos",  actions: ["view","create","edit","delete"] },
+    ],
+  },
+
+  // ══════════════════════════════════════════════════════
+  // GESTÃO INTERNA
+  // ══════════════════════════════════════════════════════
+  "gestao-interna": {
+    pages: [
+      { id: "gestao_interna",  label: "Gestão Interna (Central Operacional)",  actions: ["view","create","edit","delete"] },
+    ],
+  },
+
+  // ══════════════════════════════════════════════════════
+  // FCSIGN — CENTRAL DE ASSINATURAS
+  // ══════════════════════════════════════════════════════
+  "fcsign": {
+    pages: [
+      { id: "central_assinaturas", label: "Central de Assinaturas", actions: ["view","create","edit","delete"] },
+    ],
+  },
+
+  // ══════════════════════════════════════════════════════
+  // APONTAMENTO DE CAMPO
+  // ══════════════════════════════════════════════════════
+  "apontamento": {
+    pages: [
+      { id: "ronda",     label: "Ronda do Dia",    actions: ["view","create","edit","delete"] },
+      { id: "producao",  label: "Produção",         actions: ["view"] },
+      { id: "frentes",   label: "Mapa de Frentes",  actions: ["view"] },
+    ],
+  },
+
+  // ══════════════════════════════════════════════════════
+  // MEDIÇÃO DE TERCEIROS
+  // ══════════════════════════════════════════════════════
+  "medicao-terceiros": {
+    pages: [
+      { id: "medicoes_terceiros", label: "Medições (a pagar)", actions: ["view","create","edit","delete"] },
+    ],
+  },
+
+  // ══════════════════════════════════════════════════════
+  // PATRIMÔNIO IMOBILIÁRIO
+  // ══════════════════════════════════════════════════════
+  "patrimonio": {
+    pages: [
+      { id: "imoveis",             label: "Gestão de Imóveis",           actions: ["view","create","edit","delete"] },
+      { id: "imoveis_dashboard",   label: "Dashboard Patrimônio",         actions: ["view"] },
     ],
   },
 };
@@ -575,7 +628,6 @@ export const ROUTE_TO_PAGEID: Record<string, Record<string, string>> = {
     "/terceiros/crachas":      "crachas_terceiros",
     "/integrasign":            "integrasign",
     "/modulo-pj":              "contratos_pj",
-    "/pj-medicoes":            "contratos_pj",
     "/terceiros/pj/conformidade": "pj_conformidade",
     "/terceiros/pj/dashboard-conformidade": "pj_dashboard_conformidade",
   },
@@ -730,8 +782,27 @@ export const ROUTE_TO_PAGEID: Record<string, Record<string, string>> = {
   "comunicados-internos": {
     "/comunicados-internos":  "comunicados",
   },
+  "reembolso": {
+    "/reembolso/painel": "painel_reembolso",
+  },
   "curriculos": {
     "/curriculos":  "curriculos",
+  },
+  "gestao-interna": {
+    "/gestao-interna": "gestao_interna",
+  },
+  "fcsign": {
+    "/integrasign": "central_assinaturas",
+  },
+  "apontamento": {
+    "/apontamento": "ronda",
+  },
+  "medicao-terceiros": {
+    "/terceiros/medicoes": "medicoes_terceiros",
+  },
+  "patrimonio": {
+    "/patrimonio":           "imoveis",
+    "/patrimonio/dashboard": "imoveis_dashboard",
   },
 };
 

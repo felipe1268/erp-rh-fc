@@ -8,7 +8,7 @@
 // rapidamente ONDE cortar custos. 100% client-side sobre
 // `financial.getContasAPagarByYear` (despesas do ano). Sem novo backend.
 import { useState, useMemo } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { trpc } from "@/lib/trpc";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,7 +17,7 @@ import { useCompany } from "@/hooks/useCompany";
 import {
   RefreshCw, ChevronLeft, ChevronRight, TrendingDown, CircleDollarSign,
   Layers, Tag, AlertTriangle, CheckCircle2, Receipt, Building2,
-  BarChart2, Scissors, Calendar, Table2, ArrowUp, ArrowDown,
+  BarChart2, Scissors, Calendar, Table2, ArrowUp, ArrowDown, Search, X,
 } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar,
@@ -25,6 +25,7 @@ import {
 } from "recharts";
 import { classificarGrupoCusto } from "@shared/custosCategorias";
 import { buildCentroCustoMaps, centroCustoNomeDe } from "@shared/centroCusto";
+import { filtrarLinhasAnaliseCustos } from "@shared/analiseCustosBusca";
 
 function formatBRL(value: number): string {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value || 0);
@@ -73,7 +74,6 @@ function mesNumDe(r: any): number {
 function isVencido(r: any): boolean {
   return Number(r.diasAtraso ?? 0) > 0 && r.status !== "pago";
 }
-
 function CustomTooltip({ active, payload, label, totalRef }: any) {
   if (!active || !payload || !payload.length) return null;
   return (
@@ -93,10 +93,20 @@ function CustomTooltip({ active, payload, label, totalRef }: any) {
 
 export default function FinanceiroAnaliseCustos() {
   const { companyId } = useCompany();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
+  const search = useSearch();
   const hoje = new Date();
   const [ano, setAno] = useState(hoje.getFullYear());
   const [mesSel, setMesSel] = useState<number>(0); // 0 = ano inteiro
+  const busca = useMemo(() => new URLSearchParams(search).get("busca") || "", [search]);
+  const buscaAtiva = busca.trim().length > 0;
+  const atualizarBusca = (valor: string) => {
+    const sp = new URLSearchParams(search);
+    if (valor) sp.set("busca", valor);
+    else sp.delete("busca");
+    const qs = sp.toString();
+    setLocation(`${location}${qs ? `?${qs}` : ""}`, { replace: true });
+  };
 
   // Drill-down: abre a tela de detalhe com os lançamentos do item clicado.
   function irParaDetalhe(tipo: string, valor: string | number) {
@@ -106,6 +116,7 @@ export default function FinanceiroAnaliseCustos() {
       tipo,
       valor: String(valor),
     });
+    if (busca.trim()) qs.set("busca", busca.trim());
     setLocation(`/financeiro/analise-custos/detalhe?${qs.toString()}`);
   }
 
@@ -140,17 +151,21 @@ export default function FinanceiroAnaliseCustos() {
   // as despesas reais conta cada obra DUAS vezes e inflava o total (R$ 26,7 mi
   // → ~R$ 11 mi). É a mesma exclusão já feita em "contas a pagar comprometidas".
   const rowsAll: any[] = useMemo(
-    () => (Array.isArray(data) ? data : []).filter(
-      (r) => String(r?.origemModulo ?? "") !== "cronograma_atividade"
-    ),
-    [data]
+    () => (Array.isArray(data) ? data : [])
+      .filter((r) => String(r?.origemModulo ?? "") !== "cronograma_atividade")
+      .map((r) => ({ ...r, __centroNome: centroCustoNomeDe(r, ccMaps) })),
+    [data, ccMaps]
+  );
+  const rowsComBusca = useMemo(
+    () => filtrarLinhasAnaliseCustos(rowsAll, busca),
+    [rowsAll, busca]
   );
 
-  // Aplica o filtro de mês (0 = ano inteiro).
+  // Aplica a busca e o filtro de mês (0 = ano inteiro).
   const rowsFiltradas = useMemo(() => {
-    if (mesSel === 0) return rowsAll;
-    return rowsAll.filter((r) => mesNumDe(r) === mesSel);
-  }, [rowsAll, mesSel]);
+    if (mesSel === 0) return rowsComBusca;
+    return rowsComBusca.filter((r) => mesNumDe(r) === mesSel);
+  }, [rowsComBusca, mesSel]);
 
   // ─── KPIs ───────────────────────────────────────────────────────────────
   const kpis = useMemo(() => {
@@ -172,7 +187,7 @@ export default function FinanceiroAnaliseCustos() {
   // ─── Custo por mês (sempre 12 meses do ano) ─────────────────────────────
   const porMes = useMemo(() => {
     const arr = MESES_ABREV.map((m) => ({ mes: m, Pago: 0, "Em aberto": 0, total: 0 }));
-    for (const r of rowsAll) {
+    for (const r of rowsComBusca) {
       const mn = mesNumDe(r);
       if (mn < 1 || mn > 12) continue;
       const slot = arr[mn - 1];
@@ -182,7 +197,7 @@ export default function FinanceiroAnaliseCustos() {
       slot.total += ef;
     }
     return arr;
-  }, [rowsAll]);
+  }, [rowsComBusca]);
 
   // ─── Custo por categoria (GRUPO PADRONIZADO) ────────────────────────────
   // Rev. 3027 — agrega pela taxonomia canônica (`classificarGrupoCusto`), que
@@ -274,7 +289,7 @@ export default function FinanceiroAnaliseCustos() {
     const novaCel = (): Cel => ({ total: 0, pago: 0, aPagar: 0 });
     const map = new Map<string, Cel[]>();
     const mesTemDados = new Array(12).fill(false);
-    for (const r of rowsAll) {
+    for (const r of rowsComBusca) {
       const st = String(r?.status ?? "");
       if (st !== "pago" && st !== "a_pagar") continue; // ignora projeções (previsto)
       const mn = mesNumDe(r);
@@ -306,7 +321,7 @@ export default function FinanceiroAnaliseCustos() {
     const totalPago = linhas.reduce((s, l) => s + l.pago, 0);
     const totalAPagar = linhas.reduce((s, l) => s + l.aPagar, 0);
     return { linhas, meses, totaisMes, totalGeral, totalPago, totalAPagar };
-  }, [rowsAll]);
+  }, [rowsComBusca]);
 
   const tituloPeriodo = mesSel === 0 ? `Ano de ${ano}` : `${MESES_FULL[mesSel - 1]} ${ano}`;
   const semDados = !isLoading && rowsFiltradas.length === 0;
@@ -375,6 +390,36 @@ export default function FinanceiroAnaliseCustos() {
                 );
               })}
             </div>
+            <div className="mt-4 pt-3 border-t border-gray-100">
+              <label className="sr-only" htmlFor="busca-analise-custos">Buscar lançamentos</label>
+              <div className="relative max-w-xl">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                <input
+                  id="busca-analise-custos"
+                  type="text"
+                  value={busca}
+                  onChange={(event) => atualizarBusca(event.target.value)}
+                  placeholder="Buscar fornecedor, lançamento, obra, categoria ou centro de custo"
+                  className="h-10 w-full rounded-lg border border-gray-200 bg-white pl-9 pr-10 text-sm text-gray-800 outline-none transition-colors placeholder:text-gray-400 focus:border-rose-400 focus:ring-2 focus:ring-rose-100"
+                />
+                {busca && (
+                  <button
+                    type="button"
+                    onClick={() => atualizarBusca("")}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                    title="Limpar busca"
+                    aria-label="Limpar busca"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+              {buscaAtiva && (
+                <p className="mt-2 text-xs text-gray-500">
+                  Exibindo <span className="font-semibold text-gray-700">{rowsFiltradas.length.toLocaleString("pt-BR")}</span> lançamento(s) que correspondem à busca.
+                </p>
+              )}
+            </div>
           </CardContent>
         </Card>
 
@@ -424,8 +469,14 @@ export default function FinanceiroAnaliseCustos() {
           <Card className="border-0 shadow-sm">
             <CardContent className="py-16 text-center">
               <CircleDollarSign className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-              <p className="text-sm text-gray-500">Nenhuma despesa lançada em <span className="font-medium">{tituloPeriodo}</span>.</p>
-              <p className="text-xs text-gray-400 mt-1">Troque o período acima ou registre lançamentos em Contas a Pagar.</p>
+              <p className="text-sm text-gray-500">
+                {buscaAtiva
+                  ? <>Nenhum lançamento corresponde a <span className="font-medium">“{busca.trim()}”</span> em <span className="font-medium">{tituloPeriodo}</span>.</>
+                  : <>Nenhuma despesa lançada em <span className="font-medium">{tituloPeriodo}</span>.</>}
+              </p>
+              <p className="text-xs text-gray-400 mt-1">
+                {buscaAtiva ? "Tente outro termo ou limpe a busca." : "Troque o período acima ou registre lançamentos em Contas a Pagar."}
+              </p>
             </CardContent>
           </Card>
         ) : (

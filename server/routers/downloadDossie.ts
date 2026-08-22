@@ -434,4 +434,48 @@ export function registerDownloadDossieRoute(app: Express) {
       if (!res.headersSent) res.status(500).json({ error: "Erro interno" });
     }
   });
+
+  // Rev. 5044 — POST /api/download/ordem-servico-pdf
+  // Igual ao GET, mas aceita assinaturas (dataURLs do dialog de Treinamentos)
+  // para estampar colaborador/instrutor na OS. Retorna o PDF direto.
+  app.post("/api/download/ordem-servico-pdf", async (req: Request, res: Response) => {
+    try {
+      let user: { id: number; role: string };
+      try {
+        const authUser = await sdk.authenticateRequest(req);
+        user = { id: (authUser as any).id, role: (authUser as any).role };
+      } catch {
+        res.status(401).json({ error: "Não autenticado" });
+        return;
+      }
+      const body = (req.body ?? {}) as any;
+      const companyId = parseInt(String(body.companyId ?? ""));
+      const employeeId = parseInt(String(body.employeeId ?? ""));
+      if (isNaN(companyId) || isNaN(employeeId)) { res.status(400).json({ error: "Parâmetros inválidos" }); return; }
+
+      const db = await getDb();
+      if (user.role !== "admin_master" && user.role !== "admin") {
+        const [uc] = await db.select().from(userCompanies)
+          .where(and(eq(userCompanies.userId, user.id), eq(userCompanies.companyId, companyId))).limit(1);
+        if (!uc) { res.status(403).json({ error: "Sem permissão" }); return; }
+      }
+      const [emp] = await db.select({ id: employees.id, nomeCompleto: employees.nomeCompleto })
+        .from(employees)
+        .where(and(eq(employees.companyId, companyId), eq(employees.id, employeeId), isNull(employees.deletedAt)));
+      if (!emp) { res.status(404).json({ error: "Funcionário não encontrado" }); return; }
+
+      const buf = await gerarOrdemServicoPdf(companyId, employeeId, {
+        colaborador: typeof body.assinaturaColaborador === "string" ? body.assinaturaColaborador : null,
+        instrutor: typeof body.assinaturaInstrutor === "string" ? body.assinaturaInstrutor : null,
+        instrutorNome: typeof body.instrutorNome === "string" ? body.instrutorNome.slice(0, 120) : null,
+      });
+      if (!buf) { res.status(404).json({ error: "Sem conteúdo para gerar a OS (função sem texto de OS e sem EPIs entregues)." }); return; }
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `inline; filename="OS_${sanitize(emp.nomeCompleto || String(employeeId))}.pdf"`);
+      res.send(buf);
+    } catch (err) {
+      console.error("[OrdemServicoPdf][POST] Erro:", err);
+      if (!res.headersSent) res.status(500).json({ error: "Erro interno" });
+    }
+  });
 }

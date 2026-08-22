@@ -140,6 +140,28 @@ export default function ComunicadosInternos() {
   // Rev. 4264 — FCSign modal state
   const [fcSignDialog, setFcSignDialog] = useState<{ id: number; numero: string; titulo: string; emissorNome: string } | null>(null);
   const [fcSignEmail, setFcSignEmail] = useState("");
+  // Rev. — assinatura da DIRETORIA junto com o emissor + links de assinatura p/ cópia
+  const [fcSignCelular, setFcSignCelular] = useState("");
+  const [fcSignDirNome, setFcSignDirNome] = useState("");
+  const [fcSignDirEmail, setFcSignDirEmail] = useState("");
+  const [fcSignDirCelular, setFcSignDirCelular] = useState("");
+  // Rev. — Diretor da JF (empregador documental): aparece quando o comunicado tem colaboradores JF
+  const [fcSignDirJfNome, setFcSignDirJfNome] = useState("");
+  const [fcSignDirJfEmail, setFcSignDirJfEmail] = useState("");
+  const [fcSignDirJfCelular, setFcSignDirJfCelular] = useState("");
+  const [fcSignLinks, setFcSignLinks] = useState<{ emissor: string; emissorCel: string; diretoria: string | null; diretoriaCel: string; diretoriaJf: string | null; diretoriaJfCel: string } | null>(null);
+  const resetFcSign = () => { setFcSignDialog(null); setFcSignEmail(""); setFcSignCelular(""); setFcSignDirNome(""); setFcSignDirEmail(""); setFcSignDirCelular(""); setFcSignDirJfNome(""); setFcSignDirJfEmail(""); setFcSignDirJfCelular(""); setFcSignLinks(null); };
+  const abrirFcSignDialog = (c: any) => {
+    setFcSignDirNome("FELIPE COSTA ALVES");
+    setFcSignDirJfNome("JULIO CESAR FERRAZ DE ARAUJO");
+    setFcSignDialog({ id: c.id, numero: c.numero, titulo: c.titulo, emissorNome: c.emissorNome || c.criadoPor || "" });
+  };
+  const abrirWhatsApp = (celular: string, url: string, titulo: string) => {
+    const fone = celular.replace(/\D/g, "");
+    const foneBr = fone.length <= 11 ? `55${fone}` : fone;
+    const msg = `Olá! Segue o link para assinatura digital do comunicado "${titulo}" via FCSign:\n\n${url}\n\nO link é válido por 30 dias.`;
+    window.open(`https://wa.me/${foneBr}?text=${encodeURIComponent(msg)}`, "_blank");
+  };
   // Rev. 4264 — Destinatários picker: busca + filtro somente indiretos (compartilhado entre dialogs)
   const [buscaDest, setBuscaDest] = useState("");
   const [somentIndiretos, setSomentIndiretos] = useState(false);
@@ -161,6 +183,19 @@ export default function ComunicadosInternos() {
     { comunicadoId: listaAssinaturaId || 0, companyId, lista: listaTipo },
     { enabled: !!listaAssinaturaId && companyId > 0 },
   );
+  // Rev. 4985 — dados do empregador documental "JF" (Julio Ferraz) p/ separar
+  // a lista de ciência em 2 quando houver colaboradores marcados como JF.
+  const { data: jfEmpresa } = trpc.companies.empregadorJf.useQuery(undefined, {
+    staleTime: 5 * 60 * 1000,
+    enabled: !!listaAssinaturaId || !!viewComunicadoId || fcSignDialog !== null,
+  });
+  // Rev. — detecção de colaboradores JF entre os destinatários do comunicado aberto
+  // (duplicação do documento com a logo da JF + campo do Diretor JF no FCSign).
+  const docFuncQ = trpc.comunicadosInternos.listarFuncionariosParaAssinatura.useQuery(
+    { comunicadoId: viewComunicadoId || fcSignDialog?.id || 0, companyId, lista: "principal" },
+    { enabled: (!!viewComunicadoId || fcSignDialog !== null) && companyId > 0, staleTime: 60_000 },
+  );
+  const temJfDest = (((docFuncQ.data as any)?.funcionarios || []) as any[]).some((f: any) => f.empregadorDocumentos === "JF");
   const assinarMut = trpc.comunicadosInternos.assinar.useMutation({
     onSuccess: () => {
       listaAssinaturaQuery.refetch();
@@ -198,11 +233,18 @@ export default function ComunicadosInternos() {
   });
   // Rev. 4264 — solicita assinatura formal via FCSign
   const solicitarFCSignMut = trpc.comunicadosInternos.solicitarAssinaturaFCSign.useMutation({
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       utils.comunicadosInternos.listar.invalidate();
-      toast.success("Convite FCSign enviado! O emissor receberá o link de assinatura por e-mail.");
-      setFcSignDialog(null);
-      setFcSignEmail("");
+      toast.success("Convites FCSign enviados! Os links de assinatura estão disponíveis para cópia.");
+      const base = window.location.origin;
+      setFcSignLinks({
+        emissor: `${base}${data.linkEmissor}`,
+        emissorCel: fcSignCelular,
+        diretoria: data.linkDiretoria ? `${base}${data.linkDiretoria}` : null,
+        diretoriaCel: fcSignDirCelular,
+        diretoriaJf: data.linkDiretoriaJf ? `${base}${data.linkDiretoriaJf}` : null,
+        diretoriaJfCel: fcSignDirJfCelular,
+      });
     },
     onError: (e) => toast.error(e.message),
   });
@@ -331,6 +373,143 @@ export default function ComunicadosInternos() {
     reader.readAsDataURL(file);
   }
 
+  // Rev. — Dialog FCSign extraído p/ constante: precisa renderizar TANTO na lista
+  // quanto na visualização do comunicado (antes, clicar no botão dentro do comunicado
+  // não abria nada porque o Dialog só existia no return da lista).
+  const fcSignDialogNode = (
+        <Dialog open={fcSignDialog !== null} onOpenChange={(open) => { if (!open) resetFcSign(); }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <div className="h-8 w-8 rounded-lg bg-purple-50 flex items-center justify-center">
+                  <Send className="h-4 w-4 text-purple-600" />
+                </div>
+                Solicitar Assinatura FCSign
+              </DialogTitle>
+            </DialogHeader>
+            {fcSignDialog && (
+              <div className="space-y-4 py-1">
+                <div className="bg-slate-50 rounded-lg p-3 text-sm">
+                  <p className="font-semibold text-slate-700 truncate">CI Nº {fcSignDialog.numero} — {fcSignDialog.titulo}</p>
+                  {fcSignDialog.emissorNome && <p className="text-slate-500 text-xs mt-0.5">Emissor: {fcSignDialog.emissorNome}</p>}
+                </div>
+                {fcSignLinks ? (
+                  <div className="space-y-3">
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-xs text-green-700">
+                      <p className="font-semibold mb-1">Links de assinatura gerados!</p>
+                      <p>Envie por WhatsApp com um clique ou copie o link. Quem tinha e-mail informado também recebeu o convite por e-mail. Validade: 30 dias.</p>
+                    </div>
+                    {([["Link do Emissor", fcSignLinks.emissor, fcSignLinks.emissorCel], ...(fcSignLinks.diretoria ? [["Link da Diretoria FC", fcSignLinks.diretoria, fcSignLinks.diretoriaCel]] : []), ...(fcSignLinks.diretoriaJf ? [["Link da Diretoria JF", fcSignLinks.diretoriaJf, fcSignLinks.diretoriaJfCel]] : [])] as [string, string, string][]).map(([lbl, url, cel]) => (
+                      <div key={lbl}>
+                        <Label className="text-xs">{lbl}</Label>
+                        <div className="flex gap-1.5 mt-1">
+                          <Input readOnly className="text-xs h-8" value={url} onFocus={e => e.target.select()} />
+                          <Button size="sm" variant="outline" className="h-8 shrink-0"
+                            onClick={() => { navigator.clipboard.writeText(url).then(() => toast.success(`${lbl} copiado!`)).catch(() => toast.error("Não foi possível copiar — selecione e copie manualmente")); }}>
+                            Copiar
+                          </Button>
+                          {cel.replace(/\D/g, "").length >= 10 && (
+                            <Button size="sm" className="h-8 shrink-0 bg-green-600 hover:bg-green-700"
+                              onClick={() => abrirWhatsApp(cel, url, fcSignDialog ? `CI Nº ${fcSignDialog.numero} — ${fcSignDialog.titulo}` : "Comunicado Interno")}>
+                              WhatsApp
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <>
+                    <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 text-xs text-purple-700">
+                      <p className="font-semibold flex items-center gap-1.5 mb-1"><Mail className="h-3.5 w-3.5" /> Como funciona?</p>
+                      <p>Informe e-mail e/ou celular de cada assinante. Com e-mail, o convite vai automaticamente; com celular, você envia o link por WhatsApp com um clique. Os links também ficam disponíveis para cópia. Validade: 30 dias.</p>
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-xs font-semibold text-slate-600">Emissor Responsável *</p>
+                      <div>
+                        <Label className="text-xs">E-mail</Label>
+                        <Input type="email" className="mt-1" placeholder="nome@fcengenharia.com.br" value={fcSignEmail} onChange={e => setFcSignEmail(e.target.value)} />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Celular (WhatsApp)</Label>
+                        <Input type="tel" inputMode="tel" className="mt-1" placeholder="(12) 99999-9999" value={fcSignCelular} onChange={e => setFcSignCelular(e.target.value)} />
+                      </div>
+                    </div>
+                    <div className="border-t pt-3 space-y-2">
+                      <p className="text-xs font-semibold text-slate-600">Assinatura da Diretoria — FC (opcional)</p>
+                      <div>
+                        <Label className="text-xs">Nome do Diretor(a)</Label>
+                        <Input className="mt-1" placeholder="Ex.: FELIPE COSTA ALVES" value={fcSignDirNome} onChange={e => setFcSignDirNome(e.target.value)} />
+                      </div>
+                      <div>
+                        <Label className="text-xs">E-mail</Label>
+                        <Input type="email" className="mt-1" placeholder="diretoria@fcengenharia.com.br" value={fcSignDirEmail} onChange={e => setFcSignDirEmail(e.target.value)} />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Celular (WhatsApp)</Label>
+                        <Input type="tel" inputMode="tel" className="mt-1" placeholder="(12) 99999-9999" value={fcSignDirCelular} onChange={e => setFcSignDirCelular(e.target.value)} />
+                      </div>
+                    </div>
+                    {temJfDest && (
+                      <div className="border-t pt-3 space-y-2">
+                        <p className="text-xs font-semibold text-slate-600">Assinatura da Diretoria — Julio Ferraz (opcional)</p>
+                        <p className="text-[11px] text-slate-400 -mt-1">Este comunicado tem colaboradores da JF entre os destinatários.</p>
+                        <div>
+                          <Label className="text-xs">Nome do Diretor(a)</Label>
+                          <Input className="mt-1" placeholder="Ex.: JULIO CESAR FERRAZ DE ARAUJO" value={fcSignDirJfNome} onChange={e => setFcSignDirJfNome(e.target.value)} />
+                        </div>
+                        <div>
+                          <Label className="text-xs">E-mail</Label>
+                          <Input type="email" className="mt-1" placeholder="diretoria@julioferraz.com.br" value={fcSignDirJfEmail} onChange={e => setFcSignDirJfEmail(e.target.value)} />
+                        </div>
+                        <div>
+                          <Label className="text-xs">Celular (WhatsApp)</Label>
+                          <Input type="tel" inputMode="tel" className="mt-1" placeholder="(12) 99999-9999" value={fcSignDirJfCelular} onChange={e => setFcSignDirJfCelular(e.target.value)} />
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+            <DialogFooter>
+              {fcSignLinks ? (
+                <Button variant="outline" onClick={resetFcSign}>Fechar</Button>
+              ) : (
+                <>
+                  <Button variant="outline" onClick={resetFcSign}>Cancelar</Button>
+                  <Button
+                    className="bg-purple-600 hover:bg-purple-700"
+                    disabled={solicitarFCSignMut.isPending || docFuncQ.isLoading || (!fcSignEmail.trim() && fcSignCelular.replace(/\D/g, "").length < 10)}
+                    onClick={() => {
+                      if (!fcSignDialog) return;
+                      if (!fcSignEmail.trim() && fcSignCelular.replace(/\D/g, "").length < 10) { toast.error("Informe e-mail ou celular do emissor"); return; }
+                      const dirContato = !!fcSignDirEmail.trim() || fcSignDirCelular.replace(/\D/g, "").length >= 10;
+                      if (dirContato && !fcSignDirNome.trim()) { toast.error("Informe o nome do diretor(a) FC"); return; }
+                      const dirJfContato = temJfDest && (!!fcSignDirJfEmail.trim() || fcSignDirJfCelular.replace(/\D/g, "").length >= 10);
+                      if (dirJfContato && !fcSignDirJfNome.trim()) { toast.error("Informe o nome do diretor(a) JF"); return; }
+                      solicitarFCSignMut.mutate({
+                        id: fcSignDialog.id, companyId,
+                        emissorEmail: fcSignEmail.trim() || undefined,
+                        diretoriaNome: fcSignDirNome.trim() || undefined,
+                        diretoriaEmail: fcSignDirEmail.trim() || undefined,
+                        incluirDiretoria: dirContato && !!fcSignDirNome.trim(),
+                        diretoriaJfNome: temJfDest ? (fcSignDirJfNome.trim() || undefined) : undefined,
+                        diretoriaJfEmail: dirJfContato ? (fcSignDirJfEmail.trim() || undefined) : undefined,
+                        incluirDiretoriaJf: dirJfContato && !!fcSignDirJfNome.trim(),
+                      });
+                    }}
+                  >
+                    {solicitarFCSignMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Send className="h-4 w-4 mr-1" />}
+                    Gerar Links de Assinatura
+                  </Button>
+                </>
+              )}
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+  );
+
   // Rev. 2079 — Sub-view "Lista para Assinatura" (precede o viewComunicado).
   if (listaAssinaturaId) {
     const comAtual = comunicados.find((c: any) => c.id === listaAssinaturaId) || null;
@@ -365,6 +544,24 @@ export default function ComunicadosInternos() {
       if (filtroAssinatura === "pendentes" && f.assinatura) return false;
       return true;
     });
+    // Rev. 4985 — separa a lista por EMPREGADOR documental: colaboradores
+    // marcados como "JF" saem numa lista própria da Julio Ferraz. Se não houver
+    // nenhum JF, permanece uma lista única (comportamento original).
+    const funcJF = filtradosFunc.filter((f: any) => f.empregadorDocumentos === "JF");
+    const funcFC = filtradosFunc.filter((f: any) => f.empregadorDocumentos !== "JF");
+    const grupos: { key: string; nomeEmpresa: string; cnpj: string; logoUrl?: string | null; list: any[] }[] =
+      funcJF.length > 0
+        ? [
+            { key: "FC", nomeEmpresa, cnpj, logoUrl, list: funcFC },
+            {
+              key: "JF",
+              nomeEmpresa: (jfEmpresa as any)?.razaoSocial || (jfEmpresa as any)?.nomeFantasia || "JULIO FERRAZ PROJETOS E OBRAS LTDA",
+              cnpj: (jfEmpresa as any)?.cnpj || "03.426.403/0001-95",
+              logoUrl: (jfEmpresa as any)?.logoUrl || null,
+              list: funcJF,
+            },
+          ].filter(g => g.list.length > 0)
+        : [{ key: "FC", nomeEmpresa, cnpj, logoUrl, list: filtradosFunc }];
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-indigo-50/30 p-6">
         <style>{`
@@ -491,30 +688,40 @@ export default function ComunicadosInternos() {
             </div>
           </div>
 
-          {/* AREA IMPRIMÍVEL */}
+          {/* AREA IMPRIMÍVEL — Rev. 4985: uma lista por EMPREGADOR documental (FC/JF) */}
           <div className="lista-assinatura-print bg-white rounded-xl shadow-sm border border-slate-200 p-6 print:border-0 print:shadow-none print:rounded-none print:p-0">
+            {listaAssinaturaQuery.isLoading ? (
+              <div className="p-12 text-center text-slate-400"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></div>
+            ) : filtradosFunc.length === 0 ? (
+              <div className="p-12 text-center">
+                <Users className="h-12 w-12 mx-auto text-slate-300 mb-3" />
+                <p className="text-slate-500">{temFiltro ? "Nenhum funcionário corresponde aos filtros" : listaTipo === "complementar" ? "Nenhum colaborador admitido após a emissão com assinatura pendente" : "Nenhum funcionário ativo nesta empresa"}</p>
+              </div>
+            ) : grupos.map((g, gi) => (
+            <div key={g.key} className={gi > 0 ? "mt-8 pt-6 border-t-4 border-double border-slate-300" : ""} style={gi > 0 ? { pageBreakBefore: "always" } : undefined}>
             {/* Cabeçalho da lista (imprime) */}
             <div className="mb-4 pb-4 border-b border-slate-200">
               <div className="flex items-center justify-between gap-4 mb-3">
                 <div className="flex items-center gap-3">
-                  {logoUrl ? (
-                    <img src={logoUrl} alt={nomeEmpresa} className="h-12 object-contain" onError={(e: any) => e.target.style.display = 'none'} />
+                  {g.logoUrl ? (
+                    <img src={g.logoUrl} alt={g.nomeEmpresa} className="h-12 w-auto max-w-[150px] object-contain object-left shrink-0" style={{ height: 48, maxWidth: 150, width: "auto", objectFit: "contain" }} onError={(e: any) => e.target.style.display = 'none'} />
                   ) : (
-                    <img src="/fc-logo.png" alt="FC" className="h-12 object-contain" onError={(e: any) => e.target.style.display = 'none'} />
+                    <img src="/fc-logo.png" alt="FC" className="h-12 w-auto max-w-[150px] object-contain object-left shrink-0" style={{ height: 48, maxWidth: 150, width: "auto", objectFit: "contain" }} onError={(e: any) => e.target.style.display = 'none'} />
                   )}
                   <div>
-                    <h3 className="text-sm font-bold text-[#1B2A4A]">{nomeEmpresa}</h3>
-                    {cnpj && <p className="text-[10px] text-slate-500">CNPJ: {cnpj}</p>}
+                    <h3 className="text-sm font-bold text-[#1B2A4A]">{g.nomeEmpresa}</h3>
+                    {g.cnpj && <p className="text-[10px] text-slate-500">CNPJ: {g.cnpj}</p>}
                   </div>
                 </div>
                 <div className="text-right text-[10px] text-slate-500">
                   <p>Gerado em: {new Date().toLocaleDateString("pt-BR")} às {new Date().toLocaleTimeString("pt-BR", { hour: '2-digit', minute: '2-digit' })}</p>
-                  <p>Funcionários ativos: <span className="font-semibold text-slate-700">{totalAtivos}</span></p>
+                  <p>Colaboradores desta lista: <span className="font-semibold text-slate-700">{g.list.length}</span></p>
                 </div>
               </div>
               <div className="bg-[#1B2A4A] text-white py-2 px-3 text-center rounded-sm">
                 <span className="text-xs font-bold tracking-wider">
                   {listaTipo === "complementar" ? "LISTA COMPLEMENTAR DE CIÊNCIA" : "LISTA DE CIÊNCIA"} — COMUNICADO INTERNO Nº {comAtual?.numero}
+                  {grupos.length > 1 ? ` — ${g.key === "JF" ? "JULIO FERRAZ" : "FC ENGENHARIA"}` : ""}
                 </span>
               </div>
               <div className="mt-2 text-xs text-slate-700">
@@ -531,14 +738,7 @@ export default function ComunicadosInternos() {
               </div>
             </div>
 
-            {listaAssinaturaQuery.isLoading ? (
-              <div className="p-12 text-center text-slate-400"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></div>
-            ) : filtradosFunc.length === 0 ? (
-              <div className="p-12 text-center">
-                <Users className="h-12 w-12 mx-auto text-slate-300 mb-3" />
-                <p className="text-slate-500">{temFiltro ? "Nenhum funcionário corresponde aos filtros" : listaTipo === "complementar" ? "Nenhum colaborador admitido após a emissão com assinatura pendente" : "Nenhum funcionário ativo nesta empresa"}</p>
-              </div>
-            ) : (
+            {(
               <table className="w-full text-[11px] border-collapse">
                 <thead className="bg-slate-50 print:bg-slate-100">
                   <tr className="border-b-2 border-slate-300">
@@ -553,7 +753,7 @@ export default function ComunicadosInternos() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtradosFunc.map((f: any, idx: number) => {
+                  {g.list.map((f: any, idx: number) => {
                     const assinou = !!f.assinatura;
                     return (
                       <tr key={f.id} className={`border-b border-slate-200 ${assinou ? "bg-emerald-50/30 print:bg-white" : ""}`}>
@@ -621,6 +821,8 @@ export default function ComunicadosInternos() {
                 </tbody>
               </table>
             )}
+            </div>
+            ))}
 
             <div className="mt-6 pt-4 border-t border-slate-200 text-[9px] text-slate-400 flex justify-between">
               <span>Documento gerado pelo ERP — Lista de Ciência</span>
@@ -672,9 +874,26 @@ export default function ComunicadosInternos() {
     const endereco = selectedCompany?.endereco || "";
     const cidade = selectedCompany?.cidade || "";
     const estado = selectedCompany?.estado || "";
+    // Rev. — quando há colaboradores JF entre os destinatários, o comunicado sai em
+    // DUAS vias (FC e Julio Ferraz), cada uma com sua logo/CNPJ e seu diretor —
+    // mesma regra da Lista de Ciência.
+    const empresasDoc: Array<{ key: string; nome: string; cnpj: string; logoUrl: string | null; enderecoLinha: string; diretorNome: string }> = [
+      { key: "fc", nome: nomeEmpresa, cnpj, logoUrl: logoUrl || null, enderecoLinha: [endereco, cidade, estado].filter(Boolean).join(" - "), diretorNome: temJfDest ? "FELIPE COSTA ALVES" : "" },
+    ];
+    if (temJfDest && jfEmpresa) {
+      empresasDoc.push({
+        key: "jf",
+        nome: jfEmpresa.razaoSocial || jfEmpresa.nomeFantasia || "JULIO FERRAZ",
+        cnpj: jfEmpresa.cnpj || "",
+        logoUrl: (jfEmpresa as any).logoUrl || null,
+        enderecoLinha: [(jfEmpresa as any).endereco, (jfEmpresa as any).cidade, (jfEmpresa as any).estado].filter(Boolean).join(" - "),
+        diretorNome: "JULIO CESAR FERRAZ DE ARAUJO",
+      });
+    }
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50/30 p-6">
+        {fcSignDialogNode}
         <div className="max-w-4xl mx-auto">
           <div className="flex items-center gap-3 mb-4 print:hidden flex-wrap">
             <Button variant="ghost" size="sm" onClick={() => setViewComunicadoId(null)}>
@@ -708,7 +927,7 @@ export default function ComunicadosInternos() {
             <Button size="sm" variant="outline" className="border-purple-300 text-purple-700 hover:bg-purple-50"
               onClick={() => {
                 if (c.fcsignEnvelopeId && !confirm("Já existe um pacote FCSign enviado para este comunicado. Deseja enviar um novo pacote para todos os destinatários?")) return;
-                setFcSignDialog({ id: c.id, numero: c.numero, titulo: c.titulo, emissorNome: c.emissorNome || c.criadoPor || "" });
+                abrirFcSignDialog(c);
               }}>
               <Send className="h-4 w-4 mr-1" /> {c.fcsignEnvelopeId ? "Reenviar FCSign" : "Solicitar Assinatura FCSign"}
             </Button>
@@ -774,21 +993,22 @@ export default function ComunicadosInternos() {
             )}
           </div>
 
-          <div className="comunicado-print-area bg-white border rounded-lg p-8 max-w-3xl mx-auto print:border-0 print:shadow-none print:p-4 print:max-w-none">
+          {empresasDoc.map((emp, empIdx) => (
+          <div key={emp.key} className={`comunicado-print-area bg-white border rounded-lg p-8 max-w-3xl mx-auto print:border-0 print:shadow-none print:p-4 print:max-w-none ${empIdx > 0 ? "mt-6" : ""}`} style={empIdx < empresasDoc.length - 1 ? { breakAfter: "page", pageBreakAfter: "always" } : undefined}>
             <div className="mb-6">
               <div className="flex flex-col items-center justify-center mb-4">
-                {logoUrl ? (
-                  <img src={logoUrl} alt={nomeEmpresa} className="h-16 mb-2 object-contain" onError={(e: any) => e.target.style.display = 'none'} />
+                {emp.logoUrl ? (
+                  <img src={emp.logoUrl} alt={emp.nome} className="h-16 mb-2 object-contain" onError={(e: any) => e.target.style.display = 'none'} />
                 ) : (
                   <img src="/fc-logo.png" alt="FC Engenharia" className="h-16 mb-2 object-contain" onError={(e: any) => e.target.style.display = 'none'} />
                 )}
                 <h2 className="text-lg font-bold text-[#1B2A4A] tracking-wide text-center">
-                  {nomeEmpresa}
+                  {emp.nome}
                 </h2>
-                {cnpj && <p className="text-[10px] text-gray-500">CNPJ: {cnpj}</p>}
-                {(endereco || cidade) && (
+                {emp.cnpj && <p className="text-[10px] text-gray-500">CNPJ: {emp.cnpj}</p>}
+                {emp.enderecoLinha && (
                   <p className="text-[10px] text-gray-400">
-                    {[endereco, cidade, estado].filter(Boolean).join(" - ")}
+                    {emp.enderecoLinha}
                   </p>
                 )}
               </div>
@@ -826,7 +1046,7 @@ export default function ComunicadosInternos() {
                   const corpoMsg = isHtmlContent(c.conteudo) ? c.conteudo : escC(c.conteudo).replace(/\n/g, "<br/>");
                   const rendered = renderTemplate(comVigente, {
                     empNome: "", corpoMsg, assunto: escC(c.titulo || ""),
-                    empresaRazaoSocial: escC(nomeEmpresa), empresaCnpj: escC(cnpj),
+                    empresaRazaoSocial: escC(emp.nome), empresaCnpj: escC(emp.cnpj),
                     docNumero: escC(String(c.numero || "")), docData: escC(formatDateBR(c.dataEmissao)),
                   });
                   return (
@@ -871,7 +1091,7 @@ export default function ComunicadosInternos() {
                     </div>
                     {!ehDirecao && (
                       <div className="flex-1 text-center">
-                        <p className="text-xs font-semibold text-[#1B2A4A] mb-1 mx-4">&nbsp;</p>
+                        <p className="text-xs font-semibold text-[#1B2A4A] mb-1 mx-4">{emp.diretorNome || "\u00a0"}</p>
                         <div className="border-t border-gray-400 pt-2 mx-4">
                           <p className="text-[10px] text-gray-500">Direção</p>
                         </div>
@@ -890,6 +1110,7 @@ export default function ComunicadosInternos() {
               </span>
             </div>
           </div>
+          ))}
         </div>
       </div>
     );
@@ -1447,56 +1668,8 @@ export default function ComunicadosInternos() {
         </DialogContent>
       </Dialog>
 
-      {/* Rev. 4264 — Dialog FCSign: solicita assinatura formal do emissor responsável */}
-      <Dialog open={fcSignDialog !== null} onOpenChange={(open) => { if (!open) { setFcSignDialog(null); setFcSignEmail(""); } }}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-lg bg-purple-50 flex items-center justify-center">
-                <Send className="h-4 w-4 text-purple-600" />
-              </div>
-              Solicitar Assinatura FCSign
-            </DialogTitle>
-          </DialogHeader>
-          {fcSignDialog && (
-            <div className="space-y-4 py-1">
-              <div className="bg-slate-50 rounded-lg p-3 text-sm">
-                <p className="font-semibold text-slate-700 truncate">CI Nº {fcSignDialog.numero} — {fcSignDialog.titulo}</p>
-                {fcSignDialog.emissorNome && <p className="text-slate-500 text-xs mt-0.5">Emissor: {fcSignDialog.emissorNome}</p>}
-              </div>
-              <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 text-xs text-purple-700">
-                <p className="font-semibold flex items-center gap-1.5 mb-1"><Mail className="h-3.5 w-3.5" /> Como funciona?</p>
-                <p>O emissor responsável receberá um e-mail com link para assinar o comunicado digitalmente via FCSign. O link expira em 30 dias.</p>
-              </div>
-              <div>
-                <Label>E-mail do Emissor Responsável *</Label>
-                <Input
-                  type="email"
-                  className="mt-1"
-                  placeholder="nome@fcengenharia.com.br"
-                  value={fcSignEmail}
-                  onChange={e => setFcSignEmail(e.target.value)}
-                />
-              </div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setFcSignDialog(null); setFcSignEmail(""); }}>Cancelar</Button>
-            <Button
-              className="bg-purple-600 hover:bg-purple-700"
-              disabled={solicitarFCSignMut.isPending || !fcSignEmail.trim()}
-              onClick={() => {
-                if (!fcSignDialog) return;
-                if (!fcSignEmail.trim()) { toast.error("Informe o e-mail do emissor"); return; }
-                solicitarFCSignMut.mutate({ id: fcSignDialog.id, companyId, emissorEmail: fcSignEmail.trim() });
-              }}
-            >
-              {solicitarFCSignMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Send className="h-4 w-4 mr-1" />}
-              Enviar Convite FCSign
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Rev. 4264 — Dialog FCSign (definido em fcSignDialogNode p/ renderizar também na visualização do comunicado) */}
+      {fcSignDialogNode}
 
       <Dialog open={pendingText !== null} onOpenChange={(open) => { if (!open) setPendingText(null); }}>
         <DialogContent className="max-w-lg">

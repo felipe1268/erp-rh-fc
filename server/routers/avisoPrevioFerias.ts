@@ -1,6 +1,6 @@
 import { router, protectedProcedure } from "../_core/trpc";
 import { z } from "zod";
-import { getDb, createAuditLog, encerrarContratosPjDoFuncionario, userCanSeeAvisoStatus, getCompaniesForUser } from "../db";
+import { getDb, createAuditLog, encerrarContratosPjDoFuncionario, userCanSeeAvisoStatus, getCompaniesForUser, getEffectiveAllowedObraIds } from "../db";
 import { terminationNotices, vacationPeriods, employees, companies, obras, obraFuncionarios, hePeriods, hePeriodEmployees, pontoDescontosResumo, employeeTerminationChecklist, comboDemissaoSimulacoes, cipaMembers, cipaElections, dissidios, gestorSubstituicaoSolicitacoes, planejamentoProjetos, planejamentoRevisoes, planejamentoAtividades } from "../../drizzle/schema";
 import { invokeLLM } from "../_core/llm";
 import { isAiModuleEnabled } from "../_core/aiConfig";
@@ -8,6 +8,8 @@ import { eq, and, sql, isNull, lte, gte, desc, asc, inArray } from "drizzle-orm"
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
 import { logStatusChange } from "../lib/employeeStatusHelper";
+import { dataLimitePagamentoRescisao, anteciparParaDiaUtil } from "../../shared/feriados";
+import { BANCO_HORAS_DATA_INICIO } from "../utils/bancoHorasVigencia";
 import {
   parseBRL,
   calcularAnosServico,
@@ -181,7 +183,30 @@ export async function concluirAvisoPorBaixaFinanceira(opts: {
  * - Título com baixa/pago é intocável (não sobrescreve nem cancela).
  * - Never-throw: falha aqui não pode derrubar o fluxo de RH (loga e segue).
  */
-export async function sincronizarFinanceiroFerias(periodoId: number, userName: string): Promise<void> {
+// Rev. 5039 — parser monetário robusto p/ valores gravados pelo client em formato
+// misto: "R$ 3.068,97", "3.068,97", "3068.97" e "3.000" (sem vírgula = milhar).
+export function parseValorFeriasBR(v: any): number {
+  let s = String(v ?? '').replace(/[^\d.,-]/g, '').trim();
+  if (!s) return 0;
+  if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
+  else if (/^-?\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, '');
+  const n = parseFloat(s);
+  return isFinite(n) ? n : 0;
+}
+
+// Rev. 5040 — dois níveis: sync automático (agendar/editar) mantém uma PREVISÃO
+// (status 'previsto', valor estimado) e NUNCA mexe em título já efetivado;
+// `efetivar=true` (botão "Enviar para Financeiro") promove/cria o título real
+// 'a_pagar' com o valor líquido atualizado.
+export async function sincronizarFinanceiroFerias(periodoId: number, userName: string, efetivar: boolean = false): Promise<void> {
+  // Rev. 5041 — FÉRIAS COMPLEMENTAR ("por fora") roda ANTES do fluxo principal:
+  // o bloco principal tem returns antecipados (título já existente etc.) que não
+  // podem pular a complementar. Falha de uma não derruba a outra.
+  try {
+    await sincronizarFeriasComplementar(periodoId, userName, efetivar);
+  } catch (e: any) {
+    console.error(`[FeriasFinanceiro] Falha na férias complementar #${periodoId}:`, e?.message ?? e);
+  }
   try {
     const db = await getDb();
     if (!db) return;
@@ -189,13 +214,8 @@ export async function sincronizarFinanceiroFerias(periodoId: number, userName: s
     if (!p || p.deletedAt) return;
     if (!['agendada', 'em_gozo', 'concluida'].includes(p.status) || !p.dataInicio) return;
 
-    // BR-aware: valores gravados ora "3068.97" ora "3.068,97" (varchar-br-decimal-cast)
-    const parse = (v: any) => {
-      let s = String(v ?? '').trim();
-      if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
-      const n = parseFloat(s);
-      return isFinite(n) ? n : 0;
-    };
+    // BR-aware: valores gravados ora "3068.97" ora "R$ 3.068,97" (varchar-br-decimal-cast)
+    const parse = parseValorFeriasBR;
     const valor = parse((p as any).valorLiquido) > 0 ? parse((p as any).valorLiquido) : parse(p.valorTotal);
     if (valor <= 0) return; // sem cálculo salvo ainda — gera quando o RH salvar os valores
 
@@ -206,7 +226,11 @@ export async function sincronizarFinanceiroFerias(periodoId: number, userName: s
       venc = dt.toISOString().split('T')[0];
     }
 
-    const [emp] = await db.select({ nome: employees.nomeCompleto }).from(employees).where(eq(employees.id, p.employeeId));
+    const [emp] = await db.select({
+      nome: employees.nomeCompleto,
+      recebeComplemento: employees.recebeComplemento,
+      valorComplemento: employees.valorComplemento,
+    }).from(employees).where(and(eq(employees.id, p.employeeId), eq(employees.companyId, p.companyId)));
     const nome = emp?.nome ?? `Funcionário #${p.employeeId}`;
     const fmtBr = (d: string | null) => d ? d.split('-').reverse().join('/') : '';
     const desc = `Férias — ${nome} (${fmtBr(p.dataInicio)} a ${fmtBr(p.dataFim)})`;
@@ -231,7 +255,8 @@ export async function sincronizarFinanceiroFerias(periodoId: number, userName: s
     const exist = (Array.isArray(existRes) ? existRes[0] : existRes?.rows?.[0]) as any;
 
     if (exist?.id) {
-      if (exist.status === 'a_pagar') {
+      if (exist.status === 'a_pagar' && efetivar) {
+        // Título já efetivado só é atualizado pelo botão (líquido de fato)
         await db.execute(sql`
           UPDATE financial_entries
           SET valor_previsto = ${valor.toFixed(2)}, data_vencimento = ${venc},
@@ -240,6 +265,18 @@ export async function sincronizarFinanceiroFerias(periodoId: number, userName: s
               updated_at = NOW()
           WHERE id = ${exist.id} AND company_id = ${p.companyId} AND status = 'a_pagar'
         `);
+      } else if (exist.status === 'previsto') {
+        // Previsão: mantém sincronizada; efetivar promove p/ 'a_pagar'
+        await db.execute(sql`
+          UPDATE financial_entries
+          SET valor_previsto = ${valor.toFixed(2)}, data_vencimento = ${venc},
+              data_competencia = ${p.dataInicio}, descricao = ${desc}, origem_descricao = ${desc},
+              obra_id = COALESCE(obra_id, ${obraId}), obra_nome = COALESCE(obra_nome, ${obraNome}),
+              status = ${efetivar ? 'a_pagar' : 'previsto'},
+              updated_at = NOW()
+          WHERE id = ${exist.id} AND company_id = ${p.companyId} AND status = 'previsto'
+        `);
+        if (efetivar) console.log(`[FeriasFinanceiro] Férias #${p.id} (${nome}): previsão #${exist.id} efetivada como título a pagar de R$ ${valor.toFixed(2)} por ${userName}.`);
       }
       if (!(p as any).financeiroEntryId) {
         await db.update(vacationPeriods).set({ financeiroEntryId: Number(exist.id) } as any).where(eq(vacationPeriods.id, p.id));
@@ -254,7 +291,7 @@ export async function sincronizarFinanceiroFerias(periodoId: number, userName: s
         origem_modulo, origem_id, origem_descricao, descricao, created_at, updated_at
       ) VALUES (
         ${p.companyId}, ${obraId}, ${obraNome}, ${'FÉRIAS - MÃO DE OBRA'}, 'despesa', 'variavel',
-        ${valor.toFixed(2)}, ${p.dataInicio}, ${venc}, 'a_pagar',
+        ${valor.toFixed(2)}, ${p.dataInicio}, ${venc}, ${efetivar ? 'a_pagar' : 'previsto'},
         'ferias', ${p.id}, ${desc}, ${desc}, NOW(), NOW()
       )
       ON CONFLICT DO NOTHING
@@ -263,11 +300,107 @@ export async function sincronizarFinanceiroFerias(periodoId: number, userName: s
     const newId = Number((Array.isArray(res) ? res[0] : res?.rows?.[0])?.id) || null;
     if (newId) {
       await db.update(vacationPeriods).set({ financeiroEntryId: newId } as any).where(eq(vacationPeriods.id, p.id));
-      console.log(`[FeriasFinanceiro] Férias #${p.id} (${nome}): título #${newId} de R$ ${valor.toFixed(2)} gerado no Contas a Pagar (venc. ${venc}) por ${userName}.`);
+      console.log(`[FeriasFinanceiro] Férias #${p.id} (${nome}): ${efetivar ? 'título' : 'PREVISÃO'} #${newId} de R$ ${valor.toFixed(2)} gerado no Contas a Pagar (venc. ${venc}) por ${userName}.`);
     }
   } catch (e: any) {
     console.error(`[FeriasFinanceiro] Falha ao gerar/sincronizar título da férias #${periodoId}:`, e?.message ?? e);
   }
+}
+
+/**
+ * Rev. 5041 — Férias COMPLEMENTAR: funcionário com complemento salarial ("por
+ * fora", employees.recebeComplemento/valorComplemento) ganha um SEGUNDO título
+ * no Contas a Pagar, calculado só sobre o complemento (sem INSS/IRRF, como a
+ * Folha Complementar): complemento × (diasGozo/30) × 4/3 (férias + 1/3; abono
+ * incluso pela equivalência de 30 dias). Valor manual salvo no período
+ * (valor_ferias_complementar) tem precedência. Mesmo fluxo previsão→efetivar.
+ */
+async function sincronizarFeriasComplementar(periodoId: number, userName: string, efetivar: boolean): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  const [p] = await db.select().from(vacationPeriods).where(eq(vacationPeriods.id, periodoId));
+  if (!p || p.deletedAt) return;
+  if (!['agendada', 'em_gozo', 'concluida'].includes(p.status) || !p.dataInicio) return;
+
+  const [emp] = await db.select({
+    nome: employees.nomeCompleto,
+    recebeComplemento: employees.recebeComplemento,
+    valorComplemento: employees.valorComplemento,
+  }).from(employees).where(and(eq(employees.id, p.employeeId), eq(employees.companyId, p.companyId)));
+
+  const manual = parseValorFeriasBR((p as any).valorFeriasComplementar);
+  let valor = manual;
+  if (valor <= 0 && Number(emp?.recebeComplemento) === 1) {
+    const compl = parseBRL(emp?.valorComplemento);
+    if (compl > 0) valor = Math.round(compl * ((p.diasGozo || 30) / 30) * (4 / 3) * 100) / 100;
+  }
+
+  // Título ativo já existente?
+  const existRes: any = await db.execute(sql`
+    SELECT id, status FROM financial_entries
+    WHERE origem_modulo = 'ferias_complementar' AND origem_id = ${p.id} AND company_id = ${p.companyId} AND status <> 'cancelado'
+    ORDER BY id DESC LIMIT 1
+  `);
+  const exist = (Array.isArray(existRes) ? existRes[0] : existRes?.rows?.[0]) as any;
+
+  if (valor <= 0) {
+    // Sem complemento: se sobrou previsão antiga (perdeu o complemento), cancela.
+    if (exist?.id && exist.status === 'previsto') {
+      await db.execute(sql`
+        UPDATE financial_entries SET status='cancelado', updated_at=NOW()
+        WHERE id = ${exist.id} AND company_id = ${p.companyId} AND status='previsto'
+      `);
+    }
+    return;
+  }
+
+  let venc = p.dataPagamento as string | null;
+  if (!venc) {
+    const dt = new Date(p.dataInicio + 'T12:00:00');
+    dt.setDate(dt.getDate() - 2);
+    venc = dt.toISOString().split('T')[0];
+  }
+  const nome = emp?.nome ?? `Funcionário #${p.employeeId}`;
+  const fmtBr = (d: string | null) => d ? d.split('-').reverse().join('/') : '';
+  const desc = `Férias Complementar — ${nome} (${fmtBr(p.dataInicio)} a ${fmtBr(p.dataFim)})`;
+
+  if (exist?.id) {
+    if (exist.status === 'a_pagar' && efetivar) {
+      await db.execute(sql`
+        UPDATE financial_entries
+        SET valor_previsto = ${valor.toFixed(2)}, data_vencimento = ${venc},
+            data_competencia = ${p.dataInicio}, descricao = ${desc}, origem_descricao = ${desc},
+            updated_at = NOW()
+        WHERE id = ${exist.id} AND company_id = ${p.companyId} AND status = 'a_pagar'
+      `);
+    } else if (exist.status === 'previsto') {
+      await db.execute(sql`
+        UPDATE financial_entries
+        SET valor_previsto = ${valor.toFixed(2)}, data_vencimento = ${venc},
+            data_competencia = ${p.dataInicio}, descricao = ${desc}, origem_descricao = ${desc},
+            status = ${efetivar ? 'a_pagar' : 'previsto'},
+            updated_at = NOW()
+        WHERE id = ${exist.id} AND company_id = ${p.companyId} AND status = 'previsto'
+      `);
+    }
+    return;
+  }
+
+  const res: any = await db.execute(sql`
+    INSERT INTO financial_entries (
+      company_id, conta_nome, tipo, natureza,
+      valor_previsto, data_competencia, data_vencimento, status,
+      origem_modulo, origem_id, origem_descricao, descricao, created_at, updated_at
+    ) VALUES (
+      ${p.companyId}, ${'FÉRIAS COMPLEMENTAR'}, 'despesa', 'variavel',
+      ${valor.toFixed(2)}, ${p.dataInicio}, ${venc}, ${efetivar ? 'a_pagar' : 'previsto'},
+      'ferias_complementar', ${p.id}, ${desc}, ${desc}, NOW(), NOW()
+    )
+    ON CONFLICT DO NOTHING
+    RETURNING id
+  `);
+  const newId = Number((Array.isArray(res) ? res[0] : res?.rows?.[0])?.id) || null;
+  if (newId) console.log(`[FeriasFinanceiro] Férias #${p.id} (${nome}): ${efetivar ? 'título' : 'PREVISÃO'} COMPLEMENTAR #${newId} de R$ ${valor.toFixed(2)} (venc. ${venc}) por ${userName}.`);
 }
 // desc() de drizzle já está importado como `desc`; alias p/ evitar sombra em escopo local
 function desc2Ferias() { return desc(obraFuncionarios.id); }
@@ -287,7 +420,7 @@ export async function cancelarFinanceiroFerias(periodoId: number, motivo: string
     const res: any = await db.execute(sql`
       UPDATE financial_entries
       SET status = 'cancelado', observacoes = CONCAT(COALESCE(observacoes,''), ${'\n[Cancelado automaticamente: ' + motivo + ']'}), updated_at = NOW()
-      WHERE origem_modulo = 'ferias' AND origem_id = ${periodoId} AND company_id = ${per.companyId} AND status = 'a_pagar'
+      WHERE origem_modulo IN ('ferias', 'ferias_complementar') AND origem_id = ${periodoId} AND company_id = ${per.companyId} AND status IN ('a_pagar', 'previsto')
       RETURNING id
     `);
     const rows = Array.isArray(res) ? res : (res?.rows ?? []);
@@ -301,13 +434,22 @@ export async function cancelarFinanceiroFerias(periodoId: number, motivo: string
 /**
  * Rev. 3977 — Lê o saldo (em minutos) do Banco de Horas do empregado, usado para
  * compor o acerto rescisório (provento se positivo, desconto se negativo). Sem
- * linha na tabela = saldo 0 (empregado nunca usou banco de horas).
+ * linha no razão = saldo 0 (empregado nunca usou banco de horas). O saldo é
+ * reconstruído aqui em vez de confiar no cache, garantindo empresa correta e
+ * exclusão do histórico anterior ao marco de implantação.
  */
-async function getSaldoBancoHorasParaRescisao(db: any, employeeId: number): Promise<number> {
-  const [row] = await db.select({ saldoMinutos: bancoHorasSaldo.saldoMinutos })
-    .from(bancoHorasSaldo)
-    .where(eq(bancoHorasSaldo.employeeId, employeeId));
-  return row?.saldoMinutos || 0;
+async function getSaldoBancoHorasParaRescisao(db: any, employeeId: number, companyId: number): Promise<number> {
+  const result = await db.execute(sql`
+    SELECT COALESCE(SUM(
+      CASE WHEN tipo = 'credito' THEN ABS(minutos) ELSE -ABS(minutos) END
+    ), 0)::int AS "saldoMinutos"
+    FROM banco_horas_lancamentos
+    WHERE "employeeId" = ${employeeId}
+      AND "companyId" = ${companyId}
+      AND data >= ${BANCO_HORAS_DATA_INICIO}::date
+  `);
+  const rows = Array.isArray(result) ? result : (result?.rows ?? []);
+  return Number(rows[0]?.saldoMinutos ?? 0);
 }
 
 /**
@@ -770,7 +912,7 @@ export async function criarAvisoPrevioInterno(
   const saldoVencCreate = await getFeriasVencidasSaldo(db, emp.id, dataFim);
 
   const incluirMultaFgtsCreate = await getIncluirMultaFgts(db, params.companyId);
-  const saldoBhCreate = await getSaldoBancoHorasParaRescisao(db, emp.id);
+  const saldoBhCreate = await getSaldoBancoHorasParaRescisao(db, emp.id, params.companyId);
   const previsao = calcularRescisaoCompleta({
     salarioBase,
     dataAdmissao,
@@ -1044,7 +1186,7 @@ export const avisoPrevioFeriasRouter = router({
               const periodosVencidosRealList = vpPeriodosMap.has(vkey) ? vpPeriodosMap.get(vkey)! : undefined;
               const diasVencidosRealList = vpDiasMap.has(vkey) ? vpDiasMap.get(vkey)! : undefined;
 
-              const saldoBhList = await getSaldoBancoHorasParaRescisao(db, r.employeeId);
+              const saldoBhList = await getSaldoBancoHorasParaRescisao(db, r.employeeId, Number(r.companyId ?? emp.companyId));
               const previsao = calcularRescisaoCompleta({
                 salarioBase,
                 dataAdmissao,
@@ -1068,9 +1210,8 @@ export const avisoPrevioFeriasRouter = router({
           let dataLimitePagamento: string | null = null;
           let dataDiaTrabalhado: string | null = null;
           if (r.dataFim) {
-            const dtFim = new Date(r.dataFim + 'T00:00:00');
-            dtFim.setDate(dtFim.getDate() + 10);
-            dataLimitePagamento = dtFim.toISOString().split('T')[0];
+            // Rev. 5057 — dias extras do aviso não contam p/ o prazo; antecipa p/ dia útil.
+            dataLimitePagamento = dataLimitePagamentoRescisao(r.dataInicio, r.dataFim);
           }
           if (r.dataInicio) {
             const dtInicio = new Date(r.dataInicio + 'T00:00:00');
@@ -1129,7 +1270,7 @@ export const avisoPrevioFeriasRouter = router({
             const periodosVencidosRealById = saldoVencById.periodosVencidos;
 
             const incluirMultaFgtsById = await getIncluirMultaFgts(db, emp.companyId);
-            const saldoBhById = await getSaldoBancoHorasParaRescisao(db, row.employeeId);
+            const saldoBhById = await getSaldoBancoHorasParaRescisao(db, row.employeeId, emp.companyId);
             const previsao = calcularRescisaoCompleta({
               salarioBase,
               dataAdmissao,
@@ -1157,7 +1298,7 @@ export const avisoPrevioFeriasRouter = router({
               // Data limite = comunicação + 10 dias corridos (Art. 477 §6º CLT)
               const dtLimite = new Date(row.novoEmpregoComunicadoEm + 'T00:00:00');
               dtLimite.setDate(dtLimite.getDate() + 10);
-              previsao.dataLimitePagamento = dtLimite.toISOString().split('T')[0];
+              previsao.dataLimitePagamento = anteciparParaDiaUtil(dtLimite.toISOString().split('T')[0]);
               previsao.novoEmpregoAplicado = true;
             }
 
@@ -1205,6 +1346,8 @@ export const avisoPrevioFeriasRouter = router({
               employeeCtps: emp.ctps || '',
               employeeSerieCtps: emp.serieCtps || '',
               employeeDataAdmissao: emp.dataAdmissao || '',
+              // Rev. 4986 — empregador documental (FC/JF) p/ o documento gerado do detalhe
+              employeeEmpregadorDocs: (emp as any).empregadorDocumentos || 'FC',
               // Rev. 2725 — O "TOTAL ESTIMADO DA RESCISÃO" deve refletir a previsão
               // RECALCULADA ao vivo (igual ao SUBTOTAL PROVENTOS e ao endpoint `list`),
               // e NÃO a coluna persistida `row.valorEstimadoTotal`, que fica defasada
@@ -1391,7 +1534,7 @@ export const avisoPrevioFeriasRouter = router({
         // CÁLCULO DAS VERBAS RESCISÓRIAS
         // ============================================================
         const incluirMultaFgtsGerar = await getIncluirMultaFgts(db, emp.companyId);
-        const saldoBhGerar = await getSaldoBancoHorasParaRescisao(db, input.employeeId);
+        const saldoBhGerar = await getSaldoBancoHorasParaRescisao(db, input.employeeId, emp.companyId);
         const previsao = calcularRescisaoCompleta({
           salarioBase,
           dataAdmissao,
@@ -1606,7 +1749,7 @@ export const avisoPrevioFeriasRouter = router({
         const diasTrabMesTrab = Math.max(0, dtFimTrab.getDate() - diasFeriasMesTrab);
 
         const incluirMultaFgtsComp = await getIncluirMultaFgts(db, emp.companyId);
-        const saldoBhComp = await getSaldoBancoHorasParaRescisao(db, input.employeeId);
+        const saldoBhComp = await getSaldoBancoHorasParaRescisao(db, input.employeeId, emp.companyId);
         const prevTrab = calcularRescisaoCompleta({
           salarioBase, dataAdmissao, dataDesligamento: input.dataDesligamento,
           dataFimAviso: dataFimTrab, tipo: 'empregador_trabalhado',
@@ -2095,7 +2238,7 @@ export const avisoPrevioFeriasRouter = router({
             ? input.descontarAvisoNaoCumprido
             : !!aviso.descontarAvisoNaoCumprido;
           const incluirMultaFgtsUpd = await getIncluirMultaFgts(db, emp.companyId);
-          const saldoBhUpd = await getSaldoBancoHorasParaRescisao(db, aviso.employeeId);
+          const saldoBhUpd = await getSaldoBancoHorasParaRescisao(db, aviso.employeeId, emp.companyId);
           const previsao = calcularRescisaoCompleta({
             salarioBase,
             dataAdmissao,
@@ -2214,7 +2357,7 @@ export const avisoPrevioFeriasRouter = router({
             const saldoVencRec = await getFeriasVencidasSaldo(db, aviso.employeeId, dataFim);
             const periodosVencidosRealRec = saldoVencRec.periodosVencidos;
 
-            const saldoBhRec = await getSaldoBancoHorasParaRescisao(db, aviso.employeeId);
+            const saldoBhRec = await getSaldoBancoHorasParaRescisao(db, aviso.employeeId, emp.companyId);
             const previsao = calcularRescisaoCompleta({
               salarioBase,
               dataAdmissao,
@@ -2802,7 +2945,9 @@ export const avisoPrevioFeriasRouter = router({
         let valorEditado: number | null = null;
         if (input.valor?.trim()) {
           valorEditado = parseValor(input.valor);
-          if (valorEditado === null || !isFinite(valorEditado) || valorEditado <= 0)
+          // Rev. 5058 — R$ 0,00 é permitido (rescisão zerada: título de valor
+          // zero vai ao Financeiro só p/ registrar a baixa e concluir o aviso).
+          if (valorEditado === null || !isFinite(valorEditado) || valorEditado < 0)
             throw new TRPCError({ code: 'BAD_REQUEST', message: `Valor informado inválido ("${input.valor.trim()}"). Use o formato 5.035,16 ou 5035,16.` });
         }
         // Rev. 4689 — Multa FGTS: lançamento SEPARADO no Contas a Pagar.
@@ -2831,7 +2976,7 @@ export const avisoPrevioFeriasRouter = router({
         const totalSalvo = parseFloat(String(aviso.valorEstimadoTotal ?? '0').replace(',', '.'));
         const valorPrevisto = isFinite(totalSalvo) ? Math.max(0, totalSalvo - multaJson) : NaN;
         const valor = valorEditado ?? valorPrevisto;
-        if (!isFinite(valor) || valor <= 0)
+        if (!isFinite(valor) || valor < 0)
           throw new TRPCError({ code: 'BAD_REQUEST', message: 'Valor estimado da rescisão inválido — recalcule o aviso antes de enviar.' });
         // Marca como "editado" sempre que o RH mandou valor e ele difere da
         // previsão — ou quando a previsão nem era válida (rastreabilidade).
@@ -2866,10 +3011,10 @@ export const avisoPrevioFeriasRouter = router({
           if (aloc) { obraId = aloc.obraId; obraNome = aloc.obraNome ?? null; }
         } catch { /* sem obra = lançamento sem centro de custo */ }
 
-        // Vencimento: dataFim + 10 dias (prazo legal do art. 477 CLT).
-        const venc = new Date(aviso.dataFim + 'T12:00:00');
-        venc.setDate(venc.getDate() + 10);
-        const vencStr = venc.toISOString().split('T')[0];
+        // Vencimento (art. 477 §6º CLT): término + 10 dias, SEM contar os dias
+        // extras indenizados do aviso (Lei 12.506) e antecipado p/ dia útil.
+        const vencStr = dataLimitePagamentoRescisao(aviso.dataInicio, aviso.dataFim)
+          || aviso.dataFim;
 
         const descricao = `Rescisão — ${nome} (Aviso Prévio #${aviso.id})`;
 
@@ -3216,7 +3361,18 @@ export const avisoPrevioFeriasRouter = router({
         const [emp] = await db.select().from(employees).where(eq(employees.id, aviso.employeeId));
         if (!emp) throw new TRPCError({ code: 'NOT_FOUND', message: 'Funcionário não encontrado' });
 
-        const [empresa] = await db.select().from(companies).where(eq(companies.id, aviso.companyId));
+        let [empresa] = await db.select().from(companies).where(eq(companies.id, aviso.companyId));
+        // Rev. 4986 — empregador documental "JF": documentos do colaborador saem
+        // com os dados da JULIO FERRAZ (inclui soft-deletada; mesmo grupo empresarial).
+        if ((emp as any).empregadorDocumentos === "JF") {
+          const [jf] = await db.select().from(companies)
+            .where(and(
+              sql`${companies.cnpj} LIKE '03.426.403%'`,
+              sql`${companies.grupoEmpresarial} IS NOT DISTINCT FROM ${(empresa as any)?.grupoEmpresarial ?? null}`,
+            ))
+            .orderBy(sql`(${companies.deletedAt} IS NULL) DESC`, companies.id);
+          if (jf) empresa = jf;
+        }
 
         let previsao: any = {};
         try { previsao = JSON.parse(aviso.previsaoRescisao || '{}'); } catch { }
@@ -3244,6 +3400,7 @@ export const avisoPrevioFeriasRouter = router({
             endereco: empresa?.endereco || '',
             cidade: empresa?.cidade || '',
             estado: empresa?.estado || '',
+            logoUrl: (empresa as any)?.logoUrl || '',
           },
           funcionario: {
             nome: emp.nomeCompleto,
@@ -3532,6 +3689,77 @@ export const avisoPrevioFeriasRouter = router({
   // FÉRIAS
   // ============================================================
   ferias: router({
+    // ── Radar de Férias (riscos operacionais próximos 60 dias) ──
+    radar: protectedProcedure
+      .input(z.object({ companyId: z.coerce.number() }))
+      .query(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        const empresas = await getCompaniesForUser(ctx.user.id);
+        if (!empresas.some((c: any) => c.id === input.companyId)) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa" });
+        }
+        const { computeRadarFerias, computeEfetivoObras, ensureRadarTable } = await import("../services/feriasRadarService");
+        await ensureRadarTable();
+        let riscos = await computeRadarFerias(input.companyId);
+        let efetivoObras = await computeEfetivoObras(input.companyId);
+        // Escopo por obra: gestor comum vê só as obras que acessa.
+        // Riscos SEM obra (funcionário não alocado) são só p/ master/admin.
+        const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+        if (allowed !== null) {
+          const set = new Set(allowed);
+          riscos = riscos.filter(r => r.obraId != null && set.has(r.obraId));
+          efetivoObras = efetivoObras.filter(r => set.has(r.obraId));
+        }
+        const resRows: any = await db.execute(sql`
+          SELECT chave, decisao, observacao, user_nome, created_at
+          FROM ferias_radar_resolucoes WHERE company_id = ${input.companyId}
+          ORDER BY id DESC`);
+        const resolucoes: Record<string, any> = {};
+        for (const r of ((resRows.rows || resRows) as any[])) {
+          if (!resolucoes[r.chave]) resolucoes[r.chave] = r;
+        }
+        return { riscos, resolucoes, efetivoObras };
+      }),
+    radarResolver: protectedProcedure
+      .input(z.object({
+        companyId: z.coerce.number(),
+        chave: z.string().min(1),
+        decisao: z.enum(["postergar", "antecipar", "treinar_substituto", "realocar", "folguista", "ciente"]),
+        observacao: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        const empresas = await getCompaniesForUser(ctx.user.id);
+        if (!empresas.some((c: any) => c.id === input.companyId)) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa" });
+        }
+        const { ensureRadarTable, computeRadarFerias } = await import("../services/feriasRadarService");
+        await ensureRadarTable();
+        // Autorização server-side: a chave precisa existir no radar atual E
+        // pertencer a uma obra que o usuário acessa (não confiar na chave do client).
+        const riscosAtuais = await computeRadarFerias(input.companyId);
+        const risco = riscosAtuais.find(r => r.chave === input.chave);
+        if (!risco) throw new TRPCError({ code: "NOT_FOUND", message: "Risco não encontrado (pode já ter sido resolvido ou reagendado)" });
+        const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+        if (allowed !== null && (risco.obraId == null || !allowed.includes(risco.obraId))) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso à obra deste risco" });
+        }
+        await db.execute(sql`
+          INSERT INTO ferias_radar_resolucoes (company_id, chave, decisao, observacao, user_id, user_nome)
+          VALUES (${input.companyId}, ${input.chave}, ${input.decisao}, ${input.observacao || null}, ${ctx.user.id}, ${(ctx.user as any).name || (ctx.user as any).nome || null})`);
+        // Rev. 5118 — formalização: alerta in-app + e-mail p/ masters e responsável da obra
+        // (best-effort em background; não trava o botão do gestor)
+        const { notificarDecisaoRadar } = await import("../services/feriasRadarService");
+        notificarDecisaoRadar({
+          companyId: input.companyId,
+          risco,
+          decisao: input.decisao,
+          observacao: input.observacao,
+          decididoPorUserId: ctx.user.id,
+          decididoPorNome: (ctx.user as any).name || (ctx.user as any).nome || null,
+        }).catch(e => console.error("[FeriasRadar] notificação decisão:", e?.message || e));
+        return { ok: true };
+      }),
     list: protectedProcedure
       .input(z.object({ companyId: z.coerce.number(), companyIds: z.array(z.number()).optional(), status: z.string().optional(), employeeId: z.number().optional() }))
       .query(async ({ input }) => {
@@ -4293,6 +4521,7 @@ export const avisoPrevioFeriasRouter = router({
         mediaDSRHE: z.string().optional(),
         ajusteInss: z.string().optional(),
         valorLiquido: z.string().optional(),
+        valorFeriasComplementar: z.string().optional(),
         bonusValor: z.string().optional(),
         bonusDesc: z.string().optional(),
         pensaoDesconto: z.string().optional(),
@@ -4916,6 +5145,145 @@ export const avisoPrevioFeriasRouter = router({
             : totalFaltas <= 32 ? '24-32 faltas → 12 dias'
             : 'Mais de 32 faltas → Perde o direito',
         };
+      }),
+
+    // ============================================================
+    // Rev. 5039 — SUGESTÃO AUTOMÁTICA de ajustes (CLT 130 + pensão do cadastro)
+    // O INSS já é calculado automaticamente no dialog (tabela progressiva).
+    // Aqui devolvemos: faltas do período aquisitivo → dias de direito (CLT 130)
+    // e pensão alimentícia sugerida a partir do cadastro do funcionário.
+    // ============================================================
+    sugestaoAjustes: protectedProcedure
+      .input(z.object({
+        companyId: z.number(),
+        companyIds: z.array(z.number()).optional(),
+        id: z.number(),
+      }))
+      .query(async ({ input }) => {
+        const db = (await getDb())!;
+        const [p] = await db.select().from(vacationPeriods).where(and(
+          eq(vacationPeriods.id, input.id),
+          companyFilter(vacationPeriods.companyId, input),
+          isNull(vacationPeriods.deletedAt),
+        ));
+        if (!p) throw new TRPCError({ code: "NOT_FOUND", message: "Período de férias não encontrado" });
+        const [emp] = await db.select().from(employees).where(and(
+          eq(employees.id, p.employeeId),
+          eq(employees.companyId, p.companyId),
+        ));
+        if (!emp) throw new TRPCError({ code: "NOT_FOUND", message: "Funcionário não encontrado" });
+
+        // ── Faltas injustificadas no período aquisitivo (CLT art. 130)
+        const mesInicio = String(p.periodoAquisitivoInicio || '').substring(0, 7);
+        const mesFim = String(p.periodoAquisitivoFim || '').substring(0, 7);
+        let totalFaltas = 0;
+        if (mesInicio && mesFim) {
+          const rows = await db.select({ totalFaltas: pontoDescontosResumo.totalFaltasInjustificadas })
+            .from(pontoDescontosResumo)
+            .where(and(
+              companyFilter(pontoDescontosResumo.companyId, input),
+              eq(pontoDescontosResumo.employeeId, p.employeeId),
+              sql`${pontoDescontosResumo.mesReferencia} >= ${mesInicio}`,
+              sql`${pontoDescontosResumo.mesReferencia} <= ${mesFim}`,
+            ));
+          totalFaltas = rows.reduce((s, r) => s + (r.totalFaltas || 0), 0);
+        }
+        const diasDireito = calcDiasFeriasPorFaltas(totalFaltas);
+
+        // ── Pensão alimentícia do cadastro (mesma lógica da Folha)
+        let pensaoSugerida = 0;
+        let pensaoDetalhe = "Sem pensão alimentícia no cadastro";
+        if (Number(emp.pensaoAlimenticia) === 1) {
+          // Bruto das férias (base p/ pensão percentual): valores salvos no período
+          const brutoFerias = parseValorFeriasBR(p.valorTotal);
+          if ((emp.pensaoTipo || 'valor_fixo') === 'percentual') {
+            const pct = (parseFloat(String(emp.pensaoPercentual || '0').replace(',', '.')) || 0) / 100;
+            let base = brutoFerias;
+            let baseLabel = 'bruto das férias';
+            if ((emp.pensaoBase || 'bruto') === 'salario_minimo') {
+              try {
+                const r = ((await db.execute(sql`
+                  SELECT valor FROM system_criteria
+                  WHERE "companyId" = ${p.companyId} AND chave = 'salario_minimo_vigente'
+                  LIMIT 1
+                `)) as any).rows || [];
+                base = parseBRL(r[0]?.valor) || 1621;
+              } catch { base = 1621; }
+              baseLabel = 'salário mínimo';
+            }
+            pensaoSugerida = Math.max(0, base * pct);
+            pensaoDetalhe = `${(pct * 100).toFixed(2).replace('.', ',')}% sobre ${baseLabel} (${base.toFixed(2)})`;
+          } else {
+            pensaoSugerida = Math.max(0, parseBRL(emp.pensaoValor));
+            pensaoDetalhe = 'Valor fixo do cadastro';
+          }
+        }
+
+        return {
+          faltas: {
+            totalFaltasInjustificadas: totalFaltas,
+            diasDireito,
+            diasGozoAtual: p.diasGozo || 30,
+            excedeDireito: (p.diasGozo || 30) > diasDireito,
+            tabelaAplicada: totalFaltas <= 5 ? '0-5 faltas → 30 dias'
+              : totalFaltas <= 14 ? '6-14 faltas → 24 dias'
+              : totalFaltas <= 23 ? '15-23 faltas → 18 dias'
+              : totalFaltas <= 32 ? '24-32 faltas → 12 dias'
+              : 'Mais de 32 faltas → Perde o direito',
+          },
+          pensao: {
+            ativa: Number(emp.pensaoAlimenticia) === 1,
+            valorSugerido: Number(pensaoSugerida.toFixed(2)),
+            detalhe: pensaoDetalhe,
+          },
+          // Rev. 5041 — férias complementar ("por fora")
+          complemento: (() => {
+            const ativa = Number((emp as any).recebeComplemento) === 1;
+            const compl = ativa ? parseBRL((emp as any).valorComplemento) : 0;
+            const valorSugerido = compl > 0 ? Math.round(compl * ((p.diasGozo || 30) / 30) * (4 / 3) * 100) / 100 : 0;
+            return {
+              ativa: ativa && compl > 0,
+              valorComplementoMensal: compl,
+              valorSugerido,
+              valorSalvo: parseValorFeriasBR((p as any).valorFeriasComplementar),
+              detalhe: compl > 0 ? `Complemento ${compl.toFixed(2)} × ${(p.diasGozo || 30)}/30 dias × 4/3 (férias + 1/3)` : "Sem complemento salarial no cadastro",
+            };
+          })(),
+        };
+      }),
+
+    // ============================================================
+    // Rev. 5039 — ENVIAR PARA FINANCEIRO (botão manual)
+    // Reusa a sincronização oficial (cria/atualiza título origem 'ferias').
+    // ============================================================
+    enviarFinanceiro: protectedProcedure
+      .input(z.object({
+        companyId: z.number(),
+        companyIds: z.array(z.number()).optional(),
+        id: z.number(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        const [p] = await db.select().from(vacationPeriods).where(and(
+          eq(vacationPeriods.id, input.id),
+          companyFilter(vacationPeriods.companyId, input),
+          isNull(vacationPeriods.deletedAt),
+        ));
+        if (!p) throw new TRPCError({ code: "NOT_FOUND", message: "Período de férias não encontrado" });
+        if (!['agendada', 'em_gozo', 'concluida'].includes(p.status) || !p.dataInicio) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Só férias agendada/em gozo/concluída com data de início vão para o Financeiro." });
+        }
+        const valor = parseValorFeriasBR((p as any).valorLiquido) > 0 ? parseValorFeriasBR((p as any).valorLiquido) : parseValorFeriasBR(p.valorTotal);
+        if (valor <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Salve o valor das férias (total ou líquido) antes de enviar ao Financeiro." });
+
+        await sincronizarFinanceiroFerias(input.id, ctx.user?.name || 'Sistema', true);
+        const [after] = await db.select({ entryId: vacationPeriods.financeiroEntryId })
+          .from(vacationPeriods).where(and(
+            eq(vacationPeriods.id, input.id),
+            companyFilter(vacationPeriods.companyId, input),
+          ));
+        if (!after?.entryId) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Não foi possível criar o título no Financeiro — verifique se já existe título pago desta férias." });
+        return { ok: true, entryId: after.entryId, valor };
       }),
 
     // ============================================================

@@ -1,5 +1,6 @@
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb, createAuditLog, getEffectiveAllowedObraIds, userCanAccessObra, recordTrashEntry, captureRowSnapshot } from "../db";
+import { assertRaioXAccess, assertFullRaioXAccess } from "../raioXGuard";
 import {
   heSolicitacoes, heSolicitacaoFuncionarios, heSolicitacaoAtividades, heSolicitacaoConfirmacoes,
   employees, obras, terminationNotices, timeRecords,
@@ -1234,7 +1235,9 @@ export const heSolicitacoesRouter = router({
 
   getAssinaturaMemorial: protectedProcedure.input(z.object({
     employeeId: z.number(),
-  })).query(async ({ input }) => {
+  })).query(async ({ input, ctx }) => {
+    // Rev. 5192 — Raio-X guard.
+    await assertRaioXAccess(ctx as any, input.employeeId);
     const db = await getDb();
     if (!db) return null;
     const [emp] = await db.select({
@@ -1252,14 +1255,24 @@ export const heSolicitacoesRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
 
+    // Preserve stricter original role check (admin/admin_master) before Raio-X guard.
     const userRole = (ctx.user as any)?.role || (ctx.user as any)?.tipo;
     if (userRole !== "admin_master" && userRole !== "admin") {
       throw new TRPCError({ code: "FORBIDDEN", message: "Apenas administradores podem limpar a assinatura memorial" });
     }
-
-    const [emp] = await db.select({ id: employees.id, nome: employees.nomeCompleto })
+    // Rev. 5195 — management mutation (HE memorial signature cleanup): full Raio-X
+    // access only (admin_master or rh-dp admin). This closes the self-write hole
+    // where a non-full user could clear their OWN memorial signature. Company
+    // scope derived from the target employee's record.
+    const [emp] = await db.select({
+      id: employees.id,
+      nome: employees.nomeCompleto,
+      companyId: employees.companyId,
+    })
       .from(employees).where(eq(employees.id, input.employeeId));
     if (!emp) throw new TRPCError({ code: "NOT_FOUND", message: "Funcionário não encontrado" });
+    await assertFullRaioXAccess(ctx as any, emp.companyId);
+    await assertRaioXAccess(ctx as any, input.employeeId);
 
     await db.update(employees)
       .set({ assinaturaMemorial: null, assinaturaMemorialAt: null })

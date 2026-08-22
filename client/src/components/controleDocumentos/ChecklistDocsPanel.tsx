@@ -82,6 +82,8 @@ export default function ChecklistDocsPanel({ companyId, companyIds, onClickEmplo
   // Rev. 4677 — geração em lote: gera TODOS os documentos faltantes dos
   // funcionários selecionados, sequencial, com progresso 0–100%.
   const pendentesDe = (f: any) => modelos.filter((m: any) => f.docs[m.tipo]?.situacao === "faltando");
+  // Rev. 5049 — variante "só obrigatórios": mesma fila, filtrando m.obrigatorio
+  const pendentesObrigDe = (f: any) => pendentesDe(f).filter((m: any) => m.obrigatorio);
   const toggleEmp = (id: number) => setSelEmps(prev => {
     const n = new Set(prev);
     n.has(id) ? n.delete(id) : n.add(id);
@@ -90,10 +92,11 @@ export default function ChecklistDocsPanel({ companyId, companyIds, onClickEmplo
   const todosVisiveisSel = funcionarios.length > 0 && funcionarios.every((f: any) => selEmps.has(f.id));
   const toggleTodos = () => setSelEmps(todosVisiveisSel ? new Set() : new Set(funcionarios.map((f: any) => f.id)));
 
-  const gerarLote = async (alvos: any[]) => {
+  const gerarLote = async (alvos: any[], soObrigatorios = false) => {
     if (lote) return;
     const fila: { f: any; m: any }[] = [];
-    for (const f of alvos) for (const m of pendentesDe(f)) fila.push({ f, m });
+    const pend = soObrigatorios ? pendentesObrigDe : pendentesDe;
+    for (const f of alvos) for (const m of pend(f)) fila.push({ f, m });
     if (fila.length === 0) { toast.info("Nenhum documento faltando nos funcionários selecionados."); return; }
     let ok = 0, falhas = 0;
     setLote({ done: 0, total: fila.length, atual: "" });
@@ -115,6 +118,7 @@ export default function ChecklistDocsPanel({ companyId, companyIds, onClickEmplo
   const lotePct = lote ? Math.round((lote.done / Math.max(lote.total, 1)) * 100) : 0;
   const pendSelecionados = funcionarios.filter((f: any) => selEmps.has(f.id)).reduce((a: number, f: any) => a + pendentesDe(f).length, 0);
   const pendVisiveis = funcionarios.reduce((a: number, f: any) => a + pendentesDe(f).length, 0);
+  const pendObrigVisiveis = funcionarios.reduce((a: number, f: any) => a + pendentesObrigDe(f).length, 0);
 
   const cell = (f: any, m: any) => {
     const d = f.docs[m.tipo];
@@ -123,6 +127,14 @@ export default function ChecklistDocsPanel({ companyId, companyIds, onClickEmplo
       return (
         <Link href={`/documentos-colaborador?emp=${f.id}`} title="Assinado — abrir dossiê">
           <CheckCircle2 className="h-4 w-4 text-green-600 mx-auto" />
+        </Link>
+      );
+    }
+    if (d?.situacao === "nao_aplicavel") {
+      // Rev. 4978 — N/A: já assinado fisicamente, não conta como pendência
+      return (
+        <Link href={`/documentos-colaborador?emp=${f.id}`} title="N/A — já possui assinado (abrir dossiê)">
+          <span className="mx-auto block text-[9px] font-bold text-slate-400">N/A</span>
         </Link>
       );
     }
@@ -156,7 +168,7 @@ export default function ChecklistDocsPanel({ companyId, companyIds, onClickEmplo
               {totalPend > 0 && <Badge variant="destructive" className="text-[10px]">{totalPend} pendência(s)</Badge>}
             </CardTitle>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Funcionário × documento. Verde = assinado · Âmbar = gerado (falta assinar) · Vermelho = faltando (clique no + para gerar).
+              Funcionário × documento. Verde = assinado · Âmbar = gerado (falta assinar) · Vermelho = faltando (clique no + para gerar). Para emitir nova via, exclua antes o documento ativo no dossiê.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -181,13 +193,23 @@ export default function ChecklistDocsPanel({ companyId, companyIds, onClickEmplo
               Gerar selecionados ({selEmps.size} func. · {pendSelecionados} doc.)
             </Button>
           ) : (
-            <Button size="sm" className="h-9 gap-1 bg-[#EE9803] hover:bg-[#EE9803]/90 text-white" disabled={!!lote || pendVisiveis === 0}
-              onClick={() => {
-                if (confirm(`Gerar TODOS os ${pendVisiveis} documento(s) faltante(s) dos ${funcionarios.length} funcionário(s) da lista?`)) gerarLote(funcionarios);
-              }}>
-              {lote ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
-              Gerar todos ({pendVisiveis} doc.)
-            </Button>
+            <>
+              <Button size="sm" className="h-9 gap-1 bg-[#EE9803] hover:bg-[#EE9803]/90 text-white" disabled={!!lote || pendVisiveis === 0}
+                onClick={() => {
+                  if (confirm(`Gerar TODOS os ${pendVisiveis} documento(s) faltante(s) dos ${funcionarios.length} funcionário(s) da lista?`)) gerarLote(funcionarios);
+                }}>
+                {lote ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                Gerar todos ({pendVisiveis} doc.)
+              </Button>
+              {/* Rev. 5049 — gera só os documentos OBRIGATÓRIOS (marcados com *) */}
+              <Button size="sm" variant="outline" className="h-9 gap-1 border-[#EE9803] text-[#B87400] hover:bg-orange-50" disabled={!!lote || pendObrigVisiveis === 0}
+                onClick={() => {
+                  if (confirm(`Gerar somente os ${pendObrigVisiveis} documento(s) OBRIGATÓRIO(S) faltante(s) dos ${funcionarios.length} funcionário(s) da lista?`)) gerarLote(funcionarios, true);
+                }}>
+                {lote ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                Gerar só obrigatórios ({pendObrigVisiveis} doc.)
+              </Button>
+            </>
           )}
         </div>
         {lote ? (

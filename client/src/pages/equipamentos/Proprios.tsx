@@ -528,9 +528,8 @@ export default function EquipamentosProprios() {
     const valor = parseFloat(form.valorAquisicao.replace(",", ".")) || undefined;
     const vida = parseInt(form.vidaUtilMeses) || undefined;
     if (editingId) {
-      // Rev. 2514 — coerência status×obra: quando NÃO está "em_obra", força
-      // localização=almoxarifado e obraId=null (evita órfãos visuais).
       const emObra = form.status === "em_obra";
+      const obraSelecionada = form.localizacaoAtualObraId ?? null;
       if (emObra && !form.localizacaoAtualObraId) {
         return toast.error("Selecione a obra onde o equipamento está.");
       }
@@ -544,8 +543,8 @@ export default function EquipamentosProprios() {
         vidaUtilMeses: vida ?? null,
         observacoes: form.observacoes || null,
         status: form.status, // Rev. 2512 — status editável
-        localizacaoAtualTipo: emObra ? "obra" : "almoxarifado",
-        localizacaoAtualObraId: emObra ? form.localizacaoAtualObraId : null,
+        localizacaoAtualTipo: obraSelecionada ? "obra" : "nao_informada",
+        localizacaoAtualObraId: obraSelecionada,
         fotos: fotos.length > 0 ? fotos : undefined,
         regimeUso: form.regimeUso, // Rev. 4563
       });
@@ -553,6 +552,7 @@ export default function EquipamentosProprios() {
       // Rev. 2552 — status/obra já no cadastro. Mesma coerência da edição:
       // se "em_obra" exige obra selecionada.
       const emObra = form.status === "em_obra";
+      const obraSelecionada = form.localizacaoAtualObraId ?? null;
       if (emObra && !form.localizacaoAtualObraId) {
         return toast.error("Selecione a obra onde o equipamento está.");
       }
@@ -573,7 +573,7 @@ export default function EquipamentosProprios() {
         fotos: fotos.length > 0 ? fotos : undefined,
         observacoes: form.observacoes || undefined,
         status: form.status,
-        localizacaoAtualObraId: emObra ? form.localizacaoAtualObraId : null,
+        localizacaoAtualObraId: obraSelecionada,
         quantidade: qtd,
         regimeUso: form.regimeUso, // Rev. 4563
       });
@@ -1122,9 +1122,14 @@ export default function EquipamentosProprios() {
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-800 ring-1 ring-amber-200">
                             <Building2 className="h-2.5 w-2.5" /> OBRA NÃO DEFINIDA
                           </span>
+                        ) : p.localizacaoAtualObraId && p.obraNome ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-800 ring-1 ring-blue-200 truncate max-w-full">
+                            <Building2 className="h-2.5 w-2.5 shrink-0" />
+                            <span className="truncate uppercase">LOCAL: {p.obraNome}</span>
+                          </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-600 ring-1 ring-slate-200">
-                            <Boxes className="h-2.5 w-2.5" /> ALMOX.
+                            <MapPin className="h-2.5 w-2.5" /> SEM OBRA DEFINIDA
                           </span>
                         )}
                       </div>
@@ -1465,9 +1470,10 @@ export default function EquipamentosProprios() {
                             onClick={() => setForm(p => ({
                               ...p,
                               status: opt.v,
-                              // Rev. 2554 — coerência visual: status ≠ "em_obra"
-                              // limpa a obra (não seria gravada de qualquer forma).
-                              localizacaoAtualObraId: opt.v === "em_obra" ? p.localizacaoAtualObraId : null,
+                              // Manutenção também pode estar localizada em uma obra:
+                              // equipamento danificado não volta a "disponível" só
+                              // porque o usuário informou onde ele está.
+                              localizacaoAtualObraId: p.localizacaoAtualObraId,
                             }))}
                             className={`px-2.5 py-2 rounded-lg text-xs font-semibold border-2 transition ${
                               active
@@ -1501,23 +1507,28 @@ export default function EquipamentosProprios() {
                             setForm(p => ({
                               ...p,
                               localizacaoAtualObraId: obraId,
-                              // Rev. 2554 — escolher obra ⇒ "em_obra"; limpar ⇒
-                              // volta a "disponivel" (almoxarifado).
-                              status: obraId
-                                ? "em_obra"
-                                : (p.status === "em_obra" ? "disponivel" : p.status),
+                              // Em manutenção, a obra é apenas a localização e não
+                              // pode alterar o status do equipamento. Nos demais
+                              // casos, escolher obra continua marcando "Em obra".
+                              status: p.status === "manutencao"
+                                ? "manutencao"
+                                : obraId
+                                  ? "em_obra"
+                                  : (p.status === "em_obra" ? "disponivel" : p.status),
                             }));
                           }}
                           className="w-full px-2 py-2 border-2 border-blue-200 focus:border-blue-500 focus:outline-none rounded-lg text-sm bg-blue-50/30"
                         >
-                          <option value="">— Almoxarifado (sem obra) —</option>
+                          <option value="">— Sem obra definida —</option>
                           {obrasAtivas.map((o: any) => (
                             <option key={o.id} value={o.id}>{o.nome}</option>
                           ))}
                         </select>
                         {form.status !== "em_obra" && (
                           <p className="mt-1 text-[10.5px] text-slate-500">
-                            Selecione a obra se o equipamento já vai pra obra. Sem obra, fica no almoxarifado.
+                            {form.status === "manutencao"
+                              ? "Informe a obra onde o equipamento danificado está. Ele continuará indisponível enquanto estiver em manutenção."
+                              : "Status e localização são independentes. Sem obra, o equipamento fica disponível sem ser classificado automaticamente como almoxarifado."}
                           </p>
                         )}
                       </div>

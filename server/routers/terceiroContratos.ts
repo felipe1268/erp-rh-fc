@@ -3,6 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb, getUserCompanyLinks, createAuditLog } from "../db";
 import { upperCaseEmpresa } from "../../shared/normalizeNomeEmpresa";
+import { valorPorExtensoBR } from "../../shared/contratoPrazo";
 import { aplicarLevantamentoNaMedicaoTerceiro } from "../terceiroLevantamentoSync";
 import { calcularSaldosRealocacaoGeral } from "./compras";
 import { triggerFinancialSync, triggerFinancialSyncAwaited } from "../services/financialEventTrigger";
@@ -20,8 +21,10 @@ import {
   medicaoCampoContornos,
   medicaoCampoFotos,
   medicaoCampoPdfs,
+  medicaoCriterios,
   terceiroDocumentos,
   empresasTerceiras,
+  fornecedores,
   planejamentoAtividades,
   planejamentoAvancos,
   planejamentoProjetos,
@@ -48,9 +51,52 @@ import {
   users,
   integrasignEnvelopes,
   integrasignSignatarios,
+  systemDocumentTemplates,
 } from "../../drizzle/schema";
 
 const n = (v: any) => parseFloat(String(v ?? 0)) || 0;
+
+// ============================================================
+// Rev. 5019 — ANEXOS DO CONTRATO (wizard da prévia): a partir do JSON gravado
+// em compras_cotacao_fornecedores.anexos_contrato (e congelado em
+// terceiro_contratos.anexos_contrato na geração), monta a numeração oficial:
+// Anexo I = Proposta Comercial (sempre); II = Projetos (por disciplina);
+// III = Cronograma; IV+ = outros documentos. Numeração DINÂMICA: só entra o
+// que existe — o texto do contrato nunca cita anexo que não foi enviado.
+// Fonte única usada pelo texto do contrato E pelo PDF (contratoPreviewPdf).
+// ============================================================
+const ROMANOS = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];
+export type AnexoContratoEntrada = {
+  numero: string;           // "I", "II"...
+  titulo: string;           // "Proposta Comercial", "Projetos — Estrutural"...
+  tipo: "proposta" | "projetos" | "cronograma" | "outro";
+  disciplinas?: Array<{ disciplina: string; arquivos: Array<{ nome: string; url: string }> }>;
+  arquivos?: Array<{ nome: string; url: string }>;
+};
+export function listarAnexosContrato(anexosContrato: any): AnexoContratoEntrada[] {
+  const ax = anexosContrato && typeof anexosContrato === "object" ? anexosContrato : {};
+  const out: AnexoContratoEntrada[] = [];
+  let i = 0;
+  out.push({ numero: ROMANOS[i++], titulo: "Proposta Comercial da CONTRATADA", tipo: "proposta" });
+  const projetos = Array.isArray(ax.projetos) ? ax.projetos.filter((p: any) => p && Array.isArray(p.arquivos) && p.arquivos.length > 0) : [];
+  if (projetos.length > 0) {
+    out.push({
+      numero: ROMANOS[i++],
+      titulo: `Projetos (${projetos.map((p: any) => String(p.disciplina || "Geral")).join(", ")})`,
+      tipo: "projetos",
+      disciplinas: projetos.map((p: any) => ({ disciplina: String(p.disciplina || "Geral"), arquivos: p.arquivos.map((a: any) => ({ nome: String(a.nome || "arquivo.pdf"), url: String(a.url || "") })) })),
+    });
+  }
+  if (ax.cronograma && ax.cronograma.url) {
+    out.push({ numero: ROMANOS[i++], titulo: "Cronograma de Execução", tipo: "cronograma", arquivos: [{ nome: String(ax.cronograma.nome || "cronograma.pdf"), url: String(ax.cronograma.url) }] });
+  }
+  const outros = Array.isArray(ax.outros) ? ax.outros.filter((o: any) => o && o.url) : [];
+  for (const o of outros) {
+    out.push({ numero: ROMANOS[i] || String(i + 1), titulo: String(o.titulo || o.nome || "Documento"), tipo: "outro", arquivos: [{ nome: String(o.nome || "documento.pdf"), url: String(o.url) }] });
+    i++;
+  }
+  return out;
+}
 
 // ============================================================
 // Rev. 4778 — POKA-YOKE FINANCEIRO (método do usuário): medição aprovada
@@ -579,13 +625,22 @@ export async function cancelarContratoCascade(
     const medicoesCanceladas = medRes.length;
 
     // 3 + 4) OCs vinculadas ainda não recebidas + seus financeiros não pagos
-    const ocs = await tx.select({ id: comprasOrdens.id, status: comprasOrdens.status })
+    const ocs = await tx.select({
+      id: comprasOrdens.id,
+      status: comprasOrdens.status,
+      lancamentoRecorrente: comprasOrdens.lancamentoRecorrente,
+    })
       .from(comprasOrdens)
-      .where(and(eq(comprasOrdens.contratoId, contratoId), eq(comprasOrdens.companyId, companyId)));
+      .where(and(eq(comprasOrdens.contratoId, contratoId), eq(comprasOrdens.companyId, companyId)))
+      .orderBy(asc(comprasOrdens.id));
     let ocsCanceladas = 0;
     let financeirosCancelados = 0;
     for (const oc of ocs) {
       if (STATUS_OC_PRESERVAR.includes(oc.status)) continue; // preserva recebidas/canceladas e seus financeiros
+      if (oc.lancamentoRecorrente) {
+        // Mesmo lock do materializador de recorrências de OC (compras).
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(477002, ${oc.id})`);
+      }
       await tx.update(comprasOrdens).set({
         status: "cancelada",
         canceladoPor: usuarioNome,
@@ -611,7 +666,826 @@ export async function cancelarContratoCascade(
   });
 }
 
+// Rev. 4998 — motor compartilhado de montagem do texto do contrato (template + placeholders).
+// Usado por gerarTextoContrato (contrato real) e previewContratoFromCotacao (prévia sem persistir).
+// Rev. 4999 — converte o HTML do template ISO (Central de Documentos) em texto puro,
+// preservando parágrafos/quebras, para o motor de contrato de terceiros (texto+placeholders).
+// Rev. 5002 — Padrão da EMPRESA (Configurações › Critérios do Sistema): herdado por
+// toda obra nova na criação; obra sem critério próprio usa este na geração do contrato.
+export async function _criterioMedicaoPadraoEmpresa(db: any, companyId: number | null | undefined): Promise<string | null> {
+  if (!companyId) return null;
+  const { systemCriteria } = await import("../../drizzle/schema");
+  const rows = await db.select({ valor: systemCriteria.valor }).from(systemCriteria)
+    .where(and(eq(systemCriteria.companyId, companyId), eq(systemCriteria.chave, "terceiro_criterio_medicao_padrao"))).limit(1);
+  return rows[0]?.valor ?? null;
+}
+
+// Rev. 5001 — Critério de Medição de MDO definido na OBRA (Editar Obra › Critério de
+// Medição). JSON {tipo, condicoes[], descontos[]} → texto da cláusula do contrato.
+export function _criteriosMedicaoTexto(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  let o: any;
+  try { o = JSON.parse(raw); } catch { return null; }
+  const TIPOS: Record<string, string> = {
+    avanco_fisico: "por AVANÇO FÍSICO — percentual efetivamente executado sobre cada item do escopo/EAP contratado",
+    etapa_concluida: "por ETAPA CONCLUÍDA — somente serviços/etapas 100% concluídos entram na medição",
+    producao_unitaria: "por PRODUÇÃO — quantidade efetivamente executada e conferida multiplicada pelo preço unitário contratado",
+  };
+  const COND: Record<string, string> = {
+    aceite_fiscalizacao: "aceite formal da fiscalização/gestor da obra sobre o serviço medido",
+    sem_pendencia_documental: "inexistência de pendência documental da CONTRATADA",
+    sem_pendencia_sst: "inexistência de pendências de segurança do trabalho (SST) da equipe",
+    limpeza_area: "limpeza e desmobilização da área da etapa medida",
+  };
+  const DESC: Record<string, string> = {
+    retrabalho: "retrabalhos e serviços recusados pela fiscalização",
+    desperdicio_material: "desperdício ou perda de material fornecido acima do tolerado",
+    avarias: "avarias e danos causados pela equipe da CONTRATADA",
+  };
+  const tipoTxt = TIPOS[o?.tipo];
+  if (!tipoTxt) return null;
+  const conds = (Array.isArray(o?.condicoes) ? o.condicoes : []).map((c: string) => COND[c]).filter(Boolean);
+  const descs = (Array.isArray(o?.descontos) ? o.descontos : []).map((d: string) => DESC[d]).filter(Boolean);
+  let txt = `CRITÉRIO DE MEDIÇÃO DA OBRA — A medição dos serviços será apurada ${tipoTxt}.`;
+  if (conds.length) txt += ` Somente serão medidos e liberados para pagamento os serviços que atendam, cumulativamente: ${conds.map((c: string, i: number) => `(${i + 1}) ${c}`).join("; ")}.`;
+  if (descs.length) txt += ` Serão descontados da medição: ${descs.join("; ")}.`;
+  // Rev. 5003 — fluxo de datas (prazos em DIAS ÚTEIS, decisão do usuário: feriado/fim
+  // de semana não podem consumir o prazo da equipe).
+  const dm = Number(o?.diaMedicao) || null;
+  const pa = Number(o?.prazoAprovacaoDias) || null;
+  const pp = Number(o?.prazoPagamentoDias) || null;
+  if (dm || pa || pp) {
+    const partes: string[] = [];
+    if (dm) partes.push(`a medição fecha no dia ${dm} de cada mês (linha de corte)`);
+    if (pa) partes.push(`a CONTRATANTE tem até ${pa} dias úteis após o corte para aprovar a medição`);
+    partes.push(`aprovada a medição, a CONTRATADA emite a nota fiscal`);
+    if (pp) partes.push(`o pagamento é realizado em até ${pp} dias úteis após a emissão da nota fiscal`);
+    txt += ` FLUXO DE MEDIÇÃO E PAGAMENTO: ${partes.join("; ")}. Os prazos são contados em dias úteis, não se computando sábados, domingos e feriados.`;
+  }
+  return txt;
+}
+
+function _htmlParaTexto(html: string): string {
+  return String(html || "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|h[1-6]|li|tr|table|blockquote)>/gi, "\n")
+    .replace(/<li[^>]*>/gi, "• ")
+    .replace(/<td[^>]*>/gi, " | ")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+// Rev. 5054 — fonte ÚNICA dos overrides (itens com EAP/preços do vencedor +
+// empresa/fornecedor) usados pela prévia da cotação, pelo congelamento do texto
+// na aprovação E pela regeneração: o contrato do módulo Terceiros deve ser
+// EXATAMENTE o documento validado na cotação (pedido do user IMG_5553).
+async function _overridesDaCotacaoTC(db: any, cot: any) {
+  if (!cot.fornecedorId) throw new Error("A cotação não possui fornecedor vinculado — selecione o vencedor primeiro");
+  const [forn] = await db.select().from(fornecedores).where(eq(fornecedores.id, cot.fornecedorId));
+  if (!forn) throw new Error("Fornecedor da cotação não encontrado");
+
+  const itens = await db.select().from(comprasCotacoesItens)
+    .where(eq(comprasCotacoesItens.cotacaoId, cot.id));
+  const respostas = await db.select().from(comprasCotacaoRespostas).where(
+    and(eq(comprasCotacaoRespostas.cotacaoId, cot.id), eq(comprasCotacaoRespostas.fornecedorId, cot.fornecedorId))
+  );
+  const respostaMap: Record<number, any> = {};
+  for (const r of respostas) respostaMap[(r as any).itemId] = r;
+
+  const scItemIds = itens.map((it: any) => it.solicitacaoItemId).filter(Boolean) as number[];
+  const scItemMap: Record<number, string | null> = {};
+  if (scItemIds.length > 0) {
+    const scItems = await db.select({ id: comprasSolicitacoesItens.id, eapCodigo: comprasSolicitacoesItens.eapCodigo })
+      .from(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.id, scItemIds));
+    for (const si of scItems) scItemMap[si.id] = si.eapCodigo;
+  }
+  const itensPreview = itens.map((it: any, idx: number) => {
+    const resp = respostaMap[it.id];
+    const precoUnit = resp ? parseFloat(String(resp.precoUnitario || "0")) : parseFloat(String(it.precoUnitario || "0"));
+    const qty = parseFloat(String(it.quantidade || "1"));
+    // Paridade EXATA com gerarContratoFromCotacao: resposta existente = usa resp.total
+    const totalItem = resp ? parseFloat(String(resp.total || "0")) : precoUnit * qty;
+    return {
+      eapCodigo: it.solicitacaoItemId ? (scItemMap[it.solicitacaoItemId] ?? null) : null,
+      descricao: it.descricao,
+      unidade: it.unidade || "vb",
+      quantidade: String(qty),
+      valorUnitario: String(precoUnit),
+      valorTotal: String(totalItem),
+      ordem: idx,
+    };
+  });
+
+  // Empresa terceira já vinculada ao fornecedor (se existir) ou pseudo-cadastro a partir do fornecedor
+  const existing = await db.select().from(empresasTerceiras).where(and(
+    eq(empresasTerceiras.companyId, cot.companyId),
+    eq((empresasTerceiras as any).fornecedorId, forn.id),
+  ));
+  const empresaLike = existing[0] ?? {
+    fornecedorId: forn.id,
+    razaoSocial: upperCaseEmpresa(forn.razaoSocial),
+    cnpj: forn.cnpj || "",
+    logradouro: forn.endereco || null,
+    numero: forn.numero || null,
+    complemento: (forn as any).complemento || null,
+    bairro: forn.bairro || null,
+    cidade: forn.cidade || null,
+    estado: forn.estado || null,
+    cep: (forn as any).cep || null,
+    responsavelNome: (forn as any).representanteLegal || forn.contatoNome || null,
+    responsavelCargo: (forn as any).representanteCargo || null,
+    banco: (forn as any).banco || null,
+    agencia: (forn as any).agencia || null,
+    conta: (forn as any).conta || null,
+    pixChave: (forn as any).pix || null,
+  };
+  return { itens, itensPreview, empresaLike };
+}
+
+async function _montarTextoContrato(db: any, contrato: any, opts?: { empresaOverride?: any; itensOverride?: any[]; readOnly?: boolean }): Promise<{ texto: string; template: any }> {
+      // Rev. 4999 — FONTE OFICIAL: template "Contrato Terceiros" da Central de
+      // Documentos (Configurações › Templates de Documentos), quando VIGENTE.
+      // Só na ausência de um template vigente cai no template legado do módulo
+      // Terceiros (terceiro_contrato_templates) e, por fim, no padrão em memória.
+      let templateIso: any = null;
+      try {
+        const [isoRow] = await db.select().from(systemDocumentTemplates)
+          .where(and(
+            eq(systemDocumentTemplates.tipo, "contrato_terceiros"),
+            eq(systemDocumentTemplates.status, "vigente"),
+            isNull(systemDocumentTemplates.deletedAt),
+          ))
+          .limit(1);
+        if (isoRow && (isoRow as any).conteudoHtml) templateIso = isoRow;
+      } catch {}
+
+      // Rev. 4999 — SEM modelo vigente na Central, NÃO gera contrato nem cria
+      // template algum: alerta o usuário para definir o modelo padrão (pedido do user).
+      if (!templateIso) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Não há modelo padrão de Contrato Terceiros definido. Crie e aprove (Vigente) o template \"Contrato Terceiros\" em Configurações › Templates de Documentos › aba Contratos antes de gerar o contrato.",
+        });
+      }
+
+      let [template] = await db.select().from(terceiroContratoTemplates)
+        .where(and(
+          eq(terceiroContratoTemplates.companyId, contrato.companyId),
+          eq(terceiroContratoTemplates.ativo, true)
+        ))
+        .orderBy(desc(terceiroContratoTemplates.versao))
+        .limit(1);
+      if (!template) {
+        // Rev. 4999 — com template ISO vigente, o legado nem é usado: não semear no banco.
+        if (templateIso) template = { id: null, companyId: contrato.companyId, nome: "—", texto: "", ativo: true, versao: 1 };
+      }
+      if (!template) {
+        const defaultText = `CONTRATO DE PRESTAÇÃO DE SERVIÇOS Nº {{NUMERO_CONTRATO}}
+
+Pelo presente instrumento particular de contrato de prestação de serviços, as partes abaixo identificadas:
+
+CONTRATANTE: {{CONTRATANTE_NOME}}, inscrita no CNPJ sob o nº {{CONTRATANTE_CNPJ}}, com sede em {{CONTRATANTE_ENDERECO}}, neste ato representada por {{CONTRATANTE_REPRESENTANTE}}.
+
+CONTRATADA: {{CONTRATADA_NOME}}, inscrita no CNPJ sob o nº {{CONTRATADA_CNPJ}}, com sede em {{CONTRATADA_ENDERECO}}, neste ato representada por {{CONTRATADA_REPRESENTANTE}}, {{CONTRATADA_CARGO}}.
+
+Têm entre si, justo e contratado, o seguinte:
+
+CLÁUSULA PRIMEIRA – DO OBJETO
+
+1.1 O presente contrato tem por objeto a prestação de serviços de {{DESCRICAO_OBJETO}}, a serem executados na obra {{OBRA_NOME}}, conforme escopo detalhado abaixo:
+
+{{TABELA_ITENS}}
+
+CLÁUSULA SEGUNDA – DO PRAZO
+
+2.1 Os serviços deverão ser iniciados em {{DATA_INICIO}} e concluídos até {{DATA_TERMINO}}, salvo prorrogação por acordo escrito entre as partes.
+
+2.2 As datas acima foram definidas com base na revisão do cronograma: {{REVISAO_CRONOGRAMA}}.
+
+CLÁUSULA TERCEIRA – DO VALOR E FORMA DE PAGAMENTO
+
+3.1 O valor total do presente contrato é de {{VALOR_TOTAL}} ({{VALOR_TOTAL_EXTENSO}}), somente alterável mediante termo aditivo formal assinado pelas partes.
+
+3.2 CRITÉRIOS DE MEDIÇÃO E PAGAMENTO — Os pagamentos serão processados conforme o fluxo obrigatório abaixo, cujos prazos são improrrogáveis salvo acordo formal entre as partes:
+
+{{FLUXOGRAMA_PAGAMENTO}}
+
+a) MEDIÇÃO FÍSICA (Dia {{DIA_MEDICAO}} de cada mês) — Levantamento e conferência do avanço físico dos serviços efetivamente executados, a ser realizado conjuntamente pelo gestor da obra e o representante da CONTRATADA no canteiro;
+
+b) APROVAÇÃO DA MEDIÇÃO (Até {{PRAZO_APROVACAO}} dias úteis após a medição) — Análise e aprovação da medição pelo gestor do contrato da CONTRATANTE. A medição poderá ser aprovada total ou parcialmente, cabendo à CONTRATADA acatar os ajustes solicitados;
+
+c) DOCUMENTAÇÃO COMPROBATÓRIA — Após aprovação da medição, a CONTRATADA deverá enviar obrigatoriamente: Nota Fiscal/Fatura, guias de recolhimento de INSS e FGTS quitadas, Certidão Negativa de Débitos Trabalhistas (CNDT), comprovante de seguro de vida dos funcionários alocados na obra e demais documentos que a CONTRATANTE julgar necessários. A ausência de qualquer documento suspende o fluxo de pagamento até a regularização;
+
+d) EMISSÃO DA NOTA FISCAL (Até {{PRAZO_EMISSAO_NF}} dias úteis após aprovação) — Liberação para emissão da Nota Fiscal pela CONTRATADA, que deverá ser emitida com os dados corretos da CONTRATANTE e o valor exato da medição aprovada;
+
+e) LIBERAÇÃO DA ORDEM DE PAGAMENTO (Até {{PRAZO_LIBERACAO_OP}} dias úteis após recebimento da NF) — Conferência da Nota Fiscal e liberação da Ordem de Pagamento (OP) pela área financeira da CONTRATANTE;
+
+f) PAGAMENTO (Dia {{DIA_PAGAMENTO}} do mês subsequente) — Crédito em conta bancária da CONTRATADA, referente à medição aprovada do mês anterior.
+
+{{DADOS_BANCARIOS}}
+
+3.3 RESUMO DOS PRAZOS:
+• Dia da Medição: dia {{DIA_MEDICAO}} de cada mês
+• Prazo de Aprovação: até {{PRAZO_APROVACAO}} dias úteis após a medição
+• Prazo para Emissão da NF: até {{PRAZO_EMISSAO_NF}} dias úteis após aprovação
+• Prazo para Liberação da OP: até {{PRAZO_LIBERACAO_OP}} dias úteis após NF
+• Dia do Pagamento: dia {{DIA_PAGAMENTO}} do mês subsequente
+
+3.4 O descumprimento dos prazos estabelecidos na subcláusula 3.2 por parte da CONTRATADA (itens "c" e "d") implicará no adiamento automático do pagamento para o ciclo subsequente, sem incidência de juros ou multa a favor da CONTRATADA.
+
+3.5 A CONTRATANTE não será responsabilizada pelo atraso no pagamento quando este decorrer de pendências documentais ou irregularidades na Nota Fiscal emitida pela CONTRATADA.
+
+3.6 Serviços executados sem a devida autorização do gestor do contrato ou em desacordo com as especificações não serão objeto de medição nem de pagamento.
+
+CLÁUSULA QUARTA – DAS OBRIGAÇÕES DA CONTRATADA
+
+4.1 A CONTRATADA se obriga a:
+a) Executar os serviços de acordo com as normas técnicas vigentes e especificações do projeto;
+b) Fornecer toda a mão de obra necessária, devidamente registrada e equipada com EPIs;
+c) Manter preposto no local da obra para representá-la junto à CONTRATANTE;
+d) Responder por todos os encargos trabalhistas, previdenciários e fiscais de seus empregados;
+e) Apresentar os documentos exigidos para pagamento conforme cláusula 3.2, alínea "c".
+
+CLÁUSULA QUINTA – DAS OBRIGAÇÕES DA CONTRATANTE
+
+5.1 Efetuar os pagamentos nas condições estabelecidas neste contrato.
+5.2 Fornecer acesso ao local da obra e disponibilizar as informações técnicas necessárias.
+5.3 Designar fiscal para acompanhamento e aprovação dos serviços.
+
+CLÁUSULA SEXTA – DA RESCISÃO
+
+6.1 O presente contrato poderá ser rescindido por qualquer das partes, mediante notificação por escrito com antecedência mínima de 30 (trinta) dias.
+
+CLÁUSULA SÉTIMA – DO FORO
+
+7.1 Fica eleito o foro da Comarca de {{CIDADE_ESTADO}} para dirimir quaisquer dúvidas ou litígios oriundos do presente contrato, com renúncia de qualquer outro, por mais privilegiado que seja.
+
+E por estarem assim justos e contratados, as partes assinam o presente instrumento em 2 (duas) vias de igual teor e forma, juntamente com 2 (duas) testemunhas.
+
+{{CIDADE_ESTADO}}, {{DATA_ASSINATURA}}.
+
+
+_________________________________________
+{{CONTRATANTE_NOME}}
+CNPJ: {{CONTRATANTE_CNPJ}}
+Representante: {{CONTRATANTE_REPRESENTANTE}}
+
+
+_________________________________________
+{{CONTRATADA_NOME}}
+CNPJ: {{CONTRATADA_CNPJ}}
+Representante: {{CONTRATADA_REPRESENTANTE}}
+
+
+TESTEMUNHAS:
+
+1. _________________________________________
+   Nome: {{TESTEMUNHA_FINANCEIRO}}
+   Cargo: Responsável Financeiro
+
+2. _________________________________________
+   Nome: {{TESTEMUNHA_GESTOR_PROJETO}}
+   Cargo: Gestor de Projeto`;
+        if (opts?.readOnly) {
+          // Prévia é estritamente somente-leitura: usa o template padrão em memória, sem persistir
+          template = { id: null, companyId: contrato.companyId, nome: "Contrato Padrão", texto: defaultText, ativo: true, versao: 1 };
+        } else {
+          const [novo] = await db.insert(terceiroContratoTemplates)
+            .values({ companyId: contrato.companyId, nome: "Contrato Padrão", texto: defaultText, ativo: true, versao: 1 })
+            .returning();
+          template = novo;
+        }
+      }
+
+      let empresa = opts?.empresaOverride ?? (await db.select().from(empresasTerceiras).where(eq(empresasTerceiras.id, contrato.empresaTerceiraId)))[0];
+      // Rev. 5007 — a empresa terceira pode estar com cadastro incompleto (endereço/
+      // representante vazios) mas vinculada a um fornecedor com cadastro completo:
+      // preenche campo a campo a partir do FORNECEDOR (pedido do user — o contrato
+      // deve puxar todo o endereço conforme o cadastro do fornecedor).
+      if (empresa && (empresa as any).fornecedorId) {
+        try {
+          const [fv] = await db.select().from(fornecedores).where(and(eq(fornecedores.id, (empresa as any).fornecedorId), eq(fornecedores.companyId, contrato.companyId)));
+          if (fv) {
+            empresa = {
+              ...empresa,
+              logradouro: (empresa as any).logradouro || (fv as any).endereco || null,
+              numero: (empresa as any).numero || (fv as any).numero || null,
+              complemento: (empresa as any).complemento || (fv as any).complemento || null,
+              bairro: (empresa as any).bairro || (fv as any).bairro || null,
+              cidade: (empresa as any).cidade || (fv as any).cidade || null,
+              estado: (empresa as any).estado || (fv as any).estado || null,
+              cep: (empresa as any).cep || (fv as any).cep || null,
+              responsavelNome: (empresa as any).responsavelNome || (fv as any).representanteLegal || (fv as any).contatoNome || null,
+              responsavelCargo: (empresa as any).responsavelCargo || (fv as any).representanteCargo || null,
+            } as any;
+          }
+        } catch {}
+      }
+      const [company] = await db.select().from(companies).where(eq(companies.id, contrato.companyId));
+      const [obra] = contrato.obraId ? await db.select().from(obras).where(eq(obras.id, contrato.obraId)) : [null];
+
+      const itensContrato = opts?.itensOverride ?? await db.select().from(terceiroContratoItens)
+        .where(eq(terceiroContratoItens.contratoId, contrato.id))
+        .orderBy(asc(terceiroContratoItens.ordem), asc(terceiroContratoItens.eapCodigo));
+
+      let revisaoCronoLabel = "";
+      if (contrato.obraId) {
+        try {
+          const [proj] = await db.select({ id: planejamentoProjetos.id })
+            .from(planejamentoProjetos)
+            .where(and(eq(planejamentoProjetos.companyId, contrato.companyId), eq(planejamentoProjetos.obraId, contrato.obraId)))
+            .orderBy(desc(planejamentoProjetos.id)).limit(1);
+          if (proj) {
+            const [rev] = await db.select({
+              numero: planejamentoRevisoes.numero,
+              descricao: planejamentoRevisoes.descricao,
+              dataRevisao: planejamentoRevisoes.dataRevisao,
+              isBaseline: planejamentoRevisoes.isBaseline,
+            }).from(planejamentoRevisoes)
+              .where(and(eq(planejamentoRevisoes.projetoId, proj.id), eq(planejamentoRevisoes.status, "aprovada")))
+              .orderBy(desc(planejamentoRevisoes.numero)).limit(1);
+            if (rev) {
+              const nomeRev = rev.isBaseline ? `Baseline (Rev ${String(rev.numero).padStart(2, "0")})` : `Rev ${String(rev.numero).padStart(2, "0")}`;
+              const descPart = rev.descricao ? ` — ${rev.descricao}` : "";
+              revisaoCronoLabel = `${nomeRev}${descPart}`;
+            }
+          }
+        } catch {}
+      }
+
+      const fmtDate = (d: string | null | undefined) => {
+        if (!d) return "___/___/______";
+        const [y, m, day] = d.slice(0, 10).split("-");
+        return `${day}/${m}/${y}`;
+      };
+      const fmtMoney = (v: any) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(v) || 0);
+      const fmtNum = (v: any) => new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(Number(v) || 0);
+      // Rev. 5007 — endereço COMPLETO da contratada (logradouro, nº, complemento, bairro, cidade-UF, CEP).
+      const endEmpresa = [
+        [empresa?.logradouro, empresa?.numero].filter(Boolean).join(", "),
+        (empresa as any)?.complemento,
+        empresa?.bairro,
+        [empresa?.cidade, empresa?.estado].filter(Boolean).join(" - "),
+        empresa?.cep ? `CEP ${String(empresa.cep).replace(/^(\d{5})(\d{3})$/, "$1-$2")}` : null,
+      ].filter(Boolean).join(", ");
+      const endCompany = company?.endereco ?? [company?.cidade, company?.estado].filter(Boolean).join(" - ") ?? "";
+
+      let tabelaItens = "";
+      if (itensContrato.length > 0) {
+        const linhaHeader = "EAP          | Descrição                                          | Un    | Qtd       | Vlr Unit.      | Total";
+        const linhaSep =    "-------------|-------------------------------------------------------|-------|-----------|----------------|----------------";
+        const sanitize = (s: string) => s.replace(/\|/g, "/").replace(/[\r\n]+/g, " ").trim();
+        const linhasItens = itensContrato.map(it => {
+          const eap = sanitize(it.eapCodigo || "—").padEnd(12);
+          const desc = sanitize(it.descricao || "").padEnd(55);
+          const un = sanitize(it.unidade || "—").padEnd(5);
+          const qtd = fmtNum(it.quantidade).padStart(9);
+          const vUnit = fmtMoney(it.valorUnitario).padStart(14);
+          const vTotal = fmtMoney(it.valorTotal).padStart(14);
+          return `${eap} | ${desc} | ${un} | ${qtd} | ${vUnit} | ${vTotal}`;
+        });
+        const totalGeral = itensContrato.reduce((s, it) => s + Number(it.valorTotal || 0), 0);
+        tabelaItens = [
+          "",
+          "ESCOPO DETALHADO DOS SERVIÇOS (EAP):",
+          "",
+          linhaHeader,
+          linhaSep,
+          ...linhasItens,
+          linhaSep,
+          `${"".padEnd(12)} | ${"".padEnd(55)} | ${"".padEnd(5)} | ${"".padEnd(9)} | ${"TOTAL:".padStart(14)} | ${fmtMoney(totalGeral).padStart(14)}`,
+          "",
+        ].join("\n");
+      }
+
+      // Rev. 4996 — dados bancários do CADASTRO da empresa terceira, preenchidos
+      // automaticamente na cláusula de pagamento (pedido do user).
+      // Rev. 4997 — fallback: se a empresa terceira não tem dados bancários mas está
+      // vinculada a um fornecedor (tela Fornecedores), usa os dados do fornecedor.
+      let eb: any = empresa ?? {};
+      if (!eb.banco && !eb.conta && !eb.pixChave && (eb as any).fornecedorId) {
+        const [fornVinc] = await db.select().from(fornecedores).where(and(eq(fornecedores.id, (eb as any).fornecedorId), eq(fornecedores.companyId, contrato.companyId)));
+        if (fornVinc && ((fornVinc as any).banco || (fornVinc as any).conta || (fornVinc as any).pix)) {
+          eb = { ...eb, banco: (fornVinc as any).banco, agencia: (fornVinc as any).agencia, conta: (fornVinc as any).conta, pixChave: (fornVinc as any).pix };
+        }
+      }
+      const partesBanco: string[] = [];
+      if (eb.banco) partesBanco.push(`Banco: ${eb.banco}`);
+      if (eb.agencia) partesBanco.push(`Agência: ${eb.agencia}`);
+      if (eb.conta) partesBanco.push(`Conta: ${eb.conta}${eb.tipoConta ? ` (${eb.tipoConta})` : ""}`);
+      if (eb.titularConta) partesBanco.push(`Titular: ${eb.titularConta}${eb.cpfCnpjTitular ? ` — ${eb.cpfCnpjTitular}` : ""}`);
+      if (eb.pixChave) partesBanco.push(`Chave PIX${eb.pixTipoChave ? ` (${eb.pixTipoChave})` : ""}: ${eb.pixChave}`);
+      const dadosBancarios = partesBanco.length
+        ? `DADOS BANCÁRIOS DA CONTRATADA (conforme cadastro): ${partesBanco.join(" · ")}.`
+        : "";
+
+      // Rev. 5019 — matriz de fornecimento + lista dinâmica de anexos (wizard da
+      // prévia). Versão TEXTO aqui; variantes HTML no bloco do template ISO.
+      const anexosCt: any = (contrato as any).anexosContrato || null;
+      const matrizItens: Array<{ item: string; fornecidoPor: string }> =
+        Array.isArray(anexosCt?.matriz) ? anexosCt.matriz.filter((m: any) => m && m.item) : [];
+      // Rev. 5020 — "não se aplica" (contrato exclusivamente de mão de obra)
+      const matrizNaoAplica = anexosCt?.matrizNaoAplica === true;
+      const matrizTxt = matrizNaoAplica
+        ? "Não se aplica — contrato exclusivamente de mão de obra. Materiais e insumos são de fornecimento da CONTRATANTE; ferramentas, equipamentos de uso da equipe e EPIs são de fornecimento da CONTRATADA, salvo previsão expressa em sentido diverso na Proposta Comercial (Anexo I)."
+        : matrizItens.length
+        ? ["Item / Recurso" + " ".repeat(26) + " | Fornecido por", "-".repeat(41) + "|" + "-".repeat(15),
+           ...matrizItens.map((m) => `${String(m.item).slice(0, 40).padEnd(40)} | ${String(m.fornecidoPor || "CONTRATADA").toUpperCase()}`)].join("\n")
+        : "Todos os materiais, equipamentos e recursos são de fornecimento da CONTRATADA, ressalvado eventual faturamento direto (Cláusula 5ª).";
+      const listaAnexos = listarAnexosContrato(anexosCt);
+      const listaAnexosTxt = listaAnexos.map((a) =>
+        `ANEXO ${a.numero} — ${a.titulo}${a.tipo === "projetos" && a.disciplinas ? ": " + a.disciplinas.map((d) => `${d.disciplina} (${d.arquivos.length} arquivo${d.arquivos.length > 1 ? "s" : ""})`).join("; ") : ""}`
+      ).join("\n");
+
+      const vars: Record<string, string> = {
+        "NUMERO_CONTRATO": contrato.numeroContrato ?? "_______________",
+        "ANO_ATUAL": new Date().getFullYear().toString(),
+        "CONTRATANTE_NOME": company?.razaoSocial ?? "_______________",
+        "CONTRATANTE_CNPJ": company?.cnpj ?? "_______________",
+        "CONTRATANTE_ENDERECO": endCompany || "_______________",
+        "CONTRATANTE_REPRESENTANTE": "Felipe Costa Alves",
+        "CONTRATANTE_CARGO": "Sócio Administrador",
+        "CONTRATADA_NOME": empresa?.razaoSocial ?? "_______________",
+        "CONTRATADA_CNPJ": empresa?.cnpj ?? "_______________",
+        "CONTRATADA_ENDERECO": endEmpresa || "_______________",
+        "CONTRATADA_REPRESENTANTE": empresa?.responsavelNome ?? "_______________",
+        "CONTRATADA_CARGO": empresa?.responsavelCargo ?? "Representante Legal",
+        "OBRA_NOME": obra?.nome ?? contrato.obraNome ?? "_______________",
+        "DESCRICAO_OBJETO": contrato.descricao ?? "_______________",
+        "VALOR_TOTAL": fmtMoney(contrato.valorTotal),
+        // Rev. 5010 — valor por extenso p/ destaque no contrato (pedido do user)
+        "VALOR_TOTAL_EXTENSO": valorPorExtensoBR(Number(contrato.valorTotal) || 0),
+        // Rev. 5013 — título editável do contrato (digitado na prévia); default legado
+        "TITULO_CONTRATO": String(contrato.tituloContrato || "Contrato de Prestação de Serviços").toUpperCase(),
+        "DATA_INICIO": fmtDate(contrato.dataInicio ?? undefined),
+        "DATA_TERMINO": fmtDate(contrato.dataTermino ?? undefined),
+        "CIDADE_ESTADO": [company?.cidade, company?.estado].filter(Boolean).join(" - ") || "Montes Claros - MG",
+        "DATA_ASSINATURA": fmtDate(new Date().toISOString()),
+        "TABELA_ITENS": tabelaItens,
+        "QTD_ITENS": String(itensContrato.length),
+        "TESTEMUNHA_FINANCEIRO": contrato.testemunhaFinanceiro || (company as any)?.gestorFinanceiroNome || "_______________",
+        // SEMPRE o "Engenheiro / Responsável" do cadastro da obra (sem fallback legado).
+        "TESTEMUNHA_GESTOR_PROJETO": obra?.responsavel || "_______________",
+        "REVISAO_CRONOGRAMA": revisaoCronoLabel || "—",
+        "DIA_MEDICAO": String(contrato.diaMedicao ?? 25),
+        "PRAZO_APROVACAO": String(contrato.prazoAprovacaoDias ?? 5),
+        "PRAZO_EMISSAO_NF": String(contrato.prazoEmissaoNf ?? 3),
+        "PRAZO_LIBERACAO_OP": String(contrato.prazoLiberacaoOp ?? 5),
+        "DIA_PAGAMENTO": String(contrato.diaPagamento ?? 10),
+        "DADOS_BANCARIOS": dadosBancarios,
+        // Rev. 5014 — versão em TEXTO do fluxograma (antes vazava o placeholder cru
+        // na versão texto do contrato); o caminho HTML substitui por caixas com setas.
+        // Rev. 5019 — matriz de fornecimento e lista de anexos (texto)
+        "MATRIZ_FORNECIMENTO": matrizTxt,
+        "LISTA_ANEXOS": listaAnexosTxt,
+        "FLUXOGRAMA_PAGAMENTO": `MEDIÇÃO (dia ${contrato.diaMedicao ?? 25}) → APROVAÇÃO BM (até ${contrato.prazoAprovacaoDias ?? 5} dias úteis) → DOCUMENTAÇÃO (guias quitadas) → EMISSÃO NF (até ${contrato.prazoEmissaoNf ?? 3} dias úteis) → LIBERAÇÃO OP (até ${contrato.prazoLiberacaoOp ?? 5} dias úteis) → PAGAMENTO (dia ${contrato.diaPagamento ?? 10})`,
+      };
+
+      // Rev. 4999 — se há template "Contrato Terceiros" VIGENTE na Central de Documentos,
+      // ELE é a base do contrato (fonte oficial ISO). Preenche os placeholders camelCase
+      // do catálogo + os UPPER legados. Garante escopo (tabela) e dados bancários mesmo
+      // que o template não tenha os placeholders.
+      if (templateIso) {
+        let textoIso = _htmlParaTexto((templateIso as any).conteudoHtml);
+        // Rev. 5006 — HTML fiel ao template (mesma fonte, placeholders substituídos por
+        // variantes HTML) para a prévia renderizar EXATAMENTE como o documento da Central.
+        const escH = (s: any) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+        const fmtMoneyH = (v: any) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(v) || 0);
+        const fmtNumH = (v: any) => new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(Number(v) || 0);
+        let tabelaItensHtml = "";
+        if (itensContrato.length > 0) {
+          const totalGeralH = itensContrato.reduce((s: number, it: any) => s + Number(it.valorTotal || 0), 0);
+          const tdS = `padding:4px 6px;border:1px solid #cbd5e1;font-size:9pt`;
+          tabelaItensHtml = `<p style="margin-top:12px;break-after:avoid-page"><strong>ESCOPO DETALHADO DOS SERVIÇOS (EAP):</strong></p>
+<table style="width:100%;border-collapse:collapse;margin:6px 0 12px 0;page-break-inside:avoid"><thead><tr style="background:#1B2A4A;color:#fff">
+<th style="${tdS};border-color:#1B2A4A;text-align:left">EAP</th><th style="${tdS};border-color:#1B2A4A;text-align:left">Descrição</th><th style="${tdS};border-color:#1B2A4A">Un</th><th style="${tdS};border-color:#1B2A4A;text-align:right">Qtd</th><th style="${tdS};border-color:#1B2A4A;text-align:right">Vlr Unit.</th><th style="${tdS};border-color:#1B2A4A;text-align:right">Total</th>
+</tr></thead><tbody>
+${itensContrato.map((it: any) => `<tr><td style="${tdS}">${escH(it.eapCodigo || "—")}</td><td style="${tdS}">${escH(it.descricao || "")}</td><td style="${tdS};text-align:center">${escH(it.unidade || "—")}</td><td style="${tdS};text-align:right">${fmtNumH(it.quantidade)}</td><td style="${tdS};text-align:right">${fmtMoneyH(it.valorUnitario)}</td><td style="${tdS};text-align:right">${fmtMoneyH(it.valorTotal)}</td></tr>`).join("\n")}
+<tr><td colspan="5" style="${tdS};text-align:right;font-weight:700">TOTAL:</td><td style="${tdS};text-align:right;font-weight:700">${fmtMoneyH(totalGeralH)}</td></tr>
+</tbody></table>`;
+        }
+        const textoParaHtml = (t: string) => String(t || "").split(/\n{2,}/).map(par => `<p>${escH(par).replace(/\n/g, "<br/>")}</p>`).join("\n");
+        let htmlIso = String((templateIso as any).conteudoHtml || "");
+        // Rev. 5002 — critério da OBRA ou, na falta, o padrão da EMPRESA (Configurações).
+        let criteriosTxtIso = _criteriosMedicaoTexto(
+          (obra as any)?.terceiroCriterioMedicao ?? await _criterioMedicaoPadraoEmpresa(db, (obra as any)?.companyId ?? (contrato as any)?.companyId)
+        );
+        // Rev. 5014 — no CONTRATO o bloco vira a subcláusula 3.2.2 e NÃO repete o fluxo
+        // de datas (que já está na 3.2/3.2.1 — antes havia dois prazos de pagamento
+        // divergentes no mesmo contrato). Demais telas seguem usando o texto completo.
+        if (criteriosTxtIso) {
+          criteriosTxtIso = "3.2.2 " + criteriosTxtIso.replace(/\s*FLUXO DE MEDIÇÃO E PAGAMENTO:[\s\S]*$/, "").trim()
+            + " Os prazos de medição, aprovação, faturamento e pagamento observam exclusivamente o fluxo da subcláusula 3.2, contados em dias úteis, não se computando sábados, domingos e feriados.";
+        }
+        // Rev. 5015 — dados bancários em TABELA (Favorecido/Banco/Agência/Conta/PIX),
+        // pedido do user: "fica mais organizado e evita erro". A versão texto usa o
+        // formato pipe (mesmo do EAP), que as telas de contrato já renderizam como tabela.
+        const bancoLinhas: Array<[string, string]> = [
+          ["Favorecido", String(eb.titularConta || vars["CONTRATADA_NOME"] || "—")],
+          ["Banco", String(eb.banco || "—")],
+          ["Agência", String(eb.agencia || "—")],
+          ["Conta", eb.conta ? `${eb.conta}${eb.tipoConta ? ` (${eb.tipoConta})` : ""}` : "—"],
+          ["Chave PIX", eb.pixChave ? `${eb.pixTipoChave ? `(${eb.pixTipoChave}) ` : ""}${eb.pixChave}` : "—"],
+        ];
+        const dadosBancariosTabelaTxt = dadosBancarios
+          ? ["Campo      | Informação", "-----------|" + "-".repeat(50), ...bancoLinhas.map(([c, v]) => `${c.padEnd(10)} | ${v}`)].join("\n")
+          : "";
+        const tdB = `padding:5px 8px;border:1px solid #cbd5e1;font-size:9pt`;
+        const dadosBancariosTabelaHtml = dadosBancarios
+          ? `<table style="width:100%;max-width:520px;border-collapse:collapse;margin:6px 0 12px 0;page-break-inside:avoid"><tbody>${bancoLinhas.map(([c, v]) =>
+              `<tr><td style="${tdB};background:#f1f5f9;font-weight:700;width:130px">${escH(c)}</td><td style="${tdB}">${escH(v)}</td></tr>`).join("")}</tbody></table>`
+          : "";
+        // Rev. 5019 — variantes HTML da matriz de fornecimento e da lista de anexos
+        const matrizFornecimentoHtml = !matrizNaoAplica && matrizItens.length
+          ? `<table style="width:100%;max-width:560px;border-collapse:collapse;margin:6px 0 12px 0;page-break-inside:avoid"><thead><tr style="background:#1B2A4A;color:#fff"><th style="${tdB};border-color:#1B2A4A;text-align:left">Item / Recurso</th><th style="${tdB};border-color:#1B2A4A;width:150px">Fornecido por</th></tr></thead><tbody>${matrizItens.map((m) =>
+              `<tr><td style="${tdB}">${escH(m.item)}</td><td style="${tdB};text-align:center;font-weight:600">${escH(String(m.fornecidoPor || "CONTRATADA").toUpperCase())}</td></tr>`).join("")}</tbody></table>`
+          : `<p>${escH(matrizTxt)}</p>`;
+        const listaAnexosHtml = listaAnexos.map((a) =>
+          `<p style="margin:2px 0">ANEXO ${escH(a.numero)} — ${escH(a.titulo)}${a.tipo === "projetos" && a.disciplinas ? ": " + escH(a.disciplinas.map((d) => `${d.disciplina} (${d.arquivos.length} arquivo${d.arquivos.length > 1 ? "s" : ""})`).join("; ")) : ""}</p>`
+        ).join("\n");
+        const varsIso: Record<string, string> = {
+          "empresaRazaoSocial": vars["CONTRATANTE_NOME"],
+          "empresaCnpj": vars["CONTRATANTE_CNPJ"],
+          "empresaEndereco": vars["CONTRATANTE_ENDERECO"],
+          "docNumero": vars["NUMERO_CONTRATO"],
+          "docData": vars["DATA_ASSINATURA"],
+          "docLocal": vars["CIDADE_ESTADO"],
+          "obraNome": vars["OBRA_NOME"],
+          "obraEndereco": (obra as any)?.endereco ?? [ (obra as any)?.cidade, (obra as any)?.estado ].filter(Boolean).join(" - ") ?? "_______________",
+          "contratadaNome": vars["CONTRATADA_NOME"],
+          "contratadaCnpj": vars["CONTRATADA_CNPJ"],
+          "contratadaEndereco": vars["CONTRATADA_ENDERECO"],
+          "contratadaRepresentante": vars["CONTRATADA_REPRESENTANTE"],
+          "descricaoServico": vars["DESCRICAO_OBJETO"],
+          "valorTotal": vars["VALOR_TOTAL"],
+          "valorTotalExtenso": vars["VALOR_TOTAL_EXTENSO"],
+          "tituloContrato": vars["TITULO_CONTRATO"],
+          "dataInicio": vars["DATA_INICIO"],
+          "dataTermino": vars["DATA_TERMINO"],
+          "foroComarca": vars["CIDADE_ESTADO"],
+          "tabelaItens": tabelaItens,
+          "dadosBancarios": dadosBancariosTabelaTxt,
+          "criteriosMedicao": criteriosTxtIso ?? "",
+        };
+        for (const [k, v] of Object.entries(varsIso)) textoIso = textoIso.replaceAll(`{{${k}}}`, v);
+        for (const [k, v] of Object.entries(vars)) textoIso = textoIso.replaceAll(`{{${k}}}`, v);
+        // Rev. 5006 — mesmas substituições no HTML, com variantes HTML para os blocos.
+        const varsIsoHtml: Record<string, string> = {
+          ...varsIso,
+          "tabelaItens": tabelaItensHtml,
+          "dadosBancarios": dadosBancariosTabelaHtml,
+          "criteriosMedicao": criteriosTxtIso ? textoParaHtml(criteriosTxtIso) : "",
+        };
+        for (const [k, v] of Object.entries(varsIsoHtml)) htmlIso = htmlIso.replaceAll(`{{${k}}}`, ["tabelaItens", "dadosBancarios", "criteriosMedicao"].includes(k) ? v : escH(v));
+        // Rev. 5011 — fluxograma técnico de verdade (pedido do user): etapas em
+        // caixas com setas, sem "formatação de destaque" no texto das cláusulas.
+        // Rev. 5016 — fluxograma numa LINHA ÚNICA, colorido, com "Passo N" e prazos
+        // por extenso ("dias úteis") — pedido do user.
+        const _fluxSteps: Array<[string, string, string, string]> = [
+          ["MEDIÇÃO", `dia ${vars["DIA_MEDICAO"]}`, "#1d4ed8", "#eff6ff"],
+          ["APROVAÇÃO BM", `até ${vars["PRAZO_APROVACAO"]} dias úteis`, "#7c3aed", "#f5f3ff"],
+          ["DOCUMENTAÇÃO", "guias quitadas", "#0f766e", "#f0fdfa"],
+          ["EMISSÃO NF", `até ${vars["PRAZO_EMISSAO_NF"]} dias úteis`, "#b45309", "#fffbeb"],
+          ["LIBERAÇÃO OP", `até ${vars["PRAZO_LIBERACAO_OP"]} dias úteis`, "#be185d", "#fdf2f8"],
+          ["PAGAMENTO", `dia ${vars["DIA_PAGAMENTO"]}`, "#15803d", "#f0fdf4"],
+        ];
+        // Rev. 5017 — texto NÃO pode vazar do balão: sem nowrap herdado, cada caixa
+        // permite quebra interna (white-space:normal + overflow-wrap) e tem largura
+        // flexível igual (flex:1 1 0 + min-width:0).
+        const fluxogramaHtml = `<div style="display:flex;flex-wrap:nowrap;align-items:stretch;justify-content:center;gap:0;margin:12px 0;page-break-inside:avoid">${_fluxSteps.map(([t, s, cor, fundo], i) =>
+          `<span style="display:inline-flex;flex-direction:column;justify-content:center;text-align:center;border:1.5px solid ${cor};background:${fundo};border-radius:5px;padding:5px 3px;min-width:0;flex:1 1 0;white-space:normal;overflow:hidden;overflow-wrap:break-word;line-height:1.25">` +
+          `<span style="display:block;font-size:6pt;font-weight:700;color:${cor};text-transform:uppercase;letter-spacing:.3px">Passo ${i + 1}</span>` +
+          `<span style="display:block;font-size:7pt;font-weight:700;color:#111827;margin-top:1px">${escH(t)}</span>` +
+          `<span style="display:block;font-size:6.5pt;color:${cor};font-weight:600;margin-top:1px">${escH(s)}</span></span>`
+        ).join(`<span style="display:inline-flex;align-items:center;margin:0 2px;color:#64748b;font-weight:700;font-size:9pt;flex:0 0 auto">&#8594;</span>`)}</div>`;
+        for (const [k, v] of Object.entries(vars)) htmlIso = htmlIso.replaceAll(`{{${k}}}`, k === "TABELA_ITENS" ? tabelaItensHtml : k === "FLUXOGRAMA_PAGAMENTO" ? fluxogramaHtml : k === "MATRIZ_FORNECIMENTO" ? matrizFornecimentoHtml : k === "LISTA_ANEXOS" ? listaAnexosHtml : escH(v));
+        // Escopo (EAP) e dados bancários são obrigatórios no contrato: se o template
+        // não previu os placeholders, anexa ao final do documento.
+        if (tabelaItens && !((templateIso as any).conteudoHtml || "").includes("tabelaItens") && !((templateIso as any).conteudoHtml || "").includes("TABELA_ITENS")) {
+          textoIso += `\n\n${tabelaItens}`;
+          htmlIso += `\n${tabelaItensHtml}`;
+        }
+        if (dadosBancarios && !((templateIso as any).conteudoHtml || "").includes("dadosBancarios") && !((templateIso as any).conteudoHtml || "").includes("DADOS_BANCARIOS")) {
+          textoIso += `\n\nDADOS BANCÁRIOS DA CONTRATADA (conforme cadastro):\n\n${dadosBancariosTabelaTxt}`;
+          htmlIso += `\n<p><strong>DADOS BANCÁRIOS DA CONTRATADA (conforme cadastro):</strong></p>\n${dadosBancariosTabelaHtml}`;
+        }
+        // Rev. 5001 — se o template não previu o placeholder {{criteriosMedicao}},
+        // injeta a cláusula mesmo assim.
+        if (criteriosTxtIso && !((templateIso as any).conteudoHtml || "").includes("criteriosMedicao")) {
+          textoIso += `\n\n${criteriosTxtIso}`;
+          htmlIso += `\n${textoParaHtml(criteriosTxtIso)}`;
+        }
+        // Rev. 5000 — proposta comercial do fornecedor (anexo da cotação): referenciada
+        // como ANEXO e emendada automaticamente ao final do PDF do contrato.
+        if ((contrato as any).propostaNome || (contrato as any).propostaUrl) {
+          textoIso += `\n\nANEXO I — PROPOSTA COMERCIAL DA CONTRATADA\n\nIntegra o presente contrato, como parte indissociável, a Proposta Comercial da CONTRATADA ("${(contrato as any).propostaNome || "Proposta Comercial"}"), anexada ao final deste documento. Em caso de divergência entre as disposições deste contrato e a proposta, prevalecerá o disposto neste contrato.`;
+          htmlIso += `\n<h3>ANEXO I — PROPOSTA COMERCIAL DA CONTRATADA</h3>\n<p>Integra o presente contrato, como parte indissociável, a Proposta Comercial da CONTRATADA ("${escH((contrato as any).propostaNome || "Proposta Comercial")}"), anexada ao final deste documento. Em caso de divergência entre as disposições deste contrato e a proposta, prevalecerá o disposto neste contrato.</p>`;
+        }
+        // Rev. 5006 — dados p/ o cliente montar o documento com o MESMO motor de layout
+        // da Central de Documentos (buildFcDocument): cabeçalho, faixa, assinaturas.
+        const docMeta = {
+          empresa: {
+            razaoSocial: company?.razaoSocial ?? "",
+            nomeFantasia: (company as any)?.nomeFantasia ?? "",
+            cnpj: company?.cnpj ?? "",
+            endereco: endCompany || "",
+            cidade: company?.cidade ?? "",
+            estado: company?.estado ?? "",
+            logoUrl: (company as any)?.logoUrl ?? null,
+          },
+          contratadaNome: vars["CONTRATADA_NOME"],
+          contratadaCnpj: vars["CONTRATADA_CNPJ"],
+          gestorProjetoNome: obra?.responsavel || "",
+          financeiroNome: (company as any)?.gestorFinanceiroNome || "",
+          // Rev. 5014 — assinatura da CONTRATANTE sai com o nome do sócio, não a razão social
+          contratanteRepresentante: vars["CONTRATANTE_REPRESENTANTE"],
+          localData: `${vars["CIDADE_ESTADO"]}, ${vars["DATA_ASSINATURA"]}`,
+        };
+        return { texto: textoIso, html: htmlIso, docMeta, template: { id: null, companyId: contrato.companyId, nome: `Central de Documentos — Contrato Terceiros (Rev. ${(templateIso as any).versaoAtual ?? ""})`, texto: textoIso, ativo: true, versao: (templateIso as any).versaoAtual ?? 1, fonteIso: true } };
+      }
+
+      let texto = template.texto;
+      // Rev. 4996 — templates salvos antes do placeholder {{DADOS_BANCARIOS}}: injeta o
+      // bloco logo após a cláusula f) PAGAMENTO, para o contrato sempre sair com os dados.
+      if (!texto.includes("{{DADOS_BANCARIOS}}") && dadosBancarios) {
+        const marcador = /(\bf\) PAGAMENTO[^\n]*\n)/;
+        if (marcador.test(texto)) texto = texto.replace(marcador, `$1\n{{DADOS_BANCARIOS}}\n`);
+      }
+      for (const [k, v] of Object.entries(vars)) {
+        texto = texto.replaceAll(`{{${k}}}`, v);
+      }
+
+      return { texto, template };
+}
+
+// Rev. 4998 — datas de início/término do contrato a partir do cronograma (compartilhado
+// entre geração real e prévia).
+async function _datasCronogramaFromCotacao(db: any, cot: any, itens: any[]): Promise<{ dataInicioContrato: string | null; dataTerminoContrato: string | null }> {
+      let dataInicioContrato: string | null = null;
+      let dataTerminoContrato: string | null = null;
+      let inicioMobFixo: string | null = null;
+      // Rev. 5012 — PRIORIDADE 1: prazo definido nas Condições de Pagamento da
+      // cotação (data de início da mobilização + duração do contrato em dias).
+      // Quando preenchido pelo comprador, manda sobre as datas do cronograma/EAP.
+      try {
+        if (cot.fornecedorId) {
+          const [fp] = await db.select({
+            mob: comprasCotacaoFornecedores.mobilizacaoDataInicio,
+            dur: comprasCotacaoFornecedores.duracaoContratoDias,
+          }).from(comprasCotacaoFornecedores).where(
+            and(eq(comprasCotacaoFornecedores.cotacaoId, cot.id), eq(comprasCotacaoFornecedores.fornecedorId, cot.fornecedorId))
+          );
+          const mob = String(fp?.mob || "").slice(0, 10);
+          if (/^\d{4}-\d{2}-\d{2}$/.test(mob)) {
+            dataInicioContrato = mob;
+            inicioMobFixo = mob;
+            const dur = Number(fp?.dur) || 0;
+            if (dur > 0) {
+              const d = new Date(`${mob}T12:00:00Z`);
+              d.setUTCDate(d.getUTCDate() + dur);
+              dataTerminoContrato = d.toISOString().slice(0, 10);
+            }
+            console.log(`[gerarContratoFromCotacao] Datas via Condições de Pagamento (mobilização ${mob} + ${fp?.dur ?? 0} dias): ${dataInicioContrato} a ${dataTerminoContrato ?? "(término via cronograma)"}`);
+            if (dataTerminoContrato) return { dataInicioContrato, dataTerminoContrato };
+          }
+        }
+      } catch { /* segue p/ cronograma */ }
+      try {
+        if (cot.obraId) {
+          const scItemIds = itens.map(it => it.solicitacaoItemId).filter(Boolean) as number[];
+          let eapCodes: string[] = [];
+          if (scItemIds.length > 0) {
+            const scItems = await db.select({
+              eapCodigo: comprasSolicitacoesItens.eapCodigo,
+            }).from(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.id, scItemIds));
+            eapCodes = [...new Set(scItems.map(s => s.eapCodigo).filter(Boolean))] as string[];
+          }
+
+          let found = false;
+
+          if (eapCodes.length > 0) {
+            try {
+              const cronoDates = await db.execute(sql`
+                WITH latest_rev AS (
+                  SELECT pr.id as rev_id, pp.id as proj_id
+                  FROM planejamento_projetos pp
+                  JOIN planejamento_revisoes pr ON pr.projeto_id = pp.id AND pr.status = 'aprovada'
+                  WHERE pp.obra_id = ${cot.obraId}
+                  ORDER BY pr.numero DESC
+                  LIMIT 1
+                )
+                SELECT MIN(pa.data_inicio) as min_inicio, MAX(pa.data_fim) as max_fim
+                FROM planejamento_atividades pa
+                JOIN latest_rev lr ON pa.projeto_id = lr.proj_id AND pa.revisao_id = lr.rev_id
+                WHERE pa.data_inicio IS NOT NULL
+                  AND pa.disabled IS NOT TRUE
+                  AND pa.eap_codigo IN (${sql.join(eapCodes.map(c => sql`${c}`), sql`, `)})
+              `);
+              const row = (cronoDates as any).rows?.[0];
+              if (row?.min_inicio) {
+                dataInicioContrato = String(row.min_inicio).slice(0, 10);
+                found = true;
+              }
+              if (row?.max_fim) {
+                dataTerminoContrato = String(row.max_fim).slice(0, 10);
+                found = true;
+              }
+              if (found) console.log(`[gerarContratoFromCotacao] Datas via EAP cronograma (${eapCodes.length} códigos): ${dataInicioContrato} a ${dataTerminoContrato}`);
+            } catch (eapErr) {
+              console.warn("[gerarContratoFromCotacao] Erro na busca por EAP:", eapErr);
+            }
+          }
+
+          if (!found) {
+            try {
+              const descricoes = itens
+                .map(it => {
+                  let d = it.descricao || "";
+                  d = d.replace(/^\[[^\]]+\]\s*/, "").trim().toLowerCase();
+                  return d;
+                })
+                .filter(d => d.length > 5);
+              const uniqueDescricoes = [...new Set(descricoes)];
+
+              if (uniqueDescricoes.length > 0) {
+                const escapeLike = (s: string) => s.replace(/[%_\\]/g, c => "\\" + c);
+                const likeClauses = uniqueDescricoes.map(d => sql`LOWER(pa.nome) LIKE ${"%" + escapeLike(d.slice(0, 40)) + "%"} ESCAPE '\\'`);
+                const cronoDates = await db.execute(sql`
+                  SELECT MIN(pa.data_inicio) as min_inicio, MAX(pa.data_fim) as max_fim
+                  FROM planejamento_projetos pp
+                  JOIN planejamento_revisoes pr ON pr.projeto_id = pp.id AND pr.status = 'aprovada'
+                  JOIN planejamento_atividades pa ON pa.projeto_id = pp.id AND pa.revisao_id = pr.id
+                  WHERE pp.obra_id = ${cot.obraId}
+                    AND pa.data_inicio IS NOT NULL
+                    AND pa.disabled IS NOT TRUE
+                    AND (${sql.join(likeClauses, sql` OR `)})
+                `);
+                const row = (cronoDates as any).rows?.[0];
+                if (row?.min_inicio) {
+                  dataInicioContrato = String(row.min_inicio).slice(0, 10);
+                  found = true;
+                }
+                if (row?.max_fim) {
+                  dataTerminoContrato = String(row.max_fim).slice(0, 10);
+                  found = true;
+                }
+                if (found) console.log(`[gerarContratoFromCotacao] Datas por descrição no cronograma: ${dataInicioContrato} a ${dataTerminoContrato}`);
+              }
+            } catch (descErr) {
+              console.warn("[gerarContratoFromCotacao] Erro na busca por descrição:", descErr);
+            }
+          }
+
+          if (!found) {
+            console.log(`[gerarContratoFromCotacao] Obra ${cot.obraId} sem cronograma no planejamento — datas do contrato em branco`);
+          }
+        }
+      } catch (e) {
+        console.warn("[gerarContratoFromCotacao] Erro ao consultar datas do cronograma:", e);
+      }
+  // Mobilização definida sem duração: o início das Condições manda; término veio do cronograma.
+  if (inicioMobFixo) dataInicioContrato = inicioMobFixo;
+  return { dataInicioContrato, dataTerminoContrato };
+}
+
 export const terceiroContratosRouter = router({
+  // Rev. 5002 — Critério de Medição padrão da EMPRESA (Configurações)
+  getCriterioMedicaoPadrao: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      return { valor: await _criterioMedicaoPadraoEmpresa(db, input.companyId) };
+    }),
+  setCriterioMedicaoPadrao: protectedProcedure
+    .input(z.object({ companyId: z.number(), valor: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== "admin" && ctx.user.role !== "admin_master") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas admin pode alterar o critério padrão" });
+      if (!_criteriosMedicaoTexto(input.valor)) throw new TRPCError({ code: "BAD_REQUEST", message: "Defina o Tipo de Medição do critério padrão" });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const { systemCriteria } = await import("../../drizzle/schema");
+      const [existing] = await db.select({ id: systemCriteria.id }).from(systemCriteria)
+        .where(and(eq(systemCriteria.companyId, input.companyId), eq(systemCriteria.chave, "terceiro_criterio_medicao_padrao"))).limit(1);
+      if (existing) {
+        await db.update(systemCriteria).set({ valor: input.valor, atualizadoPor: ctx.user.name ?? "Sistema" }).where(eq(systemCriteria.id, existing.id));
+      } else {
+        await db.insert(systemCriteria).values({
+          companyId: input.companyId, categoria: "terceiros", chave: "terceiro_criterio_medicao_padrao",
+          valor: input.valor, atualizadoPor: ctx.user.name ?? "Sistema",
+        } as any);
+      }
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "configuracoes", entityType: "criterio_medicao_padrao", entityId: input.companyId, details: "Critério de Medição padrão de terceiros atualizado" });
+      return { success: true };
+    }),
+
 
   listarContratos: protectedProcedure
     .input(z.object({
@@ -790,12 +1664,34 @@ export const terceiroContratosRouter = router({
         .orderBy(desc(terceiroDocumentos.criadoEm));
 
       const [empresa] = await db.select().from(empresasTerceiras).where(eq(empresasTerceiras.id, contrato.empresaTerceiraId));
+      // Rev. 5056 — pré-preencher e-mail do fornecedor: empresa terceira sem e-mail
+      // cai no cadastro de Fornecedores (fonte que o usuário mantém completa).
+      if (empresa && !empresa.email && (empresa as any).fornecedorId) {
+        try {
+          const [forn] = await db.select({ email: fornecedores.email, contatoEmail: (fornecedores as any).contatoEmail, contatoNome: (fornecedores as any).contatoNome })
+            .from(fornecedores).where(eq(fornecedores.id, (empresa as any).fornecedorId));
+          if (forn) {
+            (empresa as any).email = forn.email || (forn as any).contatoEmail || null;
+            if (!(empresa as any).responsavelNome && (forn as any).contatoNome) (empresa as any).responsavelNome = (forn as any).contatoNome;
+          }
+        } catch {}
+      }
       // Gestor de Projeto (testemunha 2) = SEMPRE o "Engenheiro / Responsável" do cadastro da obra.
       let obraResponsavel: string | null = null;
+      let obraResponsavelEmail: string | null = null;
       if (contrato.obraId) {
         try {
           const [o] = await db.select({ responsavel: obras.responsavel }).from(obras).where(eq(obras.id, contrato.obraId));
           obraResponsavel = o?.responsavel || null;
+        } catch {}
+      }
+      // Rev. 5056 — e-mail do gestor: match do responsável da obra com o cadastro
+      // de usuários (só se o match por nome for ÚNICO — evita e-mail errado).
+      if (obraResponsavel) {
+        try {
+          const matches = await db.select({ email: users.email }).from(users)
+            .where(sql`LOWER(TRIM(${users.name})) = LOWER(TRIM(${obraResponsavel}))`);
+          if (matches.length === 1) obraResponsavelEmail = matches[0].email || null;
         } catch {}
       }
       const [companyData] = await db.select({
@@ -1102,6 +1998,7 @@ export const terceiroContratosRouter = router({
         empresa: empresa || null,
         companyData: companyData || null,
         obraResponsavel,
+        obraResponsavelEmail,
         itens,
         itensHierarchy,
         medicoes,
@@ -1204,7 +2101,29 @@ export const terceiroContratosRouter = router({
       // (quando definidos), podendo ser sobrescrito depois em "Critérios do Contrato".
       const herdado = await _herdarCondicaoPagamentoDaObra(db, input.obraId, input.companyId);
 
+      // Rev. — CONGELA os Critérios de Medição "definidos" do catálogo global no
+      // contrato (snapshot). Mudanças futuras na configuração NÃO afetam este
+      // contrato — só contratos novos pegam a versão nova.
+      let criteriosMedicaoJson: string | null = null;
+      try {
+        const defs = await db.select().from(medicaoCriterios)
+          .where(and(eq(medicaoCriterios.companyId, input.companyId),
+            eq(medicaoCriterios.status, "definido"), eq(medicaoCriterios.ativo, 1)));
+        if (defs.length) {
+          criteriosMedicaoJson = JSON.stringify(defs.map((c: any) => ({
+            servico: c.servico, chaveServico: c.chaveServico, unidade: c.unidade,
+            limiteVaoM2: c.limiteVaoM2, descontaAcima: c.descontaAcima,
+            pagaRequadro: c.pagaRequadro, requadroIncluiPeitoril: c.requadroIncluiPeitoril,
+            quemPagaRequadro: c.quemPagaRequadro, regraFc: c.regraFc, incluso: c.incluso,
+            congeladoEm: new Date().toISOString(),
+          })));
+        }
+      } catch (e: any) {
+        console.error("[terceiroContratos] snapshot de critérios falhou (contrato segue sem):", e?.message || e);
+      }
+
       const [c] = await db.insert(terceiroContratos).values({
+        criteriosMedicaoJson,
         ...herdado,
         companyId: input.companyId,
         empresaTerceiraId: input.empresaTerceiraId,
@@ -1362,8 +2281,15 @@ export const terceiroContratosRouter = router({
     }),
 
   excluirContratosLote: protectedProcedure
-    .input(z.object({ ids: z.array(z.number()), companyId: z.number() }))
-    .mutation(async ({ input }) => {
+    .input(z.object({
+      ids: z.array(z.number()),
+      companyId: z.number(),
+      password: z.string().optional(),
+      motivo: z.string().min(5, "Informe o motivo (mín. 5 caracteres)."),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      // Rev. 4998 — mesma governança do excluirContrato: só admin_master + senha + motivo (auditoria)
+      await _assertMasterComSenha(ctx.user, input.password);
       const db = await getDb();
       let deleted = 0;
       for (const cid of input.ids) {
@@ -1371,6 +2297,16 @@ export const terceiroContratosRouter = router({
           and(eq(terceiroContratos.id, cid), eq(terceiroContratos.companyId, input.companyId))
         );
         if (!contrato) continue;
+        await createAuditLog({
+          userId: ctx.user.id,
+          userName: (ctx.user as any).name || null,
+          companyId: input.companyId,
+          action: "excluir",
+          module: "terceiros",
+          entityType: "contrato",
+          entityId: cid,
+          details: `Exclusão definitiva (lote) do contrato "${(contrato as any).numeroContrato || cid}" — motivo: ${input.motivo.trim()}`,
+        });
         const medicoes = await db.select({ id: terceiroMedicoes.id }).from(terceiroMedicoes).where(eq(terceiroMedicoes.contratoId, cid));
         for (const m of medicoes) {
           await db.delete(terceiroMedicaoItens).where(eq(terceiroMedicaoItens.medicaoId, m.id));
@@ -4522,17 +5458,35 @@ export const terceiroContratosRouter = router({
   // vinculando (ou criando) a empresa terceira a partir do fornecedor.
   // ──────────────────────────────────────────────────────────────
   gerarContratoFromCotacao: protectedProcedure
-    .input(z.object({ cotacaoId: z.number(), companyId: z.number() }))
-    .mutation(async ({ input }) => {
+    .input(z.object({ cotacaoId: z.number(), companyId: z.number(), tituloContrato: z.string().max(200).optional() }))
+    .mutation(async ({ input, ctx }) => {
+      // Rev. 5054 — pedido do user (IMG_5553): o contrato do módulo Terceiros
+      // deve ser EXATAMENTE o documento validado na prévia da cotação. O texto
+      // é congelado aqui na aprovação (snapshot) — ver _overridesDaCotacaoTC.
       const db = await getDb();
+
+      // Rev. 5008 — tenant guard (code review): antes qualquer usuário podia gerar
+      // contrato de cotação de outra empresa passando o id.
+      await _assertCompanyAccess(ctx.user, input.companyId);
 
       // 1. Carregar cotação
       const [cot] = await db.select().from(comprasCotacoes).where(eq(comprasCotacoes.id, input.cotacaoId));
       if (!cot) throw new Error("Cotação não encontrada");
+      if (Number(cot.companyId) !== Number(input.companyId)) throw new Error("Cotação não pertence à empresa informada");
       if ((cot as any).tipo !== "servico") throw new Error("Apenas cotações do tipo 'serviço' podem gerar contratos de terceiros");
       if ((cot as any).contratoTerceiroId) throw new Error("Esta cotação já gerou um contrato de serviço");
 
       const isPendente = cot.status === "pendente";
+
+      // Rev. 5001/5002 — poka-yoke: contrato de MDO/pacote exige Critério de Medição
+      // (o da obra ou, na falta, o padrão da empresa em Configurações).
+      if (cot.obraId) {
+        const [obraChk] = await db.select({ tc: (obras as any).terceiroCriterioMedicao, cid: obras.companyId }).from(obras).where(eq(obras.id, cot.obraId));
+        const efetivo = (obraChk as any)?.tc || await _criterioMedicaoPadraoEmpresa(db, (obraChk as any)?.cid ?? cot.companyId);
+        if (!_criteriosMedicaoTexto(efetivo)) {
+          throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Sem Critério de Medição definido. Defina o padrão da empresa em Configurações › Critérios do Sistema, ou o da obra em Editar Obra › \"Critério de Medição\", antes de gerar o contrato do terceiro." });
+        }
+      }
 
       // 2. Carregar itens
       const itens = await db.select().from(comprasCotacoesItens)
@@ -4562,6 +5516,11 @@ export const terceiroContratosRouter = router({
       const dispensaPrazo = isServicoPuro || isMdoMedicao;
       if (!condPag && !formaPag) throw new Error("Defina a Forma de Pagamento antes de aprovar. Edite as condições do vencedor na cotação.");
       if (!dispensaPrazo && (!prazoEntrega || Number(prazoEntrega) <= 0)) throw new Error("Defina o Prazo de Entrega antes de aprovar. Edite as condições do vencedor na cotação.");
+      // Rev. 5008 — pedido do user (IMG_5521): proposta comercial do fornecedor é
+      // OBRIGATÓRIA para aprovar — ela entra como Anexo I do contrato.
+      if (!(fornInfoCheck as any)?.arquivoUrl) {
+        throw new Error("Proposta comercial pendente: anexe o orçamento/proposta do fornecedor vencedor na cotação (botão de clipe no card do fornecedor) antes de aprovar. O arquivo entra como Anexo I do contrato.");
+      }
 
       // 4. Find-or-create empresa terceira vinculada ao fornecedor
       const existing = await db.select().from(empresasTerceiras)
@@ -4606,101 +5565,7 @@ export const terceiroContratosRouter = router({
       //    Início = primeira data_inicio das atividades contratadas
       //    Término = última data_fim das atividades contratadas
       //    Se não encontrar no cronograma, datas ficam null (preenchidas manualmente)
-      let dataInicioContrato: string | null = null;
-      let dataTerminoContrato: string | null = null;
-      try {
-        if (cot.obraId) {
-          const scItemIds = itens.map(it => it.solicitacaoItemId).filter(Boolean) as number[];
-          let eapCodes: string[] = [];
-          if (scItemIds.length > 0) {
-            const scItems = await db.select({
-              eapCodigo: comprasSolicitacoesItens.eapCodigo,
-            }).from(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.id, scItemIds));
-            eapCodes = [...new Set(scItems.map(s => s.eapCodigo).filter(Boolean))] as string[];
-          }
-
-          let found = false;
-
-          if (eapCodes.length > 0) {
-            try {
-              const cronoDates = await db.execute(sql`
-                WITH latest_rev AS (
-                  SELECT pr.id as rev_id, pp.id as proj_id
-                  FROM planejamento_projetos pp
-                  JOIN planejamento_revisoes pr ON pr.projeto_id = pp.id AND pr.status = 'aprovada'
-                  WHERE pp.obra_id = ${cot.obraId}
-                  ORDER BY pr.numero DESC
-                  LIMIT 1
-                )
-                SELECT MIN(pa.data_inicio) as min_inicio, MAX(pa.data_fim) as max_fim
-                FROM planejamento_atividades pa
-                JOIN latest_rev lr ON pa.projeto_id = lr.proj_id AND pa.revisao_id = lr.rev_id
-                WHERE pa.data_inicio IS NOT NULL
-                  AND pa.disabled IS NOT TRUE
-                  AND pa.eap_codigo IN (${sql.join(eapCodes.map(c => sql`${c}`), sql`, `)})
-              `);
-              const row = (cronoDates as any).rows?.[0];
-              if (row?.min_inicio) {
-                dataInicioContrato = String(row.min_inicio).slice(0, 10);
-                found = true;
-              }
-              if (row?.max_fim) {
-                dataTerminoContrato = String(row.max_fim).slice(0, 10);
-                found = true;
-              }
-              if (found) console.log(`[gerarContratoFromCotacao] Datas via EAP cronograma (${eapCodes.length} códigos): ${dataInicioContrato} a ${dataTerminoContrato}`);
-            } catch (eapErr) {
-              console.warn("[gerarContratoFromCotacao] Erro na busca por EAP:", eapErr);
-            }
-          }
-
-          if (!found) {
-            try {
-              const descricoes = itens
-                .map(it => {
-                  let d = it.descricao || "";
-                  d = d.replace(/^\[[^\]]+\]\s*/, "").trim().toLowerCase();
-                  return d;
-                })
-                .filter(d => d.length > 5);
-              const uniqueDescricoes = [...new Set(descricoes)];
-
-              if (uniqueDescricoes.length > 0) {
-                const escapeLike = (s: string) => s.replace(/[%_\\]/g, c => "\\" + c);
-                const likeClauses = uniqueDescricoes.map(d => sql`LOWER(pa.nome) LIKE ${"%" + escapeLike(d.slice(0, 40)) + "%"} ESCAPE '\\'`);
-                const cronoDates = await db.execute(sql`
-                  SELECT MIN(pa.data_inicio) as min_inicio, MAX(pa.data_fim) as max_fim
-                  FROM planejamento_projetos pp
-                  JOIN planejamento_revisoes pr ON pr.projeto_id = pp.id AND pr.status = 'aprovada'
-                  JOIN planejamento_atividades pa ON pa.projeto_id = pp.id AND pa.revisao_id = pr.id
-                  WHERE pp.obra_id = ${cot.obraId}
-                    AND pa.data_inicio IS NOT NULL
-                    AND pa.disabled IS NOT TRUE
-                    AND (${sql.join(likeClauses, sql` OR `)})
-                `);
-                const row = (cronoDates as any).rows?.[0];
-                if (row?.min_inicio) {
-                  dataInicioContrato = String(row.min_inicio).slice(0, 10);
-                  found = true;
-                }
-                if (row?.max_fim) {
-                  dataTerminoContrato = String(row.max_fim).slice(0, 10);
-                  found = true;
-                }
-                if (found) console.log(`[gerarContratoFromCotacao] Datas por descrição no cronograma: ${dataInicioContrato} a ${dataTerminoContrato}`);
-              }
-            } catch (descErr) {
-              console.warn("[gerarContratoFromCotacao] Erro na busca por descrição:", descErr);
-            }
-          }
-
-          if (!found) {
-            console.log(`[gerarContratoFromCotacao] Obra ${cot.obraId} sem cronograma no planejamento — datas do contrato em branco`);
-          }
-        }
-      } catch (e) {
-        console.warn("[gerarContratoFromCotacao] Erro ao consultar datas do cronograma:", e);
-      }
+      const { dataInicioContrato, dataTerminoContrato } = await _datasCronogramaFromCotacao(db, cot, itens);
 
       // 6. Gerar número de contrato CT-AAAA-NNN
       const year = new Date().getFullYear();
@@ -4724,12 +5589,19 @@ export const terceiroContratosRouter = router({
         obraId: cot.obraId || null,
         numeroContrato,
         descricao: cot.descricao || `Contrato gerado da cotação ${cot.numeroCotacao}`,
+        // Rev. 5013 — título digitado pelo usuário na prévia (assunto do contrato)
+        tituloContrato: (input.tituloContrato || "").trim() || null,
         tipoContrato: "empreitada_global",
         valorTotal: String(valorTotal),
         valorPago: "0",
         dataInicio: dataInicioContrato,
         dataTermino: dataTerminoContrato,
         status: "ativo",
+        // Rev. 5000 — proposta comercial do fornecedor (anexo da cotação) segue o contrato
+        propostaUrl: (fornInfoCheck as any)?.arquivoUrl || null,
+        propostaNome: (fornInfoCheck as any)?.arquivoNome || ((fornInfoCheck as any)?.arquivoUrl ? "Proposta Comercial" : null),
+        // Rev. 5019 — snapshot dos anexos do wizard (projetos/cronograma/outros/matriz)
+        anexosContrato: (fornInfoCheck as any)?.anexosContrato || null,
         observacoes: `Gerado automaticamente da cotação ${cot.numeroCotacao}.${cot.condicaoPagamento ? ` Cond. pagamento: ${cot.condicaoPagamento}.` : ""}${(cot as any).modalidadeFd && (cot as any).modalidadeFd !== "normal" ? ` [FD ${(cot as any).fdPagador === "cliente" ? "Cliente" : "FC"}: R$ ${parseFloat((cot as any).fdValor || "0").toFixed(2)}]` : ""}`,
       }).returning();
 
@@ -4823,6 +5695,20 @@ export const terceiroContratosRouter = router({
         );
       }
 
+      // 7.5 — Rev. 5054 (pedido do user IMG_5553): CONGELA o texto do contrato
+      // exatamente como validado na prévia da cotação (mesmos overrides de
+      // itens/empresa). Sem isso, o detalhe do contrato regenerava do template
+      // vigente sem os dados da cotação e "desconfigurava" o documento.
+      try {
+        const { itensPreview, empresaLike } = await _overridesDaCotacaoTC(db, cot);
+        const monta: any = await _montarTextoContrato(db, contrato, { empresaOverride: empresaLike, itensOverride: itensPreview });
+        await db.update(terceiroContratos)
+          .set({ textoContrato: monta.texto, templateId: monta.template?.id ?? null, versaoTexto: 1 })
+          .where(eq(terceiroContratos.id, contrato.id));
+      } catch (e) {
+        console.error("[gerarContratoFromCotacao] Falha ao congelar o texto do contrato (será gerado ao abrir o detalhe):", e);
+      }
+
       // 8. Marcar cotação como concluída (contrato gerado no módulo Terceiros)
       const cotUpdate: any = { contratoTerceiroId: contrato.id, status: "concluida" };
       if (isPendente) {
@@ -4839,6 +5725,339 @@ export const terceiroContratosRouter = router({
       }
 
       return { contratoId: contrato.id, numeroContrato, empresaTerceiraId, isNova };
+    }),
+
+  // Rev. 4998 — PRÉVIA do contrato ANTES de aprovar a cotação: monta o texto exatamente
+  // como sairá na geração real, sem persistir nada (nem contrato, nem empresa terceira).
+  // Rev. 5054 — fonte ÚNICA dos overrides (itens com EAP + empresa/fornecedor)
+  // usados pela prévia da cotação, pelo congelamento na aprovação e pela
+  // regeneração do texto: garante que o contrato do módulo Terceiros seja
+  // EXATAMENTE o documento validado na cotação (pedido do user IMG_5553).
+  previewContratoFromCotacao: protectedProcedure
+    .input(z.object({ cotacaoId: z.number(), companyId: z.number(), tituloContrato: z.string().max(200).optional() }))
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
+      const db = await getDb();
+      const [cot] = await db.select().from(comprasCotacoes).where(
+        and(eq(comprasCotacoes.id, input.cotacaoId), eq(comprasCotacoes.companyId, input.companyId))
+      );
+      if (!cot) throw new Error("Cotação não encontrada");
+      if ((cot as any).tipo !== "servico") throw new Error("Apenas cotações do tipo 'serviço' têm prévia de contrato");
+      // Rev. 5001/5002 — mesmo poka-yoke da geração real (obra ou padrão da empresa).
+      if (cot.obraId) {
+        const [obraChk] = await db.select({ tc: (obras as any).terceiroCriterioMedicao, cid: obras.companyId }).from(obras).where(eq(obras.id, cot.obraId));
+        const efetivo = (obraChk as any)?.tc || await _criterioMedicaoPadraoEmpresa(db, (obraChk as any)?.cid ?? cot.companyId);
+        if (!_criteriosMedicaoTexto(efetivo)) {
+          throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Sem Critério de Medição definido. Defina o padrão da empresa em Configurações › Critérios do Sistema, ou o da obra em Editar Obra › \"Critério de Medição\", antes de aprovar a cotação e gerar o contrato." });
+        }
+      }
+      // Rev. 5054 — overrides extraídos p/ _overridesDaCotacaoTC (fonte única:
+      // prévia, congelamento na aprovação e regeneração usam o MESMO código).
+      const { itens, itensPreview, empresaLike } = await _overridesDaCotacaoTC(db, cot);
+
+      // Número previsto (mesma regra da geração real — pode variar se outro contrato for criado antes)
+      const year = new Date().getFullYear();
+      const [{ cnt }] = await db.select({ cnt: sql<number>`count(*)` })
+        .from(terceiroContratos)
+        .where(and(eq(terceiroContratos.companyId, input.companyId), sql`EXTRACT(YEAR FROM criado_em) = ${year}`));
+      const numeroContrato = `CT-${year}-${(Number(cnt) + 1).toString().padStart(3, "0")}`;
+
+      const { dataInicioContrato, dataTerminoContrato } = await _datasCronogramaFromCotacao(db, cot, itens);
+      const herdado = await _herdarCondicaoPagamentoDaObra(db, cot.obraId, input.companyId);
+
+      // Rev. 5000 — anexo da proposta do fornecedor (se houver) aparece na prévia como anexo
+      const [fornPartPrev] = await db.select().from(comprasCotacaoFornecedores).where(
+        and(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId), eq(comprasCotacaoFornecedores.fornecedorId, cot.fornecedorId))
+      );
+
+      const contratoLike: any = {
+        id: 0,
+        companyId: input.companyId,
+        numeroContrato,
+        propostaUrl: (fornPartPrev as any)?.arquivoUrl || null,
+        propostaNome: (fornPartPrev as any)?.arquivoNome || ((fornPartPrev as any)?.arquivoUrl ? "Proposta Comercial" : null),
+        // Rev. 5019 — anexos do wizard entram na prévia exatamente como no contrato final
+        anexosContrato: (fornPartPrev as any)?.anexosContrato || null,
+        descricao: cot.descricao || `Contrato gerado da cotação ${cot.numeroCotacao}`,
+        // Rev. 5013 — título digitado pelo usuário na prévia (assunto do contrato)
+        tituloContrato: (input.tituloContrato || "").trim() || null,
+        valorTotal: String(parseFloat(String(cot.total || "0"))),
+        obraId: cot.obraId || null,
+        obraNome: null,
+        dataInicio: dataInicioContrato,
+        dataTermino: dataTerminoContrato,
+        ...herdado,
+      };
+
+      // Rev. 5008 — proposta comercial é OBRIGATÓRIA já na visualização da prévia
+      // (pedido do user IMG_5522): sem Anexo I não há o que conferir de escopo.
+      if (!(fornPartPrev as any)?.arquivoUrl) {
+        throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Proposta comercial pendente: anexe o orçamento/proposta do fornecedor vencedor na cotação (botão de clipe no card do fornecedor) antes de visualizar o contrato. O arquivo entra como Anexo I." });
+      }
+
+      const { texto, html, docMeta } = await _montarTextoContrato(db, contratoLike, { empresaOverride: empresaLike, itensOverride: itensPreview, readOnly: true }) as any;
+      return {
+        texto, html: html ?? null, docMeta: docMeta ?? null, numeroContrato,
+        titulo: (input.tituloContrato || "").trim() || "Contrato de Prestação de Serviços",
+        // Rev. 5008 — prévia mostra o próprio arquivo da proposta (Anexo I) embutido
+        propostaUrl: (fornPartPrev as any)?.arquivoUrl || null,
+        propostaNome: (fornPartPrev as any)?.arquivoNome || "Proposta Comercial",
+        // Rev. 5019 — devolve os anexos salvos p/ o wizard reabrir preenchido
+        anexosContrato: (fornPartPrev as any)?.anexosContrato || null,
+      };
+    }),
+
+  // ============================================================
+  // Rev. 5019 — WIZARD DE ANEXOS DA PRÉVIA (poka-yoke): salvar a estrutura de
+  // anexos (matriz de fornecimento, projetos por disciplina, cronograma,
+  // outros) na cotação do fornecedor VENCEDOR, e upload de PDF individual.
+  // ============================================================
+  getAnexosContrato: protectedProcedure
+    .input(z.object({ cotacaoId: z.number(), companyId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
+      const db = await getDb();
+      const [cot] = await db.select({ fornecedorId: comprasCotacoes.fornecedorId }).from(comprasCotacoes).where(
+        and(eq(comprasCotacoes.id, input.cotacaoId), eq(comprasCotacoes.companyId, input.companyId))
+      );
+      if (!cot?.fornecedorId) return { anexos: null };
+      const [fornPart] = await db.select({ anexosContrato: (comprasCotacaoFornecedores as any).anexosContrato }).from(comprasCotacaoFornecedores).where(
+        and(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId), eq(comprasCotacaoFornecedores.fornecedorId, cot.fornecedorId))
+      );
+      return { anexos: (fornPart as any)?.anexosContrato ?? null };
+    }),
+
+  salvarAnexosContrato: protectedProcedure
+    .input(z.object({
+      cotacaoId: z.number(),
+      companyId: z.number(),
+      anexos: z.object({
+        // Rev. 5020 — contrato só de MDO: matriz "não se aplica"
+        matrizNaoAplica: z.boolean().default(false),
+        matriz: z.array(z.object({ item: z.string().max(120), fornecidoPor: z.enum(["CONTRATANTE", "CONTRATADA"]) })).max(60).default([]),
+        projetos: z.array(z.object({
+          // Rev. 5021 — disciplina SEMPRE em caixa alta, independente de como digitou
+          disciplina: z.string().min(1).max(80).transform((s) => s.toUpperCase()),
+          arquivos: z.array(z.object({ nome: z.string().max(200), url: z.string().max(500) })).min(1).max(20),
+        })).max(15).default([]),
+        cronograma: z.object({ nome: z.string().max(200), url: z.string().max(500) }).nullable().default(null),
+        outros: z.array(z.object({ titulo: z.string().min(1).max(120), nome: z.string().max(200), url: z.string().max(500) })).max(15).default([]),
+      }),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
+      const db = await getDb();
+      const [cot] = await db.select().from(comprasCotacoes).where(
+        and(eq(comprasCotacoes.id, input.cotacaoId), eq(comprasCotacoes.companyId, input.companyId))
+      );
+      if (!cot) throw new TRPCError({ code: "NOT_FOUND", message: "Cotação não encontrada" });
+      if (!cot.fornecedorId) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Cotação sem fornecedor vencedor definido" });
+      // Tenant guard (code review): só aceita arquivos enviados pelo PRÓPRIO
+      // assistente PARA ESTA cotação/empresa — o prefixo da chave é gerado no
+      // uploadAnexoContrato. Sem isso, uma URL /uploads/ arbitrária permitiria
+      // emendar arquivo interno de OUTRA empresa no PDF (IDOR).
+      const prefixoOk = new RegExp(`^/uploads/cotacoes/${input.companyId}/${input.cotacaoId}/contrato-anexo-[A-Za-z0-9]+\\.pdf$`);
+      const urls: string[] = [
+        ...input.anexos.projetos.flatMap((p) => p.arquivos.map((a) => a.url)),
+        ...(input.anexos.cronograma ? [input.anexos.cronograma.url] : []),
+        ...input.anexos.outros.map((o) => o.url),
+      ];
+      for (const u of urls) if (!prefixoOk.test(u)) throw new TRPCError({ code: "BAD_REQUEST", message: "Anexo inválido: envie os arquivos pelo próprio assistente." });
+      await db.update(comprasCotacaoFornecedores)
+        .set({ anexosContrato: input.anexos } as any)
+        .where(and(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId), eq(comprasCotacaoFornecedores.fornecedorId, cot.fornecedorId)));
+      return { ok: true };
+    }),
+
+  // ============================================================
+  // Rev. 5020 — COPIAR ESCOPO DA PROPOSTA (IA, opcional): lê a proposta
+  // comercial anexada e extrai a matriz de fornecimento (quem fornece o quê)
+  // para pré-preencher o wizard — evita divergência proposta × contrato.
+  // O usuário sempre revisa/edita antes de salvar.
+  // ============================================================
+  extrairMatrizDaProposta: protectedProcedure
+    .input(z.object({ cotacaoId: z.number(), companyId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
+      const { assertAiModuleEnabled } = await import("../_core/aiConfig");
+      await assertAiModuleEnabled(input.companyId, "compras");
+      const db = await getDb();
+      const [cot] = await db.select().from(comprasCotacoes).where(
+        and(eq(comprasCotacoes.id, input.cotacaoId), eq(comprasCotacoes.companyId, input.companyId))
+      );
+      if (!cot) throw new TRPCError({ code: "NOT_FOUND", message: "Cotação não encontrada" });
+      if (!cot.fornecedorId) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Cotação sem fornecedor vencedor" });
+      const [fornPart] = await db.select().from(comprasCotacaoFornecedores).where(
+        and(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId), eq(comprasCotacaoFornecedores.fornecedorId, cot.fornecedorId))
+      );
+      const propostaUrl = String((fornPart as any)?.arquivoUrl || "");
+      const mUrl = propostaUrl.match(/^\/uploads\/([^?]+)/);
+      if (!mUrl) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Proposta comercial não anexada" });
+      const { dbRetrieve } = await import("../storage");
+      const file = await dbRetrieve(decodeURIComponent(mUrl[1]));
+      if (!file) throw new TRPCError({ code: "NOT_FOUND", message: "Arquivo da proposta não encontrado" });
+      if (file.buffer.subarray(0, 5).toString("latin1") !== "%PDF-") {
+        return { ok: false as const, motivo: "A proposta anexada é uma imagem — a leitura automática só funciona com proposta em PDF.", itens: [] };
+      }
+      let propostaTexto = "";
+      try {
+        const pdfParse = (await import("pdf-parse")).default as any;
+        propostaTexto = String((await pdfParse(file.buffer))?.text || "").slice(0, 60_000);
+      } catch { /* segue vazio */ }
+      if (propostaTexto.trim().length < 100) {
+        return { ok: false as const, motivo: "A proposta parece ser um PDF escaneado (sem texto) — preencha a matriz manualmente.", itens: [] };
+      }
+      const { invokeLLM } = await import("../_core/llm");
+      const result = await invokeLLM({
+        messages: [{
+          role: "user",
+          content: `Você é um analista de contratos de construção civil no Brasil. Leia a PROPOSTA COMERCIAL abaixo e extraia a divisão de fornecimento entre as partes (escopo): quais materiais, insumos, equipamentos e recursos ficam por conta do CLIENTE/CONTRATANTE e quais por conta do FORNECEDOR/CONTRATADA.
+
+REGRAS:
+- Liste APENAS itens que a proposta menciona explicitamente (inclusos, exclusos, "por conta do cliente", "não incluso" etc.).
+- "Incluso"/"fornecido por nós" na proposta = CONTRATADA. "Por conta do cliente"/"não incluso"/"excluso" = CONTRATANTE.
+- Nome do item curto (máx. 8 palavras). Máximo 25 itens. Não invente itens.
+
+Responda APENAS com JSON válido:
+{"itens":[{"item":"<nome curto>","fornecidoPor":"CONTRATANTE"|"CONTRATADA"}]}
+Se a proposta não discriminar nada: {"itens":[]}
+
+===== PROPOSTA COMERCIAL =====
+${propostaTexto}`,
+        }],
+        maxTokens: 2048,
+      });
+      const raw = String((result as any)?.choices?.[0]?.message?.content ?? "");
+      let parsedJson: any = null;
+      const jsonMatch = raw.match(/\{[\s\S]*\}/);
+      if (jsonMatch) { try { parsedJson = JSON.parse(jsonMatch[0]); } catch { /* nulo */ } }
+      if (!parsedJson || !Array.isArray(parsedJson.itens)) {
+        return { ok: false as const, motivo: "A leitura não retornou um resultado válido — tente novamente ou preencha manualmente.", itens: [] };
+      }
+      const itens = parsedJson.itens.slice(0, 25).map((d: any) => ({
+        item: String(d?.item ?? "").replace(/\s+/g, " ").trim().slice(0, 120),
+        fornecidoPor: String(d?.fornecidoPor) === "CONTRATANTE" ? "CONTRATANTE" as const : "CONTRATADA" as const,
+      })).filter((d: any) => d.item);
+      return { ok: true as const, motivo: null, itens };
+    }),
+
+  // ============================================================
+  // Rev. 5019 — DUPLA CHECAGEM (IA): compara o TEXTO do contrato da prévia com
+  // a proposta comercial anexada e aponta divergências de valor, prazo, escopo
+  // e forma de pagamento. SÓ ALERTA — nunca bloqueia a aprovação (a decisão
+  // comercial é do usuário). Output sanitizado server-side (whitelist de
+  // campos + enums normalizados) antes de alimentar a UI.
+  // ============================================================
+  analisarDivergenciasContrato: protectedProcedure
+    .input(z.object({ cotacaoId: z.number(), companyId: z.number(), contratoTexto: z.string().min(200).max(300_000) }))
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
+      const { assertAiModuleEnabled } = await import("../_core/aiConfig");
+      await assertAiModuleEnabled(input.companyId, "compras");
+      const db = await getDb();
+      const [cot] = await db.select().from(comprasCotacoes).where(
+        and(eq(comprasCotacoes.id, input.cotacaoId), eq(comprasCotacoes.companyId, input.companyId))
+      );
+      if (!cot) throw new TRPCError({ code: "NOT_FOUND", message: "Cotação não encontrada" });
+      if (!cot.fornecedorId) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Cotação sem fornecedor vencedor" });
+      const [fornPart] = await db.select().from(comprasCotacaoFornecedores).where(
+        and(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId), eq(comprasCotacaoFornecedores.fornecedorId, cot.fornecedorId))
+      );
+      const propostaUrl = String((fornPart as any)?.arquivoUrl || "");
+      const mUrl = propostaUrl.match(/^\/uploads\/([^?]+)/);
+      if (!mUrl) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Proposta comercial não anexada" });
+      const { dbRetrieve } = await import("../storage");
+      const file = await dbRetrieve(decodeURIComponent(mUrl[1]));
+      if (!file) throw new TRPCError({ code: "NOT_FOUND", message: "Arquivo da proposta não encontrado" });
+      const isPdf = file.buffer.subarray(0, 5).toString("latin1") === "%PDF-";
+      if (!isPdf) {
+        return { ok: false as const, motivo: "A proposta anexada é uma imagem — a análise automática só funciona com proposta em PDF.", divergencias: [] };
+      }
+      let propostaTexto = "";
+      try {
+        const pdfParse = (await import("pdf-parse")).default as any;
+        const parsed = await pdfParse(file.buffer);
+        propostaTexto = String(parsed?.text || "").slice(0, 60_000);
+      } catch {
+        return { ok: false as const, motivo: "Não foi possível extrair o texto da proposta (PDF digitalizado/imagem).", divergencias: [] };
+      }
+      if (propostaTexto.trim().length < 100) {
+        return { ok: false as const, motivo: "A proposta parece ser um PDF escaneado (sem texto) — a análise automática não é possível.", divergencias: [] };
+      }
+      const { invokeLLM } = await import("../_core/llm");
+      const result = await invokeLLM({
+        messages: [{
+          role: "user",
+          content: `Você é um analista de contratos de construção civil no Brasil. Compare o CONTRATO com a PROPOSTA COMERCIAL do fornecedor e liste APENAS divergências RELEVANTES entre os dois documentos, nos temas: valor (preço total, preço unitário, R$/m²), prazo (execução, mobilização), escopo (serviços, materiais, quem fornece o quê), pagamento (forma, entrada/adiantamento, datas, retenções).
+
+REGRAS:
+- Divergência = informação que aparece nos DOIS documentos com conteúdo conflitante, OU condição relevante da proposta ausente do contrato (ex.: "20% de entrada" na proposta que o contrato não prevê).
+- NÃO liste diferenças de redação/formatação sem efeito prático.
+- Máximo 12 divergências, das mais graves para as menos graves.
+- Números no JSON: use texto ("R$ 75.000,00"), nunca números com vírgula fora de aspas.
+
+Responda APENAS com JSON válido:
+{"divergencias":[{"tema":"valor"|"prazo"|"escopo"|"pagamento"|"outro","gravidade":"alta"|"media"|"baixa","contrato":"<o que o contrato diz>","proposta":"<o que a proposta diz>","recomendacao":"<1 frase objetiva>"}]}
+Se não houver divergência relevante: {"divergencias":[]}
+
+===== CONTRATO =====
+${input.contratoTexto.slice(0, 120_000)}
+
+===== PROPOSTA COMERCIAL =====
+${propostaTexto}`,
+        }],
+      });
+      const raw = String((result as any)?.choices?.[0]?.message?.content ?? "");
+      // Rev. 5019 — parse com salvage (LLM às vezes emite número BR fora de aspas)
+      let parsedJson: any = null;
+      const jsonMatch = raw.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try { parsedJson = JSON.parse(jsonMatch[0]); }
+        catch {
+          try { parsedJson = JSON.parse(jsonMatch[0].replace(/:\s*(\d{1,3}(?:\.\d{3})*,\d+)/g, ':"$1"')); } catch { /* segue nulo */ }
+        }
+      }
+      if (!parsedJson || !Array.isArray(parsedJson.divergencias)) {
+        return { ok: false as const, motivo: "A análise não retornou um resultado válido — tente novamente.", divergencias: [] };
+      }
+      const TEMAS = new Set(["valor", "prazo", "escopo", "pagamento", "outro"]);
+      const GRAV = new Set(["alta", "media", "baixa"]);
+      const clean = (v: any, max: number) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, max);
+      const divergencias = parsedJson.divergencias.slice(0, 12).map((d: any) => ({
+        tema: TEMAS.has(String(d?.tema)) ? String(d.tema) : "outro",
+        gravidade: GRAV.has(String(d?.gravidade)) ? String(d.gravidade) : "media",
+        contrato: clean(d?.contrato, 400),
+        proposta: clean(d?.proposta, 400),
+        recomendacao: clean(d?.recomendacao, 300),
+      })).filter((d: any) => d.contrato || d.proposta);
+      return { ok: true as const, motivo: null, divergencias };
+    }),
+
+  uploadAnexoContrato: protectedProcedure
+    .input(z.object({
+      cotacaoId: z.number(),
+      companyId: z.number(),
+      fileBase64: z.string().max(15_000_000),
+      fileName: z.string().max(200),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
+      const db = await getDb();
+      const [cot] = await db.select({ id: comprasCotacoes.id }).from(comprasCotacoes).where(
+        and(eq(comprasCotacoes.id, input.cotacaoId), eq(comprasCotacoes.companyId, input.companyId))
+      );
+      if (!cot) throw new TRPCError({ code: "NOT_FOUND", message: "Cotação não encontrada" });
+      const buffer = Buffer.from(input.fileBase64, "base64");
+      // poka-yoke: só PDF de verdade (magic bytes), p/ emendar no contrato sem surpresa
+      if (buffer.subarray(0, 5).toString("latin1") !== "%PDF-") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Apenas arquivos PDF são aceitos como anexo do contrato." });
+      }
+      const { storagePut } = await import("../storage");
+      const key = `cotacoes/${input.companyId}/${input.cotacaoId}/contrato-anexo-${Math.random().toString(36).slice(2, 10)}.pdf`;
+      await storagePut(key, buffer, "application/pdf");
+      // URL canônica /uploads/<key> (não a URL da API externa): é ela que o
+      // tenant guard do salvarAnexosContrato e o merge do PDF validam por prefixo.
+      return { ok: true, url: `/uploads/${key}`, nome: input.fileName };
     }),
 
   reverterAprovacaoOS: protectedProcedure
@@ -4862,7 +6081,24 @@ export const terceiroContratosRouter = router({
       const [contrato] = await db.select().from(terceiroContratos).where(
         and(eq(terceiroContratos.id, contratoId), eq(terceiroContratos.companyId, input.companyId))
       );
-      if (!contrato) throw new Error("Contrato de serviço não encontrado ou não pertence a esta empresa");
+      if (!contrato) {
+        // Rev. 4998 — self-heal: o contrato pode ter sido excluído direto no módulo
+        // Terceiros, deixando a cotação órfã (status concluída + vínculo quebrado).
+        // Se ele existe em OUTRA empresa, mantém o bloqueio; se sumiu de vez,
+        // apenas limpa o vínculo e devolve a cotação para "Aprovada".
+        const [existeOutraEmpresa] = await db.select({ id: terceiroContratos.id })
+          .from(terceiroContratos).where(eq(terceiroContratos.id, contratoId));
+        if (existeOutraEmpresa) throw new Error("Contrato de serviço não pertence a esta empresa");
+        await db.update(comprasCotacoes)
+          .set({ status: "aprovada", contratoTerceiroId: null, atualizadoEm: new Date().toISOString() } as any)
+          .where(eq(comprasCotacoes.id, input.cotacaoId));
+        if (cot.solicitacaoId) {
+          await db.update(comprasSolicitacoes)
+            .set({ status: "concluida", atualizadoEm: new Date().toISOString() })
+            .where(eq(comprasSolicitacoes.id, cot.solicitacaoId));
+        }
+        return { ok: true, contratoJaExcluido: true };
+      }
 
       const medicoes = await db.select({ id: terceiroMedicoes.id, status: terceiroMedicoes.status })
         .from(terceiroMedicoes).where(eq(terceiroMedicoes.contratoId, contratoId));
@@ -5047,233 +6283,24 @@ export const terceiroContratosRouter = router({
       const [contrato] = await db.select().from(terceiroContratos).where(eq(terceiroContratos.id, input.contratoId));
       if (!contrato) throw new Error("Contrato não encontrado");
 
-      let [template] = await db.select().from(terceiroContratoTemplates)
-        .where(and(
-          eq(terceiroContratoTemplates.companyId, contrato.companyId),
-          eq(terceiroContratoTemplates.ativo, true)
-        ))
-        .orderBy(desc(terceiroContratoTemplates.versao))
-        .limit(1);
-      if (!template) {
-        const defaultText = `CONTRATO DE PRESTAÇÃO DE SERVIÇOS Nº {{NUMERO_CONTRATO}}
-
-Pelo presente instrumento particular de contrato de prestação de serviços, as partes abaixo identificadas:
-
-CONTRATANTE: {{CONTRATANTE_NOME}}, inscrita no CNPJ sob o nº {{CONTRATANTE_CNPJ}}, com sede em {{CONTRATANTE_ENDERECO}}, neste ato representada por {{CONTRATANTE_REPRESENTANTE}}.
-
-CONTRATADA: {{CONTRATADA_NOME}}, inscrita no CNPJ sob o nº {{CONTRATADA_CNPJ}}, com sede em {{CONTRATADA_ENDERECO}}, neste ato representada por {{CONTRATADA_REPRESENTANTE}}, {{CONTRATADA_CARGO}}.
-
-Têm entre si, justo e contratado, o seguinte:
-
-CLÁUSULA PRIMEIRA – DO OBJETO
-
-1.1 O presente contrato tem por objeto a prestação de serviços de {{DESCRICAO_OBJETO}}, a serem executados na obra {{OBRA_NOME}}, conforme escopo detalhado abaixo:
-
-{{TABELA_ITENS}}
-
-CLÁUSULA SEGUNDA – DO PRAZO
-
-2.1 Os serviços deverão ser iniciados em {{DATA_INICIO}} e concluídos até {{DATA_TERMINO}}, salvo prorrogação por acordo escrito entre as partes.
-
-2.2 As datas acima foram definidas com base na revisão do cronograma: {{REVISAO_CRONOGRAMA}}.
-
-CLÁUSULA TERCEIRA – DO VALOR E FORMA DE PAGAMENTO
-
-3.1 O valor total do presente contrato é de {{VALOR_TOTAL}}.
-
-3.2 CRITÉRIOS DE MEDIÇÃO E PAGAMENTO — Os pagamentos serão processados conforme o fluxo obrigatório abaixo, cujos prazos são improrrogáveis salvo acordo formal entre as partes:
-
-{{FLUXOGRAMA_PAGAMENTO}}
-
-a) MEDIÇÃO FÍSICA (Dia {{DIA_MEDICAO}} de cada mês) — Levantamento e conferência do avanço físico dos serviços efetivamente executados, a ser realizado conjuntamente pelo gestor da obra e o representante da CONTRATADA no canteiro;
-
-b) APROVAÇÃO DA MEDIÇÃO (Até {{PRAZO_APROVACAO}} dias úteis após a medição) — Análise e aprovação da medição pelo gestor do contrato da CONTRATANTE. A medição poderá ser aprovada total ou parcialmente, cabendo à CONTRATADA acatar os ajustes solicitados;
-
-c) DOCUMENTAÇÃO COMPROBATÓRIA — Após aprovação da medição, a CONTRATADA deverá enviar obrigatoriamente: Nota Fiscal/Fatura, guias de recolhimento de INSS e FGTS quitadas, Certidão Negativa de Débitos Trabalhistas (CNDT), comprovante de seguro de vida dos funcionários alocados na obra e demais documentos que a CONTRATANTE julgar necessários. A ausência de qualquer documento suspende o fluxo de pagamento até a regularização;
-
-d) EMISSÃO DA NOTA FISCAL (Até {{PRAZO_EMISSAO_NF}} dias úteis após aprovação) — Liberação para emissão da Nota Fiscal pela CONTRATADA, que deverá ser emitida com os dados corretos da CONTRATANTE e o valor exato da medição aprovada;
-
-e) LIBERAÇÃO DA ORDEM DE PAGAMENTO (Até {{PRAZO_LIBERACAO_OP}} dias úteis após recebimento da NF) — Conferência da Nota Fiscal e liberação da Ordem de Pagamento (OP) pela área financeira da CONTRATANTE;
-
-f) PAGAMENTO (Dia {{DIA_PAGAMENTO}} do mês subsequente) — Crédito em conta bancária da CONTRATADA, referente à medição aprovada do mês anterior.
-
-3.3 RESUMO DOS PRAZOS:
-• Dia da Medição: dia {{DIA_MEDICAO}} de cada mês
-• Prazo de Aprovação: até {{PRAZO_APROVACAO}} dias úteis após a medição
-• Prazo para Emissão da NF: até {{PRAZO_EMISSAO_NF}} dias úteis após aprovação
-• Prazo para Liberação da OP: até {{PRAZO_LIBERACAO_OP}} dias úteis após NF
-• Dia do Pagamento: dia {{DIA_PAGAMENTO}} do mês subsequente
-
-3.4 O descumprimento dos prazos estabelecidos na subcláusula 3.2 por parte da CONTRATADA (itens "c" e "d") implicará no adiamento automático do pagamento para o ciclo subsequente, sem incidência de juros ou multa a favor da CONTRATADA.
-
-3.5 A CONTRATANTE não será responsabilizada pelo atraso no pagamento quando este decorrer de pendências documentais ou irregularidades na Nota Fiscal emitida pela CONTRATADA.
-
-3.6 Serviços executados sem a devida autorização do gestor do contrato ou em desacordo com as especificações não serão objeto de medição nem de pagamento.
-
-CLÁUSULA QUARTA – DAS OBRIGAÇÕES DA CONTRATADA
-
-4.1 A CONTRATADA se obriga a:
-a) Executar os serviços de acordo com as normas técnicas vigentes e especificações do projeto;
-b) Fornecer toda a mão de obra necessária, devidamente registrada e equipada com EPIs;
-c) Manter preposto no local da obra para representá-la junto à CONTRATANTE;
-d) Responder por todos os encargos trabalhistas, previdenciários e fiscais de seus empregados;
-e) Apresentar os documentos exigidos para pagamento conforme cláusula 3.2, alínea "c".
-
-CLÁUSULA QUINTA – DAS OBRIGAÇÕES DA CONTRATANTE
-
-5.1 Efetuar os pagamentos nas condições estabelecidas neste contrato.
-5.2 Fornecer acesso ao local da obra e disponibilizar as informações técnicas necessárias.
-5.3 Designar fiscal para acompanhamento e aprovação dos serviços.
-
-CLÁUSULA SEXTA – DA RESCISÃO
-
-6.1 O presente contrato poderá ser rescindido por qualquer das partes, mediante notificação por escrito com antecedência mínima de 30 (trinta) dias.
-
-CLÁUSULA SÉTIMA – DO FORO
-
-7.1 Fica eleito o foro da Comarca de {{CIDADE_ESTADO}} para dirimir quaisquer dúvidas ou litígios oriundos do presente contrato, com renúncia de qualquer outro, por mais privilegiado que seja.
-
-E por estarem assim justos e contratados, as partes assinam o presente instrumento em 2 (duas) vias de igual teor e forma, juntamente com 2 (duas) testemunhas.
-
-{{CIDADE_ESTADO}}, {{DATA_ASSINATURA}}.
-
-
-_________________________________________
-{{CONTRATANTE_NOME}}
-CNPJ: {{CONTRATANTE_CNPJ}}
-Representante: {{CONTRATANTE_REPRESENTANTE}}
-
-
-_________________________________________
-{{CONTRATADA_NOME}}
-CNPJ: {{CONTRATADA_CNPJ}}
-Representante: {{CONTRATADA_REPRESENTANTE}}
-
-
-TESTEMUNHAS:
-
-1. _________________________________________
-   Nome: {{TESTEMUNHA_FINANCEIRO}}
-   Cargo: Responsável Financeiro
-
-2. _________________________________________
-   Nome: {{TESTEMUNHA_GESTOR_PROJETO}}
-   Cargo: Gestor de Projeto`;
-        const [novo] = await db.insert(terceiroContratoTemplates)
-          .values({ companyId: contrato.companyId, nome: "Contrato Padrão", texto: defaultText, ativo: true, versao: 1 })
-          .returning();
-        template = novo;
+      // Rev. 5054 — pedido do user (IMG_5553): contrato gerado de cotação deve
+      // regenerar com os MESMOS overrides da prévia validada (itens com EAP e
+      // preços do vencedor + dados da contratada via fornecedor), nunca só o
+      // template cru — senão o documento "desconfigura" ao chegar em Terceiros.
+      let overrides: { empresaOverride?: any; itensOverride?: any[] } | undefined;
+      try {
+        const [cotVinc] = await db.select().from(comprasCotacoes).where(and(
+          eq((comprasCotacoes as any).contratoTerceiroId, contrato.id),
+          eq(comprasCotacoes.companyId, contrato.companyId),
+        ));
+        if (cotVinc && (cotVinc as any).fornecedorId) {
+          const { itensPreview, empresaLike } = await _overridesDaCotacaoTC(db, cotVinc);
+          overrides = { empresaOverride: empresaLike, itensOverride: itensPreview };
+        }
+      } catch (e) {
+        console.error("[gerarTextoContrato] Falha nos overrides da cotação (segue sem):", e);
       }
-
-      const [empresa] = await db.select().from(empresasTerceiras).where(eq(empresasTerceiras.id, contrato.empresaTerceiraId));
-      const [company] = await db.select().from(companies).where(eq(companies.id, contrato.companyId));
-      const [obra] = contrato.obraId ? await db.select().from(obras).where(eq(obras.id, contrato.obraId)) : [null];
-
-      const itensContrato = await db.select().from(terceiroContratoItens)
-        .where(eq(terceiroContratoItens.contratoId, input.contratoId))
-        .orderBy(asc(terceiroContratoItens.ordem), asc(terceiroContratoItens.eapCodigo));
-
-      let revisaoCronoLabel = "";
-      if (contrato.obraId) {
-        try {
-          const [proj] = await db.select({ id: planejamentoProjetos.id })
-            .from(planejamentoProjetos)
-            .where(and(eq(planejamentoProjetos.companyId, contrato.companyId), eq(planejamentoProjetos.obraId, contrato.obraId)))
-            .orderBy(desc(planejamentoProjetos.id)).limit(1);
-          if (proj) {
-            const [rev] = await db.select({
-              numero: planejamentoRevisoes.numero,
-              descricao: planejamentoRevisoes.descricao,
-              dataRevisao: planejamentoRevisoes.dataRevisao,
-              isBaseline: planejamentoRevisoes.isBaseline,
-            }).from(planejamentoRevisoes)
-              .where(and(eq(planejamentoRevisoes.projetoId, proj.id), eq(planejamentoRevisoes.status, "aprovada")))
-              .orderBy(desc(planejamentoRevisoes.numero)).limit(1);
-            if (rev) {
-              const nomeRev = rev.isBaseline ? `Baseline (Rev ${String(rev.numero).padStart(2, "0")})` : `Rev ${String(rev.numero).padStart(2, "0")}`;
-              const descPart = rev.descricao ? ` — ${rev.descricao}` : "";
-              revisaoCronoLabel = `${nomeRev}${descPart}`;
-            }
-          }
-        } catch {}
-      }
-
-      const fmtDate = (d: string | null | undefined) => {
-        if (!d) return "___/___/______";
-        const [y, m, day] = d.slice(0, 10).split("-");
-        return `${day}/${m}/${y}`;
-      };
-      const fmtMoney = (v: any) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(v) || 0);
-      const fmtNum = (v: any) => new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(Number(v) || 0);
-      const endEmpresa = [empresa?.logradouro, empresa?.numero, empresa?.bairro, empresa?.cidade, empresa?.estado].filter(Boolean).join(", ");
-      const endCompany = company?.endereco ?? [company?.cidade, company?.estado].filter(Boolean).join(" - ") ?? "";
-
-      let tabelaItens = "";
-      if (itensContrato.length > 0) {
-        const linhaHeader = "EAP          | Descrição                                          | Un    | Qtd       | Vlr Unit.      | Total";
-        const linhaSep =    "-------------|-------------------------------------------------------|-------|-----------|----------------|----------------";
-        const sanitize = (s: string) => s.replace(/\|/g, "/").replace(/[\r\n]+/g, " ").trim();
-        const linhasItens = itensContrato.map(it => {
-          const eap = sanitize(it.eapCodigo || "—").padEnd(12);
-          const desc = sanitize(it.descricao || "").padEnd(55);
-          const un = sanitize(it.unidade || "—").padEnd(5);
-          const qtd = fmtNum(it.quantidade).padStart(9);
-          const vUnit = fmtMoney(it.valorUnitario).padStart(14);
-          const vTotal = fmtMoney(it.valorTotal).padStart(14);
-          return `${eap} | ${desc} | ${un} | ${qtd} | ${vUnit} | ${vTotal}`;
-        });
-        const totalGeral = itensContrato.reduce((s, it) => s + Number(it.valorTotal || 0), 0);
-        tabelaItens = [
-          "",
-          "ESCOPO DETALHADO DOS SERVIÇOS (EAP):",
-          "",
-          linhaHeader,
-          linhaSep,
-          ...linhasItens,
-          linhaSep,
-          `${"".padEnd(12)} | ${"".padEnd(55)} | ${"".padEnd(5)} | ${"".padEnd(9)} | ${"TOTAL:".padStart(14)} | ${fmtMoney(totalGeral).padStart(14)}`,
-          "",
-        ].join("\n");
-      }
-
-      const vars: Record<string, string> = {
-        "NUMERO_CONTRATO": contrato.numeroContrato ?? "_______________",
-        "ANO_ATUAL": new Date().getFullYear().toString(),
-        "CONTRATANTE_NOME": company?.razaoSocial ?? "_______________",
-        "CONTRATANTE_CNPJ": company?.cnpj ?? "_______________",
-        "CONTRATANTE_ENDERECO": endCompany || "_______________",
-        "CONTRATANTE_REPRESENTANTE": "Felipe Costa Alves",
-        "CONTRATANTE_CARGO": "Sócio Administrador",
-        "CONTRATADA_NOME": empresa?.razaoSocial ?? "_______________",
-        "CONTRATADA_CNPJ": empresa?.cnpj ?? "_______________",
-        "CONTRATADA_ENDERECO": endEmpresa || "_______________",
-        "CONTRATADA_REPRESENTANTE": empresa?.responsavelNome ?? "_______________",
-        "CONTRATADA_CARGO": empresa?.responsavelCargo ?? "Representante Legal",
-        "OBRA_NOME": obra?.nome ?? contrato.obraNome ?? "_______________",
-        "DESCRICAO_OBJETO": contrato.descricao ?? "_______________",
-        "VALOR_TOTAL": fmtMoney(contrato.valorTotal),
-        "DATA_INICIO": fmtDate(contrato.dataInicio ?? undefined),
-        "DATA_TERMINO": fmtDate(contrato.dataTermino ?? undefined),
-        "CIDADE_ESTADO": [company?.cidade, company?.estado].filter(Boolean).join(" - ") || "Montes Claros - MG",
-        "DATA_ASSINATURA": fmtDate(new Date().toISOString()),
-        "TABELA_ITENS": tabelaItens,
-        "QTD_ITENS": String(itensContrato.length),
-        "TESTEMUNHA_FINANCEIRO": contrato.testemunhaFinanceiro || (company as any)?.gestorFinanceiroNome || "_______________",
-        // SEMPRE o "Engenheiro / Responsável" do cadastro da obra (sem fallback legado).
-        "TESTEMUNHA_GESTOR_PROJETO": obra?.responsavel || "_______________",
-        "REVISAO_CRONOGRAMA": revisaoCronoLabel || "—",
-        "DIA_MEDICAO": String(contrato.diaMedicao ?? 25),
-        "PRAZO_APROVACAO": String(contrato.prazoAprovacaoDias ?? 5),
-        "PRAZO_EMISSAO_NF": String(contrato.prazoEmissaoNf ?? 3),
-        "PRAZO_LIBERACAO_OP": String(contrato.prazoLiberacaoOp ?? 5),
-        "DIA_PAGAMENTO": String(contrato.diaPagamento ?? 10),
-        "FLUXOGRAMA_PAGAMENTO": "{{FLUXOGRAMA_PAGAMENTO}}",
-      };
-
-      let texto = template.texto;
-      for (const [k, v] of Object.entries(vars)) {
-        texto = texto.replaceAll(`{{${k}}}`, v);
-      }
+      const { texto, template } = await _montarTextoContrato(db, contrato, overrides);
 
       // Salvar revisão da versão atual, se já tiver texto
       const versaoAtual = contrato.versaoTexto ?? 0;
@@ -5294,6 +6321,48 @@ TESTEMUNHAS:
         .where(eq(terceiroContratos.id, input.contratoId));
 
       return { texto, versao: novaVersao };
+    }),
+
+  // Rev. 5054 — HTML do documento p/ o detalhe do contrato renderizar EXATAMENTE
+  // como a prévia da cotação e o template da Central (pedido do user IMG_5554:
+  // "quero a formatação igual, tudo exatamente igual"). Read-only: não persiste.
+  documentoHtml: protectedProcedure
+    .input(z.object({ contratoId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+      const [contrato] = await db.select().from(terceiroContratos).where(eq(terceiroContratos.id, input.contratoId));
+      if (!contrato) throw new Error("Contrato não encontrado");
+      await _assertCompanyAccess(ctx.user, (contrato as any).companyId);
+
+      // Contrato vindo de cotação: mesmos overrides da prévia validada.
+      let overrides: { empresaOverride?: any; itensOverride?: any[]; readOnly?: boolean } = { readOnly: true };
+      try {
+        const [cotVinc] = await db.select().from(comprasCotacoes).where(and(
+          eq((comprasCotacoes as any).contratoTerceiroId, contrato.id),
+          eq(comprasCotacoes.companyId, contrato.companyId),
+        ));
+        if (cotVinc && (cotVinc as any).fornecedorId) {
+          const { itensPreview, empresaLike } = await _overridesDaCotacaoTC(db, cotVinc);
+          overrides = { empresaOverride: empresaLike, itensOverride: itensPreview, readOnly: true };
+        }
+      } catch (e) {
+        console.error("[documentoHtml] Falha nos overrides da cotação (segue sem):", e);
+      }
+      const monta: any = await _montarTextoContrato(db, contrato, overrides);
+      return {
+        texto: monta.texto as string,
+        html: (monta.html as string | undefined) ?? null,
+        docMeta: monta.docMeta ?? null,
+        numeroContrato: (contrato as any).numeroContrato,
+        // Mesmo assunto usado na prévia da cotação (achado do code review)
+        titulo: (contrato as any).tituloContrato ?? null,
+        // Anexos (proposta, projetos, cronograma, outros) — mesmos campos que a
+        // prévia da cotação devolve, p/ o detalhe renderizar os anexos DENTRO do
+        // documento após as assinaturas (pedido do user IMG_5555: "Cadê os anexos?")
+        propostaUrl: (contrato as any).propostaUrl ?? null,
+        propostaNome: (contrato as any).propostaNome ?? null,
+        anexosContrato: (contrato as any).anexosContrato ?? null,
+      };
     }),
 
   salvarTextoContrato: protectedProcedure

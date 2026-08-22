@@ -45,7 +45,9 @@ const BUCKET_MAP: Record<string, DespBucket> = {
   folha_rh: "folha", folha_clt: "folha", folha: "folha",
   payroll_agregado: "folha", fechamento_ponto: "folha",
   folha_projetada: "folha", encargos_projetado: "folha",
+  folha_oficial: "folha", folha_prevista_vale: "folha", folha_prevista_pagamento: "folha",
   decimo_terceiro_projetado: "folha", ferias_projetada: "folha",
+  ferias: "folha", ferias_complementar: "folha",
   rescisao_projetada: "folha",
   pj: "folha", pagamento_pj: "folha", pj_projetado: "folha",
   pro_labore: "folha", medicao_pj: "folha",
@@ -248,6 +250,9 @@ export default function FinanceiroFluxoCaixa() {
     const proj = Array(12).fill(0);
     const real = Array(12).fill(0);
     for (const c of rows) {
+      // Crédito de extrato conciliado sem NFS-e não é faturamento. O dinheiro
+      // continua preservado na linha informativa de movimentações bancárias.
+      if (c.receitaExtratoSemFatura) continue;
       const key = String(c.dataVencimento ?? "").slice(0, 7);
       const i = meses12.indexOf(key);
       if (i < 0) continue;
@@ -367,6 +372,7 @@ export default function FinanceiroFluxoCaixa() {
     const src: any[] = (drill.tipo === "entrada" ? receberQ.data : pagarQ.data) ?? [];
     const out: any[] = [];
     for (const c of src) {
+      if (drill.tipo === "entrada" && c.receitaExtratoSemFatura) continue;
       if (drill.tipo === "saida" &&
           (c.origemModulo === "aplicacao_financeira" || c.origemModulo === "transferencia_interna")) continue;
       const proj = drill.tipo === "saida" ? isProjecaoDespesa(c.origemModulo) : isProjecaoOrigem(c.origemModulo);

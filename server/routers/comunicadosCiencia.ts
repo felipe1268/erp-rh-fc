@@ -18,6 +18,7 @@ import {
 } from "../../drizzle/schema";
 import { eq, and, sql, isNull } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
+import { EMPLOYEE_STATUS_DESLIGADOS } from "../../shared/modules";
 
 export const CIENCIA_ONLINE_MARKER = "ciencia_online";
 
@@ -100,11 +101,14 @@ async function identificarFuncionario(db: any, comunicado: any, cpf: string, dat
     eq(employees.companyId, comunicado.companyId),
     sql`regexp_replace(${employees.cpf}, '[^0-9]', '', 'g') = ${cpfLimpo}`,
   ));
-  const emp = rows.find((r: any) => r.status === "Ativo") || rows[0];
-  // Anti-enumeração: TODA falha (CPF inexistente, inativo, sem/errada data de
+  // Rev. — funcionário em Férias/afastado TAMBÉM pode dar ciência; só os
+  // desligados (Desligado/Lista_Negra/Inativo) ficam bloqueados.
+  const elegivel = (r: any) => !EMPLOYEE_STATUS_DESLIGADOS.includes(String(r.status || ""));
+  const emp = rows.find((r: any) => r.status === "Ativo") || rows.find(elegivel) || rows[0];
+  // Anti-enumeração: TODA falha (CPF inexistente, desligado, sem/errada data de
   // nascimento, fora da lista de destinatários) devolve a MESMA mensagem genérica.
   const falha = () => new TRPCError({ code: "FORBIDDEN", message: MSG_IDENT_GENERICA });
-  if (!emp || emp.status !== "Ativo") throw falha();
+  if (!emp || !elegivel(emp)) throw falha();
   const nascDb = emp.dataNascimento
     ? (emp.dataNascimento instanceof Date
         ? (emp.dataNascimento as Date).toISOString().slice(0, 10)

@@ -50,7 +50,6 @@ const OUTROS_SET = ["sustado", "cancelado", "devolvido", "indefinido"];
 //   conferido  = conciliado=1 (compensado E verificado/conferido no extrato)
 //   confere    = banco compensou + controle compensado, mas ainda NÃO marcado (conciliado=0)
 //   divergente = banco compensou MAS controle não está "compensado" (análise)
-const EXTRATO_FILTERS = ["conferido", "confere", "divergente"];
 
 // Rev. 3246 — diferença em DIAS (no fuso local, à meia-noite) entre uma data e hoje.
 // >0 = no futuro (faltam N dias); 0 = hoje; <0 = no passado (vencido há N dias).
@@ -75,13 +74,16 @@ const FORMA_PAGAMENTO_LABEL: Record<string, string> = {
   outro: "Outro",
 };
 
-function statusBadge(s: string) {
+function statusBadge(s: string, vencido?: boolean) {
   switch (s) {
     case "compensado": return <Badge className="bg-green-100 text-green-700 hover:bg-green-100">Compensado</Badge>;
     // Rev. 4081 — cheque devolvido quitado por substituição (PIX/TED/dinheiro/etc.) vira
     // "compensado_pix" (Rev. 4079); antes caía no default "Indefinido".
     case "compensado_pix": return <Badge className="bg-teal-100 text-teal-700 hover:bg-teal-100">Quitado (substituição)</Badge>;
-    case "pendente": return <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100">Pendente</Badge>;
+    // Rev. 4994 — pendente com vencimento no passado = status derivado "Vencido"
+    case "pendente": return vencido
+      ? <Badge className="bg-red-100 text-red-700 hover:bg-red-100">Vencido</Badge>
+      : <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100">Pendente</Badge>;
     case "sustado": return <Badge className="bg-red-100 text-red-700 hover:bg-red-100">Sustado</Badge>;
     case "cancelado": return <Badge className="bg-gray-200 text-gray-700 hover:bg-gray-200">Cancelado</Badge>;
     case "devolvido": return <Badge className="bg-orange-100 text-orange-700 hover:bg-orange-100">Devolvido</Badge>;
@@ -339,7 +341,10 @@ export default function FinanceiroCheques() {
   const listarArgs: any = { companyId, limit: 2000, ano };
   // "outros" e os filtros de EXTRATO são agregados client-side (vários status / flags
   // derivadas); não mandamos status ao servidor nesses casos — filtramos localmente abaixo.
-  if (fStatus !== "todos" && fStatus !== "outros" && !EXTRATO_FILTERS.includes(fStatus)) listarArgs.status = fStatus;
+  // Rev. 4994 — "vencido" é status DERIVADO (pendente + vencimento no passado): filtra client-side
+  // Rev. 5090 — status NÃO vai mais ao servidor: a base precisa vir completa para
+  // que os cards de status nunca zerem ao clicar num deles; o recorte de status é
+  // aplicado client-side em chequesFiltrados (a lista do ano/mês já vem inteira).
   if (mesSel != null) listarArgs.mes = mesSel;
   if (fBusca.trim()) listarArgs.busca = fBusca.trim();
 
@@ -383,8 +388,9 @@ export default function FinanceiroCheques() {
   );
   const conferirMut = (trpc as any).cheques.conferirExtrato.useMutation();
   const autoCorrigirMut = (trpc as any).cheques.autoCorrigirDivergencias.useMutation();
-  // Rev. 4261 — Auto-corrige divergências banco×controle (pendente → compensado) quando
-  // o extrato mostra match FORTE (nº+valor único). Dispara ao carregar `verif`. Usa ref
+  // Rev. 4261 — Auto-corrige divergências banco×controle (→ compensado) quando o extrato
+  // mostra match FORTE (nº+valor único). Rev. 4995: cobre também devolvido/sustado/indefinido
+  // (pedido do user: "se compensou, mude o status"). Dispara ao carregar `verif`. Usa ref
   // estável (ano|mes) p/ não reenviar no mesmo período.
   const autoCorrigirKeyRef = React.useRef<string>("");
   React.useEffect(() => {
@@ -544,16 +550,45 @@ export default function FinanceiroCheques() {
     return m;
   }, [resumoMensal]);
 
+  // Rev. 4995 — base com os filtros NÃO-status (fornecedor/obra/datas) aplicados;
+  // é a régua dos totais de Vencidos/extrato — assim o card bate com a tabela.
+  const chequesBase = useMemo(() => {
+    let arr = cheques as any[];
+    if (fVencDe) arr = arr.filter((c) => c.dataVencimento && String(c.dataVencimento).slice(0, 10) >= fVencDe);
+    if (fVencAte) arr = arr.filter((c) => c.dataVencimento && String(c.dataVencimento).slice(0, 10) <= fVencAte);
+    if (fFornecedor) arr = arr.filter((c) => (c.fornecedorNome || "") === fFornecedor);
+    if (fObra) arr = arr.filter((c) => String(c.obraId || "") === fObra);
+    return arr;
+  }, [cheques, fVencDe, fVencAte, fFornecedor, fObra]);
+
+  // Rev. 4994 — totais dos filtros de EXTRATO + Vencidos (sobre a base filtrada) p/ dropdown e card.
+  const extratoTotais = useMemo(() => {
+    const mk = () => ({ qtd: 0, total: 0 });
+    const r = { conferido: mk(), confere: mk(), divergente: mk(), vencido: mk() };
+    for (const c of chequesBase as any[]) {
+      const v = parseFloat(String(c.valor ?? "0").replace(/[^\d.,-]/g, "").replace(/\.(?=\d{3}(\D|$))/g, "").replace(",", ".")) || 0;
+      // Rev. 4995 — unificado: conciliado OU compensação detectada no extrato contam como "conferido"
+      if (Number(c.conciliado) === 1 || c.extratoConfirmado) { r.conferido.qtd++; r.conferido.total += v; }
+      if (c.extratoDivergente === true) { r.divergente.qtd++; r.divergente.total += v; }
+      if (c.status === "pendente" && (diasAteData(c.dataVencimento) ?? 1) < 0) { r.vencido.qtd++; r.vencido.total += v; }
+    }
+    return r;
+  }, [chequesBase]);
+
   // Lista exibida — aplica o filtro client-side de "Outros" (agregado de status) + data vencimento.
   const chequesFiltrados = useMemo(() => {
     let arr = cheques as any[];
     if (fStatus === "outros") arr = arr.filter((c) => OUTROS_SET.includes(c.status));
+    // Rev. 4994 — vencidos: pendentes cujo vencimento já passou
+    else if (fStatus === "vencido") arr = arr.filter((c) => c.status === "pendente" && (diasAteData(c.dataVencimento) ?? 1) < 0);
     // Rev. 3242 — filtros de EXTRATO (flags derivadas que o `listar` já anexa).
     // `conciliado` vem da coluna integer (1/0) — comparar com Number, NÃO `=== true`
     // (espelha o backend `Number(c.conciliado)===1`); `extratoConfirmado/Divergente` já são boolean.
-    else if (fStatus === "conferido") arr = arr.filter((c) => Number(c.conciliado) === 1);
-    else if (fStatus === "confere") arr = arr.filter((c) => c.extratoConfirmado && Number(c.conciliado) !== 1);
+    // Rev. 4995 — unificado: "conferido" = conciliado OU compensação detectada no extrato
+    else if (fStatus === "conferido" || fStatus === "confere") arr = arr.filter((c) => Number(c.conciliado) === 1 || c.extratoConfirmado);
     else if (fStatus === "divergente") arr = arr.filter((c) => c.extratoDivergente === true);
+    // Rev. 5090 — status simples agora é filtrado aqui (não vai mais ao servidor).
+    else if (fStatus !== "todos") arr = arr.filter((c) => c.status === fStatus);
     // Rev. 4256 — filtro por data de vencimento (De / Até), client-side.
     if (fVencDe) {
       const de = fVencDe; // "YYYY-MM-DD"
@@ -582,11 +617,13 @@ export default function FinanceiroCheques() {
     return arr;
   }, [cheques, fStatus, fVencDe, fVencAte, fFornecedor, fObra]);
 
-  // Rev. 4257 — quando qualquer filtro client-side está ativo (fornecedor, data,
-  // status "outros"/extrato), os cards derivam do chequesFiltrados em vez do resumo
-  // backend — "o que a tabela mostra é o que os cards mostram".
+  // Rev. 4257 — quando um filtro client-side de fornecedor/data/obra está ativo,
+  // os cards derivam da base filtrada em vez do resumo backend.
+  // Rev. 5090 — o filtro de STATUS não entra nessa conta: clicar num card (ex.
+  // Pendentes) não pode zerar os demais cards de status; eles sempre mostram a
+  // distribuição completa da base (chequesBase, sem o recorte de status).
   // IIFE (sem useMemo) para evitar qualquer problema de stale-closure com deps.
-  const anyFiltroAtivo = !!(fFornecedor || fVencDe || fVencAte || fObra || fStatus !== "todos");
+  const anyFiltroAtivo = !!(fFornecedor || fVencDe || fVencAte || fObra);
   // valor é NUMERIC(15,2) — Drizzle retorna como string EN "3558.75"
   // Também suporta string BR "3.558,75" caso venha de importação legada
   const parseValor = (v: unknown): number => {
@@ -600,15 +637,16 @@ export default function FinanceiroCheques() {
   };
   const cardTotais = (() => {
     if (!anyFiltroAtivo) return cardTotaisBackend;
+    // chequesBase = base com fornecedor/data/obra aplicados, SEM o recorte de status.
     const map: Record<string, { qtd: number; total: number }> = {};
-    for (const c of chequesFiltrados as any[]) {
+    for (const c of chequesBase as any[]) {
       const s = String(c.status || "indefinido");
       if (!map[s]) map[s] = { qtd: 0, total: 0 };
       map[s].qtd++;
       map[s].total += parseValor(c.valor);
     }
-    const qtd = (chequesFiltrados as any[]).length;
-    const total = (chequesFiltrados as any[]).reduce((acc: number, c: any) => acc + parseValor(c.valor), 0);
+    const qtd = (chequesBase as any[]).length;
+    const total = (chequesBase as any[]).reduce((acc: number, c: any) => acc + parseValor(c.valor), 0);
     return { qtd, total, map };
   })();
 
@@ -1140,52 +1178,83 @@ export default function FinanceiroCheques() {
           </div>
         )}
 
-        {/* ── 4 Cards de status (clicáveis) ── */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {/* ── Cards de status (clicáveis) — Rev. 4994: um card/filtro POR status ── */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-7 gap-3">
           {/* Pendentes */}
           <button type="button" onClick={() => toggleStatus("pendente")} aria-pressed={fStatus === "pendente"}
-            className={`text-left rounded-xl border bg-card p-4 transition-all hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-amber-300 ${fStatus === "pendente" ? "ring-2 ring-amber-500 border-amber-300" : ""}`}>
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs font-medium text-muted-foreground">Pendentes</span>
-              <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
+            className={`text-left rounded-xl border bg-card p-3 transition-all hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-amber-300 ${fStatus === "pendente" ? "ring-2 ring-amber-500 border-amber-300" : ""}`}>
+            <div className="flex items-center justify-between gap-1.5 mb-1 min-w-0">
+              <span className="text-xs font-medium text-muted-foreground truncate">Pendentes</span>
+              <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-amber-500" />
             </div>
-            <div className="text-2xl font-bold text-amber-600">{cardTotais.map["pendente"]?.qtd || 0}</div>
-            <div className="text-sm font-medium text-muted-foreground mt-0.5">{formatBRL(cardTotais.map["pendente"]?.total || 0)}</div>
+            <div className="text-xl font-bold text-amber-600">{cardTotais.map["pendente"]?.qtd || 0}</div>
+            <div className="text-xs font-medium text-muted-foreground mt-0.5 whitespace-nowrap">{formatBRL(cardTotais.map["pendente"]?.total || 0)}</div>
+          </button>
+
+          {/* Vencidos (derivado: pendente + vencimento no passado) — Rev. 4994 */}
+          <button type="button" onClick={() => toggleStatus("vencido")} aria-pressed={fStatus === "vencido"}
+            className={`text-left rounded-xl border bg-card p-3 transition-all hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-red-300 ${fStatus === "vencido" ? "ring-2 ring-red-600 border-red-400" : ""}`}>
+            <div className="flex items-center justify-between gap-1.5 mb-1 min-w-0">
+              <span className="text-xs font-medium text-muted-foreground truncate">Vencidos</span>
+              <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-red-600" />
+            </div>
+            <div className="text-xl font-bold text-red-700">{extratoTotais.vencido.qtd}</div>
+            <div className="text-xs font-medium text-muted-foreground mt-0.5 whitespace-nowrap">{formatBRL(extratoTotais.vencido.total)}</div>
           </button>
 
           {/* Compensados */}
           <button type="button" onClick={() => toggleStatus("compensado")} aria-pressed={fStatus === "compensado"}
-            className={`text-left rounded-xl border bg-card p-4 transition-all hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-green-300 ${fStatus === "compensado" ? "ring-2 ring-green-500 border-green-300" : ""}`}>
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs font-medium text-muted-foreground">Compensados</span>
-              <span className="h-2.5 w-2.5 rounded-full bg-green-500" />
+            className={`text-left rounded-xl border bg-card p-3 transition-all hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-green-300 ${fStatus === "compensado" ? "ring-2 ring-green-500 border-green-300" : ""}`}>
+            <div className="flex items-center justify-between gap-1.5 mb-1 min-w-0">
+              <span className="text-xs font-medium text-muted-foreground truncate">Compensados</span>
+              <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-green-500" />
             </div>
-            <div className="text-2xl font-bold text-green-700">{cardTotais.map["compensado"]?.qtd || 0}</div>
-            <div className="text-sm font-medium text-muted-foreground mt-0.5">{formatBRL(cardTotais.map["compensado"]?.total || 0)}</div>
+            <div className="text-xl font-bold text-green-700">{cardTotais.map["compensado"]?.qtd || 0}</div>
+            <div className="text-xs font-medium text-muted-foreground mt-0.5 whitespace-nowrap">{formatBRL(cardTotais.map["compensado"]?.total || 0)}</div>
           </button>
 
           {/* Devolvidos */}
           <button type="button" onClick={() => toggleStatus("devolvido")} aria-pressed={fStatus === "devolvido"}
-            className={`text-left rounded-xl border bg-card p-4 transition-all hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-orange-300 ${fStatus === "devolvido" ? "ring-2 ring-orange-500 border-orange-300" : ""}`}>
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs font-medium text-muted-foreground">Devolvidos</span>
-              <span className="h-2.5 w-2.5 rounded-full bg-orange-500" />
+            className={`text-left rounded-xl border bg-card p-3 transition-all hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-orange-300 ${fStatus === "devolvido" ? "ring-2 ring-orange-500 border-orange-300" : ""}`}>
+            <div className="flex items-center justify-between gap-1.5 mb-1 min-w-0">
+              <span className="text-xs font-medium text-muted-foreground truncate">Devolvidos</span>
+              <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-orange-500" />
             </div>
-            <div className="text-2xl font-bold text-orange-600">{cardTotais.map["devolvido"]?.qtd || 0}</div>
-            <div className="text-sm font-medium text-muted-foreground mt-0.5">{formatBRL(cardTotais.map["devolvido"]?.total || 0)}</div>
+            <div className="text-xl font-bold text-orange-600">{cardTotais.map["devolvido"]?.qtd || 0}</div>
+            <div className="text-xs font-medium text-muted-foreground mt-0.5 whitespace-nowrap">{formatBRL(cardTotais.map["devolvido"]?.total || 0)}</div>
           </button>
 
-          {/* Outros (sustado/cancelado/indefinido) */}
-          <button type="button" onClick={() => toggleStatus("outros")} aria-pressed={fStatus === "outros"}
-            className={`text-left rounded-xl border bg-card p-4 transition-all hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-gray-300 ${fStatus === "outros" ? "ring-2 ring-gray-500 border-gray-300" : ""}`}>
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs font-medium text-muted-foreground">Outros</span>
-              <span className="h-2.5 w-2.5 rounded-full bg-gray-400" />
+          {/* Sustados */}
+          <button type="button" onClick={() => toggleStatus("sustado")} aria-pressed={fStatus === "sustado"}
+            className={`text-left rounded-xl border bg-card p-3 transition-all hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-red-300 ${fStatus === "sustado" ? "ring-2 ring-red-500 border-red-300" : ""}`}>
+            <div className="flex items-center justify-between gap-1.5 mb-1 min-w-0">
+              <span className="text-xs font-medium text-muted-foreground truncate">Sustados</span>
+              <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-red-500" />
             </div>
-            <div className="text-2xl font-bold text-gray-600">
-              {(cardTotais.map["sustado"]?.qtd || 0) + (cardTotais.map["cancelado"]?.qtd || 0) + (cardTotais.map["indefinido"]?.qtd || 0)}
+            <div className="text-xl font-bold text-red-600">{cardTotais.map["sustado"]?.qtd || 0}</div>
+            <div className="text-xs font-medium text-muted-foreground mt-0.5 whitespace-nowrap">{formatBRL(cardTotais.map["sustado"]?.total || 0)}</div>
+          </button>
+
+          {/* Cancelados */}
+          <button type="button" onClick={() => toggleStatus("cancelado")} aria-pressed={fStatus === "cancelado"}
+            className={`text-left rounded-xl border bg-card p-3 transition-all hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-gray-300 ${fStatus === "cancelado" ? "ring-2 ring-gray-500 border-gray-300" : ""}`}>
+            <div className="flex items-center justify-between gap-1.5 mb-1 min-w-0">
+              <span className="text-xs font-medium text-muted-foreground truncate">Cancelados</span>
+              <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-gray-500" />
             </div>
-            <div className="text-sm font-medium text-muted-foreground mt-0.5">sustado · cancelado</div>
+            <div className="text-xl font-bold text-gray-600">{cardTotais.map["cancelado"]?.qtd || 0}</div>
+            <div className="text-xs font-medium text-muted-foreground mt-0.5 whitespace-nowrap">{formatBRL(cardTotais.map["cancelado"]?.total || 0)}</div>
+          </button>
+
+          {/* Indefinidos */}
+          <button type="button" onClick={() => toggleStatus("indefinido")} aria-pressed={fStatus === "indefinido"}
+            className={`text-left rounded-xl border bg-card p-3 transition-all hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-slate-300 ${fStatus === "indefinido" ? "ring-2 ring-slate-500 border-slate-300" : ""}`}>
+            <div className="flex items-center justify-between gap-1.5 mb-1 min-w-0">
+              <span className="text-xs font-medium text-muted-foreground truncate">Indefinidos</span>
+              <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-slate-300" />
+            </div>
+            <div className="text-xl font-bold text-slate-500">{cardTotais.map["indefinido"]?.qtd || 0}</div>
+            <div className="text-xs font-medium text-muted-foreground mt-0.5 whitespace-nowrap">{formatBRL(cardTotais.map["indefinido"]?.total || 0)}</div>
           </button>
         </div>
 
@@ -1202,13 +1271,30 @@ export default function FinanceiroCheques() {
               </div>
               <Select value={fStatus} onValueChange={setFStatus}>
                 <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
-                <SelectContent position="popper" side="bottom" align="start" sideOffset={4}>
-                  <SelectItem value="todos">Todos os status</SelectItem>
-                  {STATUS_OPTS.map((s) => <SelectItem key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</SelectItem>)}
-                  <SelectItem value="outros">Outros (sustado/cancelado/devolvido)</SelectItem>
-                  <SelectItem value="conferido">✓ Conferidos no extrato</SelectItem>
-                  <SelectItem value="confere">Confere — falta marcar</SelectItem>
-                  <SelectItem value="divergente">⚠ Divergências</SelectItem>
+                <SelectContent position="popper" side="bottom" align="start" sideOffset={4} className="min-w-[320px]">
+                  {/* Rev. 4995 — linhas alinhadas: bolinha + nome à esquerda, qtd/valor à direita */}
+                  {([
+                    { v: "todos", nome: "Todos os status", dot: "bg-slate-400", qtd: cardTotaisBackend.qtd, total: cardTotaisBackend.total, bold: true },
+                    { v: "pendente", nome: "Pendente", dot: "bg-amber-500", qtd: cardTotaisBackend.map["pendente"]?.qtd || 0, total: cardTotaisBackend.map["pendente"]?.total || 0 },
+                    { v: "vencido", nome: "Vencido", dot: "bg-red-600", qtd: extratoTotais.vencido.qtd, total: extratoTotais.vencido.total },
+                    { v: "compensado", nome: "Compensado", dot: "bg-green-500", qtd: cardTotaisBackend.map["compensado"]?.qtd || 0, total: cardTotaisBackend.map["compensado"]?.total || 0 },
+                    { v: "devolvido", nome: "Devolvido", dot: "bg-orange-500", qtd: cardTotaisBackend.map["devolvido"]?.qtd || 0, total: cardTotaisBackend.map["devolvido"]?.total || 0 },
+                    { v: "sustado", nome: "Sustado", dot: "bg-red-500", qtd: cardTotaisBackend.map["sustado"]?.qtd || 0, total: cardTotaisBackend.map["sustado"]?.total || 0 },
+                    { v: "cancelado", nome: "Cancelado", dot: "bg-gray-500", qtd: cardTotaisBackend.map["cancelado"]?.qtd || 0, total: cardTotaisBackend.map["cancelado"]?.total || 0 },
+                    { v: "indefinido", nome: "Indefinido", dot: "bg-slate-300", qtd: cardTotaisBackend.map["indefinido"]?.qtd || 0, total: cardTotaisBackend.map["indefinido"]?.total || 0 },
+                    { v: "conferido", nome: "✓ Conferidos no extrato", dot: "bg-emerald-500", qtd: extratoTotais.conferido.qtd, total: extratoTotais.conferido.total, sep: true },
+                    { v: "divergente", nome: "⚠ Divergências", dot: "bg-red-400", qtd: extratoTotais.divergente.qtd, total: extratoTotais.divergente.total },
+                  ] as any[]).map((o) => (
+                    <SelectItem key={o.v} value={o.v} className={o.sep ? "border-t mt-1 pt-2" : undefined}>
+                      <span className="flex w-full items-center gap-2 pr-1">
+                        <span className={`h-2 w-2 shrink-0 rounded-full ${o.dot}`} />
+                        <span className={`flex-1 truncate ${o.bold ? "font-semibold" : ""}`}>{o.nome}</span>
+                        <span className="ml-auto shrink-0 tabular-nums text-xs text-muted-foreground">
+                          {o.qtd} · {formatBRL(o.total)}
+                        </span>
+                      </span>
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               {/* Filtro por fornecedor com busca — Rev. 4256 */}
@@ -1388,11 +1474,11 @@ export default function FinanceiroCheques() {
             {/* Legenda de status — p/ rastreio de cada cheque */}
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-muted-foreground">
               <span className="font-medium uppercase tracking-wide">Legenda:</span>
-              <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-green-500" /> Compensado</span>
-              <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-amber-500" /> Pendente</span>
-              <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-orange-500" /> Devolvido</span>
-              <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-red-500" /> Sustado</span>
-              <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-gray-400" /> Cancelado / Indefinido</span>
+              <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 shrink-0 rounded-full bg-green-500" /> Compensado</span>
+              <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 shrink-0 rounded-full bg-amber-500" /> Pendente</span>
+              <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 shrink-0 rounded-full bg-orange-500" /> Devolvido</span>
+              <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 shrink-0 rounded-full bg-red-500" /> Sustado</span>
+              <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 shrink-0 rounded-full bg-gray-400" /> Cancelado / Indefinido</span>
               <span className="inline-flex items-center gap-1.5 text-emerald-700"><Link2 className="h-3 w-3" /> Conciliado no extrato</span>
               <span className="inline-flex items-center gap-1.5 text-red-700"><AlertTriangle className="h-3 w-3" /> Divergência (banco compensou, controle não)</span>
             </div>
@@ -1481,7 +1567,7 @@ export default function FinanceiroCheques() {
                         {mesSel == null && <td className="py-2 pr-3 whitespace-nowrap">{c.mes ? `${MESES[c.mes]}/${c.ano}` : c.ano}</td>}
                         <td className="py-2 pr-3">
                           <div className="flex flex-col gap-1">
-                            {statusBadge(c.status)}
+                            {statusBadge(c.status, (diasAteData(c.dataVencimento) ?? 1) < 0)}
                             {/* Rev. 4081 — detalhamento de como o cheque foi pago (multi-forma/multi-conta). */}
                             {c.status === "compensado_pix" && c.numeroCheque && companyId ? (
                               <ChequeVinculosBreakdown companyId={Number(companyId)} numeroCheque={String(c.numeroCheque)} />
@@ -1565,7 +1651,8 @@ export default function FinanceiroCheques() {
                   <p className="text-red-700">
                     <AlertTriangle className="inline h-4 w-4 mr-1" />
                     As <strong>{verif.divergencias} divergência(s)</strong> (banco compensou, mas o controle diz
-                    devolvido/sustado/pendente) <strong>NÃO</strong> serão alteradas — o status é mantido para você analisar.
+                    devolvido/sustado/pendente) com <strong>match forte</strong> (nº + valor único) são corrigidas
+                    automaticamente para "compensado"; só as ambíguas ficam aqui para você analisar.
                   </p>
                 ) : null}
               </div>

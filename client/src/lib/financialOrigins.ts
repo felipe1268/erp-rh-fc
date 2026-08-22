@@ -19,6 +19,7 @@ export type FinancialOrigin =
   | "juridico" | "processo_trabalhista"
   | "almoxarifado" | "almoxarifado_saida"
   | "adiantamento" | "comissao_comprador"
+  | "reembolso" | "reembolso_fundo"
   | "planejamento_medicao" | "planejamento_compra"
   | "cronograma_atividade" | "revenue"
   // Rev. 1630 — Projeção de Folha/Benefícios/13º/PJ (forecast antes do fato gerador)
@@ -27,6 +28,8 @@ export type FinancialOrigin =
   | "decimo_terceiro_projetado" | "pj_projetado"
   // Rev. 1636 — Projeções de Férias (CLT 145) e Rescisão de Aviso (CLT 477 §6º)
   | "ferias_projetada" | "rescisao_projetada"
+  // Rev. 5038 — Folha oficial: título exato (consolidação) + previsões base folha anterior
+  | "folha_oficial" | "folha_prevista_vale" | "folha_prevista_pagamento"
   | "transferencia_estoque"
   | "manual" | "recorrente";
 
@@ -57,6 +60,7 @@ export const ORIGEM_LABELS: Record<string, string> = {
   almoxarifado: "Almoxarifado", almoxarifado_saida: "Saída Almox.",
   // Outras
   adiantamento: "Adiantamento", comissao_comprador: "Comissão",
+  reembolso: "Reembolso", reembolso_fundo: "Fundo Fixo (Caixinha)",
   // Receitas
   cronograma_atividade: "Cronograma", revenue: "Receita Manual",
   // Projeções de Folha (Rev. 1630)
@@ -68,6 +72,16 @@ export const ORIGEM_LABELS: Record<string, string> = {
   pj_projetado: "PJ (Projeção)",
   ferias_projetada: "Férias (Projeção)",
   rescisao_projetada: "Rescisão (Projeção)",
+  // Vale Transporte (Rev. 5042)
+  vale_transporte: "Vale Transporte",
+  vale_alimentacao: "Vale Alimentação",
+  // Férias (Rev. 5041)
+  ferias: "Férias",
+  ferias_complementar: "Férias Complementar",
+  // Folha oficial (Rev. 5038)
+  folha_oficial: "Folha Oficial",
+  folha_prevista_vale: "Vale Folha (Previsão)",
+  folha_prevista_pagamento: "Folha (Previsão)",
   transferencia_estoque: "Transferência Estoque",
   // Cartão de crédito (Rev. 4594)
   cartao_fatura: "Fatura de Cartão",
@@ -87,11 +101,16 @@ export const ORIGEM_ICONS: Record<string, LucideIcon> = {
   juridico: Scale, processo_trabalhista: Scale,
   almoxarifado: Package, almoxarifado_saida: Package,
   adiantamento: Wallet, comissao_comprador: Wallet,
+  reembolso: Wallet, reembolso_fundo: Wallet,
   cronograma_atividade: Calendar, revenue: Banknote,
   folha_projetada: Users, encargos_projetado: Receipt,
   beneficio_vr_projetado: Receipt, beneficio_va_projetado: Receipt,
   decimo_terceiro_projetado: Calendar, pj_projetado: Briefcase,
   ferias_projetada: Calendar, rescisao_projetada: FileText,
+  folha_oficial: Users, folha_prevista_vale: Users, folha_prevista_pagamento: Users,
+  ferias: Calendar, ferias_complementar: Calendar,
+  vale_transporte: Users,
+  vale_alimentacao: Users,
   transferencia_estoque: Package,
   cartao_fatura: CreditCard,
   manual: Wallet, recorrente: Wallet,
@@ -132,6 +151,8 @@ export const ORIGEM_COLORS: Record<string, string> = {
   almoxarifado_saida: "bg-emerald-50 text-emerald-700 border-emerald-200",
   transferencia_estoque: "bg-violet-50 text-violet-700 border-violet-200",
   adiantamento: "bg-gray-50 text-gray-700 border-gray-200",
+  reembolso: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  reembolso_fundo: "bg-violet-50 text-violet-700 border-violet-200",
   comissao_comprador: "bg-gray-50 text-gray-700 border-gray-200",
   cronograma_atividade: "bg-green-50 text-green-700 border-green-200",
   revenue: "bg-green-50 text-green-700 border-green-200",
@@ -144,6 +165,13 @@ export const ORIGEM_COLORS: Record<string, string> = {
   pj_projetado: "bg-violet-50 text-violet-700 border-violet-200",
   ferias_projetada: "bg-violet-50 text-violet-700 border-violet-200",
   rescisao_projetada: "bg-violet-50 text-violet-700 border-violet-200",
+  folha_oficial: "bg-purple-50 text-purple-700 border-purple-200",
+  ferias: "bg-purple-50 text-purple-700 border-purple-200",
+  vale_transporte: "bg-blue-50 text-blue-700 border-blue-200",
+  vale_alimentacao: "bg-orange-50 text-orange-700 border-orange-200",
+  ferias_complementar: "bg-violet-50 text-violet-700 border-violet-200",
+  folha_prevista_vale: "bg-violet-50 text-violet-700 border-violet-200",
+  folha_prevista_pagamento: "bg-violet-50 text-violet-700 border-violet-200",
   cartao_fatura: "bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200",
   manual: "bg-gray-50 text-gray-700 border-gray-200",
   recorrente: "bg-violet-50 text-violet-700 border-violet-200",

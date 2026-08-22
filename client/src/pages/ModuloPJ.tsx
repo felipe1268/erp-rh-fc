@@ -174,14 +174,17 @@ function BancoCombobox({ value, onChange }: { value: string; onChange: (v: strin
   );
 }
 
-export default function ModuloPJ() {
+// Rev. 5160 — a tela foi dividida a pedido do user: "Prestadores de Serviço"
+// (/modulo-pj) fica só com CADASTRO + CONTRATOS; a Folha PJ (medições 1ª/2ª)
+// vive dentro de "Medições de Terceiros" via <ModuloPJ modo="folha" embedded />.
+export default function ModuloPJ({ modo = "contratos", embedded = false }: { modo?: "contratos" | "folha"; embedded?: boolean } = {}) {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
   const { user } = useAuth();
   const documentMargins = useDocumentMargins();
   const [, navigate] = useLocation();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) || 0 : 0;
   const companyIds = getCompanyIdsForQuery();
-  const [tab, setTab] = useState("contratos");
+  const [tab, setTab] = useState(modo === "folha" ? "pagamentos" : "contratos");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ativo");
   const [showContratoDialog, setShowContratoDialog] = useState(false);
@@ -559,7 +562,7 @@ export default function ModuloPJ() {
     if (!contratoByIdData) { toast.error("Aguarde os dados do contrato carregarem."); return; }
     const modeloHtml = (modeloContratoData as any)?.modeloHtml || null;
     if (!modeloHtml) {
-      toast.error("Template de contrato não encontrado. Configure o modelo em Configurações → Templates de Documentos → Contrato PJ e certifique-se de que está como 'Vigente'.");
+      toast.error("Template de contrato não encontrado. Configure o modelo em Configurações → Templates de Documentos → Contrato de Prestador de Serviço e certifique-se de que está como 'Vigente'.");
       return;
     }
     const html = buildContratoPjSignHtml({
@@ -587,7 +590,7 @@ export default function ModuloPJ() {
     const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
     const fmtCPF = (v: string) => v.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
     
-    let html = `<html><head><meta charset="utf-8"><title>Relatório PJ - ${mesLabel}</title>
+    let html = `<html><head><meta charset="utf-8"><title>Relatório de Prestadores de Serviço - ${mesLabel}</title>
     <style>
       @media print { body { margin: 0; } }
       body { font-family: Arial, sans-serif; font-size: 11px; color: #333; padding: 20px; }
@@ -606,7 +609,7 @@ export default function ModuloPJ() {
       .page-break { page-break-before: always; }
     </style></head><body>`;
     
-    html += `<h1>Relatório Consolidado PJ — ${mesLabel}</h1>`;
+    html += `<h1>Relatório Consolidado de Prestadores de Serviço — ${mesLabel}</h1>`;
     html += `<div class="header-info"><span>Gerado em: ${nowBrasilia()}</span><span>${relatorio.totais.qtdPrestadores} prestador(es) • ${relatorio.totais.qtdLancamentos} lançamento(s)</span></div>`;
     
     // Resumo geral
@@ -872,24 +875,25 @@ export default function ModuloPJ() {
     }
   };
 
-  return (
-    <DashboardLayout>
-      <div className="p-6 space-y-6">
+  const conteudo = (<>
+      <div className={embedded ? "space-y-6" : "p-6 space-y-6"}>
         {/* Header */}
+        {!embedded && (
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
               <Briefcase className="h-6 w-6 text-purple-600" />
-              Prestadores de Serviço
+              {modo === "folha" ? "Folha de Prestadores — Medições" : "Prestadores de Serviço"}
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Gestão de contratos de prestadores de serviço — Folha 40/60, bonificações e alertas de vencimento
+              {modo === "folha" ? "Medições mensais (1ª/2ª) dos prestadores de serviço — conectadas ao Contas a Pagar" : "Gestão de contratos de prestadores de serviço — Folha 40/60, bonificações e alertas de vencimento"}
             </p>
           </div>
         </div>
+        )}
 
-        {/* Stats — Rev. 4412 */}
-        {(() => {
+        {/* Stats — Rev. 4412 (só no modo contratos: são KPIs de contrato) */}
+        {modo !== "folha" && (() => {
           const semContrato = alertas?.pjsSemContrato?.length ?? 0;
           type KpiItem = {
             label: string; value: number | string; icon: any;
@@ -978,7 +982,7 @@ export default function ModuloPJ() {
         })()}
 
         {/* Alerts */}
-        {alertas && ((alertas.vencendo?.length || 0) > 0 || (alertas.vencidos?.length || 0) > 0 || (alertas.pjsSemContrato?.length || 0) > 0) && (
+        {modo !== "folha" && alertas && ((alertas.vencendo?.length || 0) > 0 || (alertas.vencidos?.length || 0) > 0 || (alertas.pjsSemContrato?.length || 0) > 0) && (
           <div className="space-y-2">
             {(alertas.vencidos?.length || 0) > 0 && (
               <div className="bg-red-50 border border-red-200 rounded-lg p-3">
@@ -1025,12 +1029,22 @@ export default function ModuloPJ() {
           </div>
         )}
 
-        {/* Tabs */}
+        {/* Tabs — Rev. 5160: cada modo mostra só a própria aba (sem alternância) */}
         <Tabs value={tab} onValueChange={setTab}>
-          <TabsList>
-            <TabsTrigger value="contratos"><FileSignature className="h-4 w-4 mr-1" /> Contratos</TabsTrigger>
-            <TabsTrigger value="pagamentos"><DollarSign className="h-4 w-4 mr-1" /> Folha PJ</TabsTrigger>
-          </TabsList>
+          {modo === "folha" ? null : (
+            <div className="flex items-center gap-2">
+              <TabsList>
+                <TabsTrigger value="contratos"><FileSignature className="h-4 w-4 mr-1" /> Contratos</TabsTrigger>
+              </TabsList>
+              <button
+                type="button"
+                onClick={() => navigate("/terceiros/medicoes")}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-purple-700 border border-purple-200 bg-purple-50 hover:bg-purple-100 rounded-lg px-3 py-1.5 transition-colors"
+              >
+                <DollarSign className="h-3.5 w-3.5" /> Folha de Prestadores mudou para Medições de Terceiros →
+              </button>
+            </div>
+          )}
 
           {/* Contratos */}
           <TabsContent value="contratos">
@@ -1246,7 +1260,7 @@ export default function ModuloPJ() {
               className="mb-4"
             />
             <div className="flex gap-2 mb-4 flex-wrap">
-              <Button variant="outline" onClick={() => gerarMensal.mutate({ companyId, companyIds })} disabled={gerarMensal.isPending} title="Sincroniza previsões de medições para todos os contratos PJ ativos (idempotente).">
+              <Button variant="outline" onClick={() => gerarMensal.mutate({ companyId, companyIds })} disabled={gerarMensal.isPending} title="Sincroniza previsões de medições para todos os contratos de prestadores de serviço ativos (idempotente).">
                 <RefreshCw className={`h-4 w-4 mr-2 ${gerarMensal.isPending ? "animate-spin" : ""}`} /> Sincronizar Previsões
               </Button>
               <Button variant="outline" onClick={() => exportarPDF()} disabled={!(pagamentos as any[]).length || pjMes == null} title={pjMes == null ? "Selecione um mês para exportar PDF" : ""}>
@@ -1879,7 +1893,7 @@ export default function ModuloPJ() {
         )}
 
         {/* Create / Edit Contrato Dialog — layout 2 colunas Rev. 4454 */}
-        <FullScreenDialog open={showContratoDialog} onClose={() => { setShowContratoDialog(false); setEditingContratoId(null); setForm({}); setMotivoAlteracao(""); setCreatedContratoId(null); setFormOrigemTipo(null); setFormOrigemContrato(null); }} title={editingContratoId ? "Editar Contrato PJ" : formOrigemTipo === 'revisao' ? "Criar Revisão de Contrato PJ" : formOrigemTipo === 'renovacao' ? "Renovar Contrato PJ" : "Novo Contrato PJ"} icon={<FileSignature className="h-5 w-5 text-white" />}>
+        <FullScreenDialog open={showContratoDialog} onClose={() => { setShowContratoDialog(false); setEditingContratoId(null); setForm({}); setMotivoAlteracao(""); setCreatedContratoId(null); setFormOrigemTipo(null); setFormOrigemContrato(null); }} title={editingContratoId ? "Editar Contrato de Prestador de Serviço" : formOrigemTipo === 'revisao' ? "Criar Revisão de Contrato de Prestador de Serviço" : formOrigemTipo === 'renovacao' ? "Renovar Contrato de Prestador de Serviço" : "Novo Contrato de Prestador de Serviço"} icon={<FileSignature className="h-5 w-5 text-white" />}>
           <div className="w-full max-w-7xl mx-auto">
 
             {/* ═══ FASE 1 — Seleção de prestador (apenas novo contrato) ═══ */}
@@ -1892,7 +1906,7 @@ export default function ModuloPJ() {
                   <h2 className="text-xl font-bold text-gray-900">Selecionar Prestador PJ</h2>
                   <p className="text-sm text-gray-500 mt-1">
                     {pjEmployeesSemContrato.length === 0
-                      ? "Todos os prestadores PJ já possuem contrato ativo ou pendente de assinatura"
+                      ? "Todos os prestadores de serviço já possuem contrato ativo ou pendente de assinatura"
                       : <><span className="font-semibold text-blue-700">{pjEmployeesSemContrato.length}</span> prestador(es) disponível(is) para novo contrato</>}
                   </p>
                 </div>
@@ -1913,7 +1927,7 @@ export default function ModuloPJ() {
                     <div className="text-5xl mb-3">👥</div>
                     <p className="text-gray-500 font-medium text-sm">
                       {pjEmployeesSemContrato.length === 0
-                        ? "Todos os prestadores PJ já possuem contrato ativo ou pendente de assinatura."
+                        ? "Todos os prestadores de serviço já possuem contrato ativo ou pendente de assinatura."
                         : `Nenhum resultado para "${empSearch}"`}
                     </p>
                   </div>
@@ -2153,7 +2167,7 @@ export default function ModuloPJ() {
                 <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
                   <div className="flex items-center gap-2 px-4 py-2.5 bg-purple-50 border-b border-purple-100">
                     <div className="h-5 w-5 rounded-full bg-purple-600 flex items-center justify-center text-white text-[10px] font-bold shrink-0">4</div>
-                    <p className="text-xs font-bold uppercase tracking-wider text-purple-800">Regra de Pagamento (Folha PJ)</p>
+                    <p className="text-xs font-bold uppercase tracking-wider text-purple-800">Regra de Pagamento (Folha de Prestadores)</p>
                   </div>
                   <div className="p-4 space-y-3">
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -2665,7 +2679,7 @@ export default function ModuloPJ() {
             geradoPor={user?.name || ""}
           />
         )}
-    </DashboardLayout>
-  );
+  </>);
+  return embedded ? conteudo : <DashboardLayout>{conteudo}</DashboardLayout>;
 }
 

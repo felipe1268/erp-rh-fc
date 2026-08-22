@@ -67,6 +67,26 @@ function companyWhere(table: any, companyId: number, companyIds?: number[]) {
 }
 
 
+// Helper: obra atual do funcionário (alocação ativa em obra_funcionarios;
+// fallback: registro aberto em employee_site_history — empresas que alocam só via ESH)
+function obraAtualSql(employeeIdCol: any, companyId: number, companyIds?: number[]) {
+  const ids = resolveIds(companyId, companyIds);
+  const idsSql = sql.raw(ids.map(n => Number(n)).join(','));
+  return sql<string | null>`COALESCE(
+    (SELECT o.nome FROM obra_funcionarios ofx
+     JOIN obras o ON o.id = ofx."obraId"
+     WHERE ofx."employeeId" = ${employeeIdCol} AND ofx."isActive" = 1
+       AND ofx."companyId" IN (${idsSql})
+     ORDER BY ofx."dataInicio" DESC NULLS LAST, ofx.id DESC LIMIT 1),
+    (SELECT o.nome FROM employee_site_history esh
+     JOIN obras o ON o.id = esh."obraId"
+     WHERE esh."employeeId" = ${employeeIdCol} AND esh."dataFim" IS NULL
+       AND esh.tipo IN ('alocacao','transferencia')
+       AND esh."companyId" IN (${idsSql})
+     ORDER BY esh."dataInicio" DESC NULLS LAST, esh.id DESC LIMIT 1)
+  )`;
+}
+
 // ============================================================
 // 1. DASHBOARD FUNCIONÁRIOS (análise completa)
 // ============================================================
@@ -202,14 +222,14 @@ async function getDashFuncionarios(companyId: number, companyIds?: number[], ano
       .from(employees).where(and(activeWhere, sql`"dataAdmissao" IS NOT NULL`)).orderBy(desc(employees.dataAdmissao)).limit(1),
 
     // 18. Ranking advertências (top 10 — ocorridas no ano de análise)
-    db.select({ employeeId: warnings.employeeId, nome: employees.nomeCompleto, funcao: employees.funcao, fotoUrl: employees.fotoUrl, total: sql<number>`count(*)` })
+    db.select({ employeeId: warnings.employeeId, nome: employees.nomeCompleto, funcao: employees.funcao, fotoUrl: employees.fotoUrl, obraAtual: obraAtualSql(warnings.employeeId, companyId, companyIds), total: sql<number>`count(*)` })
       .from(warnings).innerJoin(employees, eq(warnings.employeeId, employees.id))
       .where(and(companyWhere(warnings, companyId, companyIds), isNull(warnings.deletedAt), isNull(employees.deletedAt), sql`${warnings.dataOcorrencia}::date BETWEEN ${yearStart}::date AND ${yearEndEvt}::date`))
       .groupBy(warnings.employeeId, employees.nomeCompleto, employees.funcao, employees.fotoUrl)
       .orderBy(sql`count(*) desc`).limit(10),
 
     // 19. Ranking atestados (top 10 — emitidos no ano de análise)
-    db.select({ employeeId: atestados.employeeId, nome: employees.nomeCompleto, funcao: employees.funcao, fotoUrl: employees.fotoUrl, totalAtestados: sql<number>`count(*)`, totalDias: sql<number>`COALESCE(SUM("diasAfastamento"), 0)` })
+    db.select({ employeeId: atestados.employeeId, nome: employees.nomeCompleto, funcao: employees.funcao, fotoUrl: employees.fotoUrl, obraAtual: obraAtualSql(atestados.employeeId, companyId, companyIds), totalAtestados: sql<number>`count(*)`, totalDias: sql<number>`COALESCE(SUM("diasAfastamento"), 0)` })
       .from(atestados).innerJoin(employees, eq(atestados.employeeId, employees.id))
       .where(and(companyWhere(atestados, companyId, companyIds), isNull(atestados.deletedAt), isNull(employees.deletedAt), sql`${atestados.dataEmissao}::date BETWEEN ${yearStart}::date AND ${yearEndEvt}::date`))
       .groupBy(atestados.employeeId, employees.nomeCompleto, employees.funcao, employees.fotoUrl)
@@ -337,8 +357,8 @@ async function getDashFuncionarios(companyId: number, companyIds?: number[], ano
       maiorTempo: longestTenure ? { nome: longestTenure.nome, data: longestTenure.data, funcao: longestTenure.funcao } : null,
       menorTempo: shortestTenure ? { nome: shortestTenure.nome, data: shortestTenure.data, funcao: shortestTenure.funcao } : null,
     },
-    rankingAdvertencias: rankingAdvertencias.map(r => ({ employeeId: r.employeeId, nome: r.nome, funcao: r.funcao, fotoUrl: r.fotoUrl ?? null, total: Number(r.total) })),
-    rankingAtestados: rankingAtestados.map(r => ({ employeeId: r.employeeId, nome: r.nome, funcao: r.funcao, fotoUrl: r.fotoUrl ?? null, totalAtestados: Number(r.totalAtestados), totalDias: Number(r.totalDias) })),
+    rankingAdvertencias: rankingAdvertencias.map(r => ({ employeeId: r.employeeId, nome: r.nome, funcao: r.funcao, fotoUrl: r.fotoUrl ?? null, obraAtual: (r as any).obraAtual ?? null, total: Number(r.total) })),
+    rankingAtestados: rankingAtestados.map(r => ({ employeeId: r.employeeId, nome: r.nome, funcao: r.funcao, fotoUrl: r.fotoUrl ?? null, obraAtual: (r as any).obraAtual ?? null, totalAtestados: Number(r.totalAtestados), totalDias: Number(r.totalDias) })),
     advertenciasTipo: advertenciasTipo.map(r => ({ label: r.tipo, value: Number(r.count) })),
     funcaoAll: funcaoAll.map(r => ({ label: r.funcao || "Não informado", value: Number(r.count) })),
     funcaoStatusDist: funcaoStatusDist.map(r => ({ funcao: r.funcao || "Não informado", status: isCurrentYear ? (r.status || "Desconhecido") : "Ativo", count: Number(r.count) })),
@@ -827,7 +847,7 @@ async function getDashFeriasComparativo(companyId: number, ano?: number, company
         AND v."periodoConcessivoFim"::date <= (m.mi + interval '1 month - 1 day')::date
         AND v."dataInicio" IS NULL
         AND v.status NOT IN ('pago','cancelado')) AS vencidas,
-      (SELECT COALESCE(SUM(NULLIF(REPLACE(v."valorTotal",',','.'),'')::numeric), 0) FROM vacation_periods v
+      (SELECT COALESCE(SUM(fc_money(v."valorTotal")), 0) FROM vacation_periods v
         WHERE v."companyId" IN (${cl}) AND v."deletedAt" IS NULL
         AND v."dataInicio" IS NOT NULL
         AND v."dataInicio"::date >= m.mi AND v."dataInicio"::date <= (m.mi + interval '1 month - 1 day')::date) AS custo_iniciadas

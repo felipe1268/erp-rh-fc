@@ -1,6 +1,7 @@
 import { protectedProcedure, router } from "../_core/trpc";
 import { z } from "zod";
-import { getDb } from "../db";
+import { TRPCError } from "@trpc/server";
+import { getDb, getUserCompanyLinks } from "../db";
 import { vrBenefits, employees, obras, obraFuncionarios, mealBenefitConfigs, vaFaltaAlerts } from "../../drizzle/schema";
 import { eq, and, sql, isNull, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
@@ -13,6 +14,128 @@ function parseBRL(v: string | null | undefined): number {
 
 function formatBRL(v: number): string {
   return v.toFixed(2).replace(".", ",");
+}
+
+// ============================================================
+// Rev. 5044 — Integração VA ↔ Financeiro (mesma regra da Folha):
+// RH só APROVA; quem paga é o Financeiro. Ao aprovar, o total do mês
+// vira/atualiza um título 'a_pagar' (origem 'vale_alimentacao') e a
+// previsão do bridge (beneficio_va/vr_projetado) é removida.
+// ============================================================
+// Deny-by-default: usuário sem vínculo não acessa empresa nenhuma.
+async function assertVaCompanyAccess(ctxUser: any, companyId: number) {
+  if (!ctxUser?.id) throw new TRPCError({ code: "UNAUTHORIZED", message: "Sessão inválida." });
+  if (ctxUser.role === "admin" || ctxUser.role === "admin_master") return;
+  const links = await getUserCompanyLinks(ctxUser.id);
+  const allowedIds = (links as any[]).map((l: any) => l.companyId).filter((v: any) => typeof v === "number");
+  if (!allowedIds.includes(companyId)) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+  }
+}
+
+// Para operações por IDs: valida que todos pertencem à empresa e a UM único mês;
+// devolve o mês real persistido (nunca confiar no mes do cliente p/ reconciliar).
+async function resolveMesDosIds(db: any, companyId: number, ids: number[]): Promise<string> {
+  const clean = ids.map(Number).filter((n) => Number.isInteger(n) && n > 0);
+  if (!clean.length) throw new TRPCError({ code: "BAD_REQUEST", message: "IDs inválidos." });
+  const rows: any[] = ((await db.execute(sql`
+    SELECT DISTINCT "mesReferencia" FROM vr_benefits
+    WHERE "companyId" = ${companyId} AND id IN (${sql.raw(clean.join(","))})
+  `)) as any).rows || [];
+  if (!rows.length) throw new TRPCError({ code: "NOT_FOUND", message: "Lançamento(s) não encontrado(s) nesta empresa." });
+  if (rows.length > 1) throw new TRPCError({ code: "BAD_REQUEST", message: "Os lançamentos selecionados pertencem a meses diferentes." });
+  return rows[0].mesReferencia;
+}
+
+// Serializa aprovação/reversão + reconciliação do título por empresa (lock 478009).
+const VA_LOCK_KEY = 478009;
+
+function vaDiaUtilOuAnterior(ano: number, mes1a12: number, dia: number): string {
+  const d = new Date(Date.UTC(ano, mes1a12 - 1, dia));
+  const dow = d.getUTCDay();
+  if (dow === 0) d.setUTCDate(d.getUTCDate() - 2);
+  else if (dow === 6) d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+async function syncTituloVA(
+  db: any, companyId: number, mesReferencia: string, userName: string, criarSeAusente: boolean,
+): Promise<{ entryId: number | null; valor: number; aviso?: string }> {
+  const [ano, mes] = mesReferencia.split("-");
+  const totRes: any = await db.execute(sql`
+    SELECT COALESCE(SUM(fc_money("valorTotal")),0) AS total, COUNT(*) AS qtd
+    FROM vr_benefits
+    WHERE "companyId" = ${companyId} AND "mesReferencia" = ${mesReferencia}
+      AND status IN ('aprovado','pago')
+  `);
+  const tot = (totRes?.rows ?? totRes)?.[0] || {};
+  const valor = Math.round((Number(tot.total) || 0) * 100) / 100;
+  const qtd = Number(tot.qtd) || 0;
+
+  const desc = `Vale Alimentação ${mes}/${ano}`;
+  const exist = ((await db.execute(sql`
+    SELECT id, status FROM financial_entries
+    WHERE company_id = ${companyId} AND origem_modulo = 'vale_alimentacao'
+      AND origem_descricao = ${desc} AND status <> 'cancelado'
+    LIMIT 1
+  `)) as any).rows || [];
+
+  if (valor <= 0) {
+    // Nada aprovado — cancela título ainda não baixado (ex.: aprovação toda revertida)
+    if (exist.length && exist[0].status === 'a_pagar') {
+      await db.execute(sql`
+        UPDATE financial_entries SET status = 'cancelado', updated_at = NOW()
+        WHERE id = ${exist[0].id} AND company_id = ${companyId} AND status = 'a_pagar'
+      `);
+      return { entryId: null, valor: 0, aviso: `Título "${desc}" cancelado (nenhum lançamento aprovado).` };
+    }
+    return { entryId: null, valor: 0 };
+  }
+
+  // Substitui a PREVISÃO do bridge desta competência
+  await db.execute(sql`
+    DELETE FROM financial_entries
+    WHERE company_id = ${companyId} AND status = 'previsto'
+      AND origem_modulo IN ('beneficio_va_projetado','beneficio_vr_projetado')
+      AND TO_CHAR(data_competencia,'YYYY-MM') = ${mesReferencia}
+  `);
+
+  if (exist.length) {
+    if (exist[0].status === 'a_pagar') {
+      await db.execute(sql`
+        UPDATE financial_entries
+        SET valor_previsto = ${valor.toFixed(2)},
+            descricao = ${`${desc} — ${qtd} colaborador(es)`}, updated_at = NOW()
+        WHERE id = ${exist[0].id} AND company_id = ${companyId} AND status = 'a_pagar'
+      `);
+      console.log(`[ValeAlimentacao] ${desc}: título #${exist[0].id} atualizado p/ R$ ${valor.toFixed(2)} por ${userName}`);
+      return { entryId: Number(exist[0].id), valor };
+    }
+    return { entryId: Number(exist[0].id), valor, aviso: `Título "${desc}" já tem baixa no Financeiro — valor não foi alterado (estorne antes de reaprovar).` };
+  }
+  if (!criarSeAusente) return { entryId: null, valor };
+
+  const venc = vaDiaUtilOuAnterior(Number(ano), Number(mes) + 1, 5); // dia 5 do mês seguinte, recuo p/ dia útil
+  const res: any = await db.execute(sql`
+    INSERT INTO financial_entries (
+      company_id, conta_nome, tipo, natureza,
+      valor_previsto, data_competencia, data_vencimento, status,
+      origem_modulo, origem_id, origem_descricao, descricao, created_at, updated_at
+    ) VALUES (
+      ${companyId}, 'VALE ALIMENTAÇÃO', 'despesa', 'fixa',
+      ${valor.toFixed(2)}, ${`${ano}-${mes}-01`}, ${venc}, 'a_pagar',
+      'vale_alimentacao', ${parseInt(`${ano}${mes}`, 10)}, ${desc},
+      ${`${desc} — ${qtd} colaborador(es)`}, NOW(), NOW()
+    )
+    ON CONFLICT DO NOTHING
+    RETURNING id
+  `);
+  // Dedup atômico via índice único parcial uq_fin_entries_vale_alimentacao
+  // (company_id, origem_descricao WHERE origem_modulo='vale_alimentacao' AND status<>'cancelado')
+  const newId = Number((Array.isArray(res) ? res[0] : res?.rows?.[0])?.id) || null;
+  if (!newId) return { entryId: null, valor, aviso: 'Título desta competência acabou de ser gerado por outra requisição.' };
+  console.log(`[ValeAlimentacao] ${desc}: título #${newId} de R$ ${valor.toFixed(2)} gerado por ${userName}`);
+  return { entryId: newId, valor };
 }
 
 const FERIADOS_NACIONAIS_FIXOS = [
@@ -279,7 +402,7 @@ export const valeAlimentacaoRouter = router({
           SUM(CASE WHEN vr.status = 'aprovado' THEN 1 ELSE 0 END) as aprovados,
           SUM(CASE WHEN vr.status = 'pago' THEN 1 ELSE 0 END) as pagos,
           SUM(CASE WHEN vr.status = 'cancelado' THEN 1 ELSE 0 END) as cancelados,
-          SUM(CASE WHEN vr.status != 'cancelado' THEN CAST(REPLACE(REPLACE(vr."valorTotal", '.', ''), ',', '.') AS DECIMAL(10,2)) ELSE 0 END) as "totalValor"
+          SUM(CASE WHEN vr.status != 'cancelado' THEN fc_money(vr."valorTotal") ELSE 0 END) as "totalValor"
         FROM vr_benefits vr
         LEFT JOIN employees e ON vr."employeeId" = e.id
         WHERE vr."companyId" IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND vr."mesReferencia" = ${input.mesReferencia}
@@ -924,7 +1047,8 @@ export const valeAlimentacaoRouter = router({
       motivoAlteracao: z.string().optional(),
       observacoes: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await assertVaCompanyAccess(ctx.user, input.companyId);
       const db = (await getDb())!;
       const updateData: Record<string, any> = {};
       if (input.valorTotal !== undefined) updateData.valorTotal = input.valorTotal;
@@ -939,10 +1063,19 @@ export const valeAlimentacaoRouter = router({
       
       if (Object.keys(updateData).length === 0) return { success: false, message: "Nenhum campo para atualizar" };
 
-      await db.update(vrBenefits).set(updateData).where(and(
-        sql`${vrBenefits.id} = ${input.id}`,
-        eq(vrBenefits.companyId, input.companyId)
-      ));
+      // Rev. 5044 — mudou valor/status: atômico + serializado com a reconciliação do título
+      const precisaSync = input.valorTotal !== undefined || input.status !== undefined;
+      await db.transaction(async (tx: any) => {
+        if (precisaSync) await tx.execute(sql`SELECT pg_advisory_xact_lock(${VA_LOCK_KEY}, ${input.companyId})`);
+        await tx.update(vrBenefits).set(updateData).where(and(
+          sql`${vrBenefits.id} = ${input.id}`,
+          eq(vrBenefits.companyId, input.companyId)
+        ));
+        if (precisaSync) {
+          const row: any = ((await tx.execute(sql`SELECT "mesReferencia" FROM vr_benefits WHERE id = ${input.id} AND "companyId" = ${input.companyId}`)) as any).rows?.[0];
+          if (row?.mesReferencia) await syncTituloVA(tx, input.companyId, row.mesReferencia, ctx.user?.name || "RH", false);
+        }
+      });
       return { success: true };
     }),
 
@@ -952,31 +1085,43 @@ export const valeAlimentacaoRouter = router({
       aprovadoPor: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
+      await assertVaCompanyAccess(ctx.user, input.companyId);
       const db = (await getDb())!;
       const userName = input.aprovadoPor || ctx.user?.name || "RH";
-      
-      if (input.ids && input.ids.length > 0) {
-        const result = await db.execute(
-          sql`UPDATE vr_benefits SET status = 'aprovado', "aprovadoPor" = ${userName} WHERE id IN (${sql.raw(input.ids.join(","))}) AND "companyId" = ${input.companyId} AND status = 'pendente'`
-        );
-        return { success: true, aprovados: (result as any)?.rowCount || 0 };
-      } else {
-        const result = await db.execute(
-          sql`UPDATE vr_benefits SET status = 'aprovado', "aprovadoPor" = ${userName} WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia} AND status = 'pendente'`
-        );
-        return { success: true, aprovados: (result as any)?.rowCount || 0 };
-      }
+      // Rev. 5044 — tudo numa transação serializada por empresa: aprovação + título
+      return await db.transaction(async (tx: any) => {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${VA_LOCK_KEY}, ${input.companyId})`);
+        let aprovados = 0;
+        let mesSync = input.mesReferencia;
+        if (input.ids && input.ids.length > 0) {
+          mesSync = await resolveMesDosIds(tx, input.companyId, input.ids);
+          const result = await tx.execute(
+            sql`UPDATE vr_benefits SET status = 'aprovado', "aprovadoPor" = ${userName} WHERE id IN (${sql.raw(input.ids.map(Number).filter(Boolean).join(","))}) AND "companyId" = ${input.companyId} AND status = 'pendente'`
+          );
+          aprovados = (result as any)?.rowCount || 0;
+        } else {
+          const result = await tx.execute(
+            sql`UPDATE vr_benefits SET status = 'aprovado', "aprovadoPor" = ${userName} WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia} AND status = 'pendente'`
+          );
+          aprovados = (result as any)?.rowCount || 0;
+        }
+        // Envia/atualiza o título no Contas a Pagar (mesma regra da folha)
+        const fin = await syncTituloVA(tx, input.companyId, mesSync, userName, true);
+        return { success: true, aprovados, financeiro: fin };
+      });
     }),
 
   marcarPago: protectedProcedure
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(),
       ids: z.array(z.number()).optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await assertVaCompanyAccess(ctx.user, input.companyId);
       const db = (await getDb())!;
       if (input.ids && input.ids.length > 0) {
+        await resolveMesDosIds(db, input.companyId, input.ids);
         const result = await db.execute(
-          sql`UPDATE vr_benefits SET status = 'pago' WHERE id IN (${sql.raw(input.ids.join(","))}) AND "companyId" = ${input.companyId} AND status = 'aprovado'`
+          sql`UPDATE vr_benefits SET status = 'pago' WHERE id IN (${sql.raw(input.ids.map(Number).filter(Boolean).join(","))}) AND "companyId" = ${input.companyId} AND status = 'aprovado'`
         );
         return { success: true, pagos: (result as any)?.rowCount || 0 };
       } else {
@@ -991,11 +1136,13 @@ export const valeAlimentacaoRouter = router({
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(),
       ids: z.array(z.number()).optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await assertVaCompanyAccess(ctx.user, input.companyId);
       const db = (await getDb())!;
       if (input.ids && input.ids.length > 0) {
+        await resolveMesDosIds(db, input.companyId, input.ids);
         const result = await db.execute(
-          sql`UPDATE vr_benefits SET status = 'aprovado' WHERE id IN (${sql.raw(input.ids.join(","))}) AND "companyId" = ${input.companyId} AND status = 'pago'`
+          sql`UPDATE vr_benefits SET status = 'aprovado' WHERE id IN (${sql.raw(input.ids.map(Number).filter(Boolean).join(","))}) AND "companyId" = ${input.companyId} AND status = 'pago'`
         );
         return { success: true, revertidos: (result as any)?.rowCount || 0 };
       } else {
@@ -1006,17 +1153,54 @@ export const valeAlimentacaoRouter = router({
       }
     }),
 
+  /** Rev. 5044 — reverte APROVADOS p/ pendente e reconcilia o título (cancela se zerar). */
+  reverterAprovacao: protectedProcedure
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(),
+      ids: z.array(z.number()).optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      await assertVaCompanyAccess(ctx.user, input.companyId);
+      const db = (await getDb())!;
+      const userName = ctx.user?.name || "RH";
+      return await db.transaction(async (tx: any) => {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${VA_LOCK_KEY}, ${input.companyId})`);
+        let revertidos = 0;
+        let mesSync = input.mesReferencia;
+        if (input.ids && input.ids.length > 0) {
+          mesSync = await resolveMesDosIds(tx, input.companyId, input.ids);
+          const result = await tx.execute(
+            sql`UPDATE vr_benefits SET status = 'pendente' WHERE id IN (${sql.raw(input.ids.map(Number).filter(Boolean).join(","))}) AND "companyId" = ${input.companyId} AND status IN ('aprovado','pago')`
+          );
+          revertidos = (result as any)?.rowCount || 0;
+        } else {
+          const result = await tx.execute(
+            sql`UPDATE vr_benefits SET status = 'pendente' WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia} AND status IN ('aprovado','pago')`
+          );
+          revertidos = (result as any)?.rowCount || 0;
+        }
+        const fin = await syncTituloVA(tx, input.companyId, mesSync, userName, false);
+        return { success: true, revertidos, financeiro: fin };
+      });
+    }),
+
   cancelarLancamento: protectedProcedure
     .input(z.object({
       id: z.number(),
       companyId: z.number(),
       motivo: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await assertVaCompanyAccess(ctx.user, input.companyId);
       const db = (await getDb())!;
-      await db.execute(
-        sql`UPDATE vr_benefits SET status = 'cancelado', "motivoAlteracao" = ${input.motivo || 'Cancelado pelo usuário'} WHERE id = ${input.id} AND "companyId" = ${input.companyId}`
-      );
+      await db.transaction(async (tx: any) => {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${VA_LOCK_KEY}, ${input.companyId})`);
+        const row: any = ((await tx.execute(sql`SELECT "mesReferencia" FROM vr_benefits WHERE id = ${input.id} AND "companyId" = ${input.companyId}`)) as any).rows?.[0];
+        await tx.execute(
+          sql`UPDATE vr_benefits SET status = 'cancelado', "motivoAlteracao" = ${input.motivo || 'Cancelado pelo usuário'} WHERE id = ${input.id} AND "companyId" = ${input.companyId}`
+        );
+        // Rev. 5044 — reconcilia título do mês (não cria)
+        if (row?.mesReferencia) await syncTituloVA(tx, input.companyId, row.mesReferencia, ctx.user?.name || "RH", false);
+      });
       return { success: true };
     }),
 
@@ -1115,10 +1299,10 @@ export const valeAlimentacaoRouter = router({
         if (totalDesconto > 0) {
           await db.execute(
             sql`UPDATE vr_benefits SET 
-              "valorCafe" = CAST(GREATEST(0, CAST(REPLACE(REPLACE("valorCafe", '.', ''), ',', '.') AS DECIMAL(10,2)) - ${descCafe}) AS TEXT),
-              "valorLanche" = CAST(GREATEST(0, CAST(REPLACE(REPLACE("valorLanche", '.', ''), ',', '.') AS DECIMAL(10,2)) - ${descLanche}) AS TEXT),
-              "valorJanta" = CAST(GREATEST(0, CAST(REPLACE(REPLACE("valorJanta", '.', ''), ',', '.') AS DECIMAL(10,2)) - ${descJantar}) AS TEXT),
-              "valorTotal" = CAST(GREATEST(0, CAST(REPLACE(REPLACE("valorTotal", '.', ''), ',', '.') AS DECIMAL(10,2)) - ${totalDesconto}) AS TEXT),
+              "valorCafe" = CAST(GREATEST(0, fc_money("valorCafe") - ${descCafe}) AS TEXT),
+              "valorLanche" = CAST(GREATEST(0, fc_money("valorLanche") - ${descLanche}) AS TEXT),
+              "valorJanta" = CAST(GREATEST(0, fc_money("valorJanta") - ${descJantar}) AS TEXT),
+              "valorTotal" = CAST(GREATEST(0, fc_money("valorTotal") - ${totalDesconto}) AS TEXT),
               "diasFaltas" = COALESCE("diasFaltas", 0) + 1,
               "diasDescontados" = COALESCE("diasDescontados", 0) + 1,
               "updatedAt" = NOW()

@@ -60,9 +60,12 @@ async function montarHtmlDoc(doc: RhDocRow): Promise<string> {
   const [emp] = await db.select({ nomeCompleto: employees.nomeCompleto })
     .from(employees).where(eq(employees.id, doc.employeeId));
 
-  const [logoUri, sigUri] = await Promise.all([
+  // Rev. 5100 — carrega URLs de assinaturas (colaborador + empregador) em paralelo
+  const docAny = doc as any;
+  const [logoUri, sigUri, empregadorSigUri] = await Promise.all([
     imgDataUri(empresa?.logoUrl),
     imgDataUri(doc.assinaturaUrl),
+    imgDataUri(docAny.empregadorAssinaturaUrl ?? null),
   ]);
 
   // Rev. 4678 — snapshots novos já trazem a moldura ISO própria (sentinela
@@ -75,6 +78,28 @@ async function montarHtmlDoc(doc: RhDocRow): Promise<string> {
        <div style="border-top:1px solid #333;margin-top:2px;padding-top:3px">${esc(emp?.nomeCompleto || "")}</div>
        <div class="aut">Assinado digitalmente em ${esc(fmtDateTime(doc.assinadoEm))}${doc.assinaturaIp ? ` · IP ${esc(doc.assinaturaIp)}` : ""}${doc.assinaturaHash ? `<br/>SHA-256 ${esc(String(doc.assinaturaHash).slice(0, 24))}…` : ""}</div>`
     : `<div style="border-top:1px solid #333;margin-top:44px;padding-top:3px">${esc(emp?.nomeCompleto || "Assinatura do Colaborador")}</div>`;
+
+  // Rev. 5101 — bloco da assinatura do EMPREGADOR: exibe identidade do sócio
+  // (empregadorSocioNome) e operador se diferente, mais auditoria completa.
+  const empregadorAssinadoEm: string | null = docAny.empregadorAssinadoEm ?? null;
+  const empregadorSocioNome: string | null = docAny.empregadorSocioNome ?? null;
+  const empregadorOperadorNome: string | null = docAny.empregadorOperadorNome ?? null;
+  const empregadorAssinaturaHash: string | null = docAny.empregadorAssinaturaHash ?? null;
+  const empregadorModo: string | null = docAny.empregadorModo ?? null;
+  // Linha de auditoria: sócio + operador (se diferente) + modo + hash
+  const auditParts: string[] = [];
+  if (empregadorAssinadoEm) auditParts.push(`Assinado em ${esc(fmtDateTime(empregadorAssinadoEm))}`);
+  if (empregadorSocioNome) auditParts.push(esc(empregadorSocioNome));
+  if (empregadorOperadorNome && empregadorOperadorNome !== empregadorSocioNome) auditParts.push(`op: ${esc(empregadorOperadorNome)}`);
+  if (empregadorModo) auditParts.push(`modo: ${esc(empregadorModo)}`);
+  const auditLinha = auditParts.join(" · ");
+  const empregadorBloco = empregadorSigUri
+    ? `<img src="${empregadorSigUri}" alt="assinatura empregador" style="height:44px;max-width:220px;object-fit:contain;display:block;margin:0 auto"/>
+       <div style="border-top:1px solid #333;margin-top:2px;padding-top:3px">${esc(empresa?.razaoSocial || "Empregadora")}</div>
+       <div class="aut">${auditLinha}${empregadorAssinaturaHash ? `<br/>SHA-256 ${esc(String(empregadorAssinaturaHash).slice(0, 24))}…` : ""}</div>`
+    : `<div><div style="border-top:1px solid #333;margin-top:44px;padding-top:3px">${esc(empresa?.razaoSocial || "Empregadora")}</div></div>`;
+
+  const temAssinaturaEmpregador = !!empregadorSigUri;
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"/><style>
   * { box-sizing: border-box; } body { font-family: Arial, Helvetica, sans-serif; font-size: 10.5pt; color: #111; margin: 0; }
@@ -96,9 +121,9 @@ ${temMolduraIso ? "" : `<div class="cab">
 <div class="corpo"${temMolduraIso ? ` style="margin-top:0"` : ""}>${await inlineUploadsImgs(doc.conteudoHtml)}</div>
 <div class="assin">
   <div>${assinaturaBloco}</div>
-  <div><div style="border-top:1px solid #333;margin-top:44px;padding-top:3px">${esc(empresa?.razaoSocial || "Empregadora")}</div></div>
+  <div>${empregadorBloco}</div>
 </div>
-${assinado ? `<div class="rodape"><b>AUTENTICAÇÃO DIGITAL:</b> A assinatura deste documento foi coletada eletronicamente, com registro de data/hora, endereço IP e hash criptográfico SHA-256 da imagem da assinatura, garantindo integridade e autenticidade nos termos da MP 2.200-2/2001 (ICP-Brasil).</div>` : ""}
+${(assinado || temAssinaturaEmpregador) ? `<div class="rodape"><b>AUTENTICAÇÃO DIGITAL:</b> A(s) assinatura(s) deste documento foi(ram) coletada(s) eletronicamente, com registro de data/hora${assinado && doc.assinaturaIp ? ", endereço IP" : ""} e hash criptográfico SHA-256 da imagem da assinatura, garantindo integridade e autenticidade nos termos da MP 2.200-2/2001 (ICP-Brasil).${temAssinaturaEmpregador ? " Assinatura do empregador aplicada digitalmente pelo sistema." : ""}</div>` : ""}
 <div class="footer"><span>ERP Gestão Integrada — Documentos do Colaborador</span><span>Emitido em ${new Date().toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}</span></div>
 </body></html>`;
 }

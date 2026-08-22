@@ -2556,6 +2556,12 @@ export const folhaPagamentoRouter = router({
       // Rev. 3876 — Cheque especial
       chequeEspecialAtivo: z.number().optional(),
       chequeEspecialLimite: z.number().optional(),
+      // Rev. 5031 — CNAB240 Caixa (folha): dados do convênio fornecidos pela Caixa
+      convenio: z.string().max(30).optional().nullable(),
+      cnabTipoCompromisso: z.string().regex(/^\d{2}$/).optional().nullable(),
+      cnabCodigoCompromisso: z.string().regex(/^\d{4}$/).optional().nullable(),
+      cnabParametroTransmissao: z.string().regex(/^\d{2}$/).optional().nullable(),
+      cnabAmbiente: z.enum(['T', 'P']).optional().nullable(),
     }))
     .mutation(async ({ input, ctx }) => {
       const { companyIds, saldoInicial, saldoInicialData, ...accountData } = input;
@@ -2598,6 +2604,12 @@ export const folhaPagamentoRouter = router({
       // Rev. 3876 — Cheque especial
       chequeEspecialAtivo: z.number().optional(),
       chequeEspecialLimite: z.number().optional(),
+      // Rev. 5031 — CNAB240 Caixa (folha): dados do convênio fornecidos pela Caixa
+      convenio: z.string().max(30).optional().nullable(),
+      cnabTipoCompromisso: z.string().regex(/^\d{2}$/).optional().nullable(),
+      cnabCodigoCompromisso: z.string().regex(/^\d{4}$/).optional().nullable(),
+      cnabParametroTransmissao: z.string().regex(/^\d{2}$/).optional().nullable(),
+      cnabAmbiente: z.enum(['T', 'P']).optional().nullable(),
     }))
     .mutation(async ({ input, ctx }) => {
       const { id, saldoInicial, saldoInicialData, ...data } = input;

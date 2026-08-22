@@ -25,7 +25,7 @@ import { APP_VERSION } from "../../../shared/version";
 import { useIsMobile } from "@/hooks/useMobile";
 import {
   LayoutDashboard, LogOut, PanelLeft, Users,
-  Clock, Star, Lock, Building2, FileText, Trophy,
+  Clock, Star, Lock, Building2, FileText, Trophy, Bus,
   ChevronDown, ChevronRight,
   BarChart3, Settings, Grid2X2,
   Landmark, Wallet, FolderOpen, UtensilsCrossed, Layers, Briefcase, Megaphone, MessageCircle,
@@ -38,8 +38,9 @@ import {
   Warehouse, Wrench, Calculator, Target, Package, ShoppingCart, Truck, ArrowRightLeft, Gauge,
   Home, Tag, GripVertical, Network, ScanFace, PackageCheck, PenLine, ChevronLeft,
   Camera, Blocks, CheckSquare, FileCheck2, Milestone, Fuel, MapPin,
-  UserMinus, Search, X, GraduationCap, Sparkles, HeartPulse, Award,
-  RefreshCw, HandCoins, Scissors, Archive, FileOutput, Activity,
+  UserMinus, Search, X, GraduationCap, Sparkles, HeartPulse, Award, TrendingDown,
+  RefreshCw, HandCoins, Scissors, Archive, FileOutput, Activity, PiggyBank,
+  Phone,
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -107,6 +108,7 @@ const menuSectionsRHDP: MenuSection[] = [
       { icon: Calculator, label: "Encargos Sociais", path: "/encargos-sociais" },
       { icon: FolderOpen, label: "Controle de Documentos", path: "/controle-documentos" },
       { icon: UtensilsCrossed, label: "Vale Alimentação", path: "/vale-alimentacao" },
+      { icon: Bus, label: "Vale Transporte", path: "/vale-transporte" },
       { icon: Clock, label: "Solicitação de Hora Extra", path: "/solicitacao-he" },
       { icon: HardHat, label: "Solicitação de Mão de Obra", path: "/solicitacao-mdo" },
       { icon: ArrowLeftRight, label: "Banco de Horas", path: "/banco-horas" },
@@ -123,6 +125,7 @@ const menuSectionsRHDP: MenuSection[] = [
       { icon: UserMinus, label: "Demissão", path: "/demissao", children: [
         { icon: AlertTriangle, label: "Aviso Prévio", path: "/aviso-previo" },
         { icon: FileText, label: "Pedido de Demissão", path: "/pedido-demissao" },
+        { icon: TrendingDown, label: "Plano de Desligamento", path: "/plano-desligamento" },
       ]},
       { icon: Palmtree, label: "Férias", path: "/ferias" },
       { icon: ShieldCheck, label: "Seguro de Vida", path: "/seguro-vida" },
@@ -406,7 +409,7 @@ const menuSectionsCompras: MenuSection[] = [
     items: [
 
       { icon: ArrowLeftRight,  label: "Realocação de Verba",  path: "/compras/realocacao"       },
-      { icon: Calculator,      label: "Comissões",            path: "/compras/comissoes"        },
+      { icon: Calculator,      label: "Prêmios",              path: "/compras/comissoes"        },
     ],
   },
   {
@@ -596,12 +599,22 @@ const menuSectionsMedicao: MenuSection[] = [
   },
 ];
 
+const menuSectionsApontamento: MenuSection[] = [
+  {
+    title: "Apontamento de Campo",
+    items: [
+      { icon: ClipboardList, label: "Ronda do Dia",    path: "/apontamento"          },
+      { icon: FileBarChart,  label: "Produção",        path: "/apontamento?tab=producao" },
+      { icon: Target,        label: "Mapa de Frentes", path: "/apontamento?tab=frentes"  },
+    ],
+  },
+];
+
 const menuSectionsMedicaoTerceiros: MenuSection[] = [
   {
     title: "Medição de Terceiros",
     items: [
       { icon: Receipt,         label: "Medições (a pagar)", path: "/terceiros/medicoes" },
-      { icon: FileSpreadsheet, label: "Medições PJ", path: "/pj-medicoes" },
     ],
   },
 ];
@@ -735,6 +748,8 @@ const menuSectionsCadastro: MenuSection[] = [
       { icon: Scale,         label: "Convenções Coletivas",path: "/convencoes-coletivas" },
       { icon: Wrench,        label: "Habilidades",         path: "/habilidades"          },
       { icon: ClipboardList, label: "Contas Bancárias",    path: "/contas-bancarias"     },
+      { icon: Phone,         label: "Telefones Corporativos", path: "/telefones-corporativos" },
+      { icon: FileSignature, label: "Contratos de Serviço",   path: "/contratos-servico" },
     ],
   },
   {
@@ -801,6 +816,38 @@ const menuSectionsFcsign: MenuSection[] = [
   },
 ];
 
+// Rev. 5052 — módulo Reembolso (avulso + caixinha/fundo fixo)
+const menuSectionsReembolso: MenuSection[] = [
+  {
+    title: "Reembolsos",
+    items: [
+      { icon: HandCoins, label: "Reembolsos", path: "/reembolso/painel" },
+      { icon: LayoutDashboard, label: "Dashboard", path: "/reembolso/painel?view=dash" },
+      { icon: UserCheck, label: "Cadastrar Caixinha", path: "/reembolso/painel?novo=1" },
+    ],
+  },
+];
+
+// Gestão Interna — Central Operacional
+const menuSectionsGestaoInterna: MenuSection[] = [
+  {
+    title: "Central Operacional",
+    items: [
+      { icon: Gauge, label: "Gestão Interna", path: "/gestao-interna", adminMasterOnly: true },
+    ],
+  },
+];
+
+const menuSectionsPatrimonio: MenuSection[] = [
+  {
+    title: "Patrimônio Imobiliário",
+    items: [
+      { icon: Building2,       label: "Meus Imóveis", path: "/patrimonio", adminMasterOnly: true },
+      { icon: LayoutDashboard, label: "Dashboard",    path: "/patrimonio/dashboard", adminMasterOnly: true },
+    ],
+  },
+];
+
 export const MODULE_SECTIONS: Record<ModuleId, MenuSection[]> = {
   "rh-dp": menuSectionsRHDP,
   "sst": menuSectionsSST,
@@ -815,6 +862,7 @@ export const MODULE_SECTIONS: Record<ModuleId, MenuSection[]> = {
   "planejamento":  menuSectionsPlanejamento,
   "medicao":       menuSectionsMedicao,
   "medicao-terceiros": menuSectionsMedicaoTerceiros,
+  "apontamento":   menuSectionsApontamento,
   "cadastro":      menuSectionsCadastro,
   "compras":       menuSectionsCompras,
   "almoxarifado":  menuSectionsAlmoxarifado,
@@ -827,6 +875,9 @@ export const MODULE_SECTIONS: Record<ModuleId, MenuSection[]> = {
   "oraculo":              menuSectionsOraculo,
   "portal-cliente":       menuSectionsPortalCliente,
   "fcsign":               menuSectionsFcsign,
+  "reembolso":            menuSectionsReembolso,
+  "gestao-interna":       menuSectionsGestaoInterna,
+  "patrimonio":           menuSectionsPatrimonio,
   "admin": menuSectionsAdmin,
   "all": [...menuSectionsRHDP], // fallback: show RH & DP
 };
@@ -897,6 +948,7 @@ const MODULE_HOME_ROUTES: Record<ModuleId, string> = {
   "planejamento":   "/planejamento",
   "medicao":        "/medicao",
   "medicao-terceiros": "/terceiros/medicoes",
+  "apontamento":    "/apontamento",
   "cadastro":       "/empresas",
   "compras":        "/compras/painel",
   "almoxarifado":   "/almoxarifado",
@@ -909,6 +961,9 @@ const MODULE_HOME_ROUTES: Record<ModuleId, string> = {
   "oraculo":              "/oraculo",
   "portal-cliente":       "/clientes/portal",
   "fcsign":               "/integrasign",
+  "reembolso":            "/reembolso/painel",
+  "gestao-interna":       "/gestao-interna",
+  "patrimonio":           "/patrimonio",
   "admin": "/admin/telemetria",
   "all": "/painel",
 };
@@ -928,6 +983,7 @@ const MODULE_THEME: Record<ModuleId, { icon: any; color: string; bg: string }> =
   "planejamento":  { icon: Target,        color: "text-green-400",   bg: "bg-green-500/20"   },
   "medicao":       { icon: FileBarChart,  color: "text-teal-400",    bg: "bg-teal-500/20"    },
   "medicao-terceiros": { icon: Receipt,   color: "text-orange-400",  bg: "bg-orange-500/20"  },
+  "apontamento":   { icon: ClipboardList, color: "text-lime-400",    bg: "bg-lime-500/20"    },
   "cadastro":      { icon: BookOpen,      color: "text-indigo-400",  bg: "bg-indigo-500/20"  },
   "compras":       { icon: ShoppingCart,  color: "text-rose-400",    bg: "bg-rose-500/20"    },
   "almoxarifado":  { icon: Warehouse,     color: "text-emerald-400", bg: "bg-emerald-500/20" },
@@ -940,6 +996,9 @@ const MODULE_THEME: Record<ModuleId, { icon: any; color: string; bg: string }> =
   "oraculo":              { icon: Sparkles,  color: "text-violet-400", bg: "bg-violet-500/20" },
   "portal-cliente":       { icon: ShieldCheck, color: "text-indigo-400", bg: "bg-indigo-500/20" },
   "fcsign":               { icon: PenLine, color: "text-teal-400", bg: "bg-teal-500/20" },
+  "reembolso":            { icon: HandCoins, color: "text-orange-400", bg: "bg-orange-500/20" },
+  "gestao-interna":       { icon: Gauge, color: "text-cyan-300", bg: "bg-cyan-500/20" },
+  "patrimonio":           { icon: Building2, color: "text-sky-300", bg: "bg-sky-500/20" },
   "admin": { icon: BarChart3, color: "text-red-400", bg: "bg-red-500/20" },
   "all": { icon: LayoutDashboard, color: "text-[#D4A843]", bg: "bg-[#D4A843]/20" },
 };
@@ -1033,8 +1092,12 @@ export default function DashboardLayout({
 // Rev. 4688 — também no Financeiro (informativo: quem paga é o Financeiro).
 function FeriasGozoPromptGlobal() {
   const { activeModule } = useModule();
+  const { user } = useAuth();
+  const isMaster = user?.role === "admin_master";
   if (activeModule === "rh-dp") return <FeriasGozoPrompt />;
   if (activeModule === "financeiro") return <FeriasGozoPrompt informativo />;
+  // Rev. 4977 — masters veem os alertas de RH em QUALQUER módulo (pedido do user)
+  if (isMaster) return <FeriasGozoPrompt />;
   return null;
 }
 
@@ -1043,15 +1106,20 @@ function FeriasGozoPromptGlobal() {
 // de fim de semana/feriado). RH vê os 3; Financeiro só o de avisos.
 function AlertasDiaGlobal() {
   const { activeModule } = useModule();
+  const { user } = useAuth();
+  const isMaster = user?.role === "admin_master";
   if (activeModule === "rh-dp") return <AlertasDiaPrompt modulo="rh" />;
   if (activeModule === "financeiro") return <AlertasDiaPrompt modulo="financeiro" />;
+  if (isMaster) return <AlertasDiaPrompt modulo="rh" />;
   return null;
 }
 
 // Rev. 4927 — Pop-up regra de ouro: CLT sem seguro de vida (só módulo RH).
 function SeguroVidaAlertGlobal() {
   const { activeModule } = useModule();
-  if (activeModule === "rh-dp") return <SeguroVidaAlertPrompt />;
+  const { user } = useAuth();
+  const isMaster = user?.role === "admin_master";
+  if (activeModule === "rh-dp" || isMaster) return <SeguroVidaAlertPrompt />;
   return null;
 }
 
@@ -1084,7 +1152,12 @@ function DashboardLayoutContent({
   );
   const comprasBadgeQ = trpc.compras.getComprasBadgeCounts.useQuery(
     { companyIds: badgeCompanyIds },
-    { enabled: badgeCompanyIds.length > 0, refetchInterval: 30_000, staleTime: 15_000 }
+    {
+      enabled: badgeCompanyIds.length > 0,
+      refetchInterval: 60_000,
+      staleTime: 30_000,
+      refetchOnWindowFocus: false,
+    }
   );
   // Rev. 1271 — Bolinha vermelha para HE/MO solicitações novas (por usuário)
   const requestsBadgeQ = trpc.notifications.pendingRequestCounts.useQuery(
@@ -1116,6 +1189,7 @@ function DashboardLayoutContent({
     "orcamento": "orcamento", "planejamento": "planejamento", "cadastro": "cadastro",
     "compras": "compras",
     "almoxarifado": "compras",
+    "gestao-interna": "gestao-interna",
   };
   const isModEnabled = (modId: string) => isModuleEnabled(hubToConfigKey[modId] ?? modId);
 
@@ -1484,6 +1558,16 @@ function DashboardLayoutContent({
       sections = customSections;
     }
 
+    // Telefones Corporativos é uma página do Cadastro, mas tem toggle próprio
+    // por empresa. Remova o atalho mesmo quando ele vier de uma configuração
+    // de menu salva.
+    if (!isModEnabled("telefones-corporativos")) {
+      sections = sections.map(section => ({
+        ...section,
+        items: section.items.filter(item => item.path !== "/telefones-corporativos"),
+      }));
+    }
+
     // Filter admin-only paths: only master user can see/access these.
     // Exceção: "/usuarios" também é visível para admin e adm_cliente (Rev. 4041),
     // o backend (userManagement router) escopa o que cada perfil pode fazer lá dentro.
@@ -1695,7 +1779,7 @@ function DashboardLayoutContent({
     }
 
     return sections.filter(s => s.items.length > 0);
-  }, [activeModule, location, isAdminUser, isMasterUser, permIsAdminMaster, canAccessFeature, accessibleModules, hasGroup, groupCanAccessRoute, canViewPage, savedMenuConfig, comprasBadgeQ.data, requestsBadgeQ.data, sstBadgeQ.data]);
+  }, [activeModule, location, isAdminUser, isMasterUser, permIsAdminMaster, canAccessFeature, accessibleModules, hasGroup, groupCanAccessRoute, canViewPage, savedMenuConfig, comprasBadgeQ.data, requestsBadgeQ.data, sstBadgeQ.data, isModEnabled]);
 
   const orderedSections = useMemo(() => {
     const pinned   = effectiveSections.filter(s => s.title === PINNED_LAST);
@@ -1807,15 +1891,20 @@ function DashboardLayoutContent({
     { id: "financeiro",   label: "Financeiro",    icon: DollarSign,  color: "text-yellow-400",  bg: "bg-yellow-500/20",  path: "/financeiro",            canSee: () => (permIsAdminMaster || canAccessModule("financeiro"))   && isModEnabled("financeiro") },
     { id: "medicao",      label: "Medição",       icon: Construction,color: "text-orange-400",  bg: "bg-orange-500/20",  path: "/medicao",               canSee: () => (permIsAdminMaster || canAccessModule("medicao"))      && isModEnabled("medicao") },
     { id: "medicao-terceiros", label: "Medição Terceiros", icon: Receipt, color: "text-orange-400", bg: "bg-orange-500/20", path: "/terceiros/medicoes", canSee: () => (permIsAdminMaster || canAccessModule("terceiros") || canAccessModule("medicao-terceiros")) && isModEnabled("terceiros") && isModEnabled("medicao-terceiros") },
+    { id: "apontamento", label: "Apontamento de Campo", icon: ClipboardList, color: "text-lime-400", bg: "bg-lime-500/20", path: "/apontamento", canSee: () => (permIsAdminMaster || canAccessModule("apontamento") || canAccessModule("medicao-terceiros") || canAccessModule("terceiros")) && isModEnabled("apontamento") },
     { id: "gestao-documentos", label: "Proj./Doc. Técnicos", icon: FolderOpen, color: "text-sky-400", bg: "bg-sky-500/20", path: "/gestao-documentos", canSee: () => (permIsAdminMaster || canAccessModule("gestao-documentos")) && isModEnabled("gestao-documentos") },
     { id: "operacional", label: "Operacional", icon: HardHat, color: "text-amber-400", bg: "bg-amber-500/20", path: "/operacional/painel", canSee: () => (permIsAdminMaster || canAccessModule("operacional")) && isModEnabled("operacional") },
     { id: "frotas", label: "Frotas", icon: Truck, color: "text-cyan-400", bg: "bg-cyan-500/20", path: "/frotas/painel", canSee: () => (permIsAdminMaster || canAccessModule("frotas")) && isModEnabled("frotas") },
     { id: "comunicados-internos", label: "Comunicados Internos", icon: Megaphone, color: "text-blue-400",   bg: "bg-blue-500/20",   path: "/comunicados-internos", canSee: () => (permIsAdminMaster || canAccessModule("comunicados-internos")) && isModEnabled("comunicados-internos") },
     { id: "curriculos",           label: "Currículos",           icon: Briefcase, color: "text-amber-400",  bg: "bg-amber-500/20",  path: "/curriculos",           canSee: () => (permIsAdminMaster || canAccessModule("curriculos"))           && isModEnabled("curriculos") },
+    // Rev. 5063 — Reembolso é para TODOS os usuários logados (só depende do toggle da empresa)
+    { id: "reembolso",            label: "Reembolso",            icon: HandCoins, color: "text-orange-400",  bg: "bg-orange-500/20",  path: "/reembolso/painel",    canSee: () => isModEnabled("reembolso") },
     { id: "oraculo",              label: "Oráculo",              icon: Sparkles,  color: "text-violet-400", bg: "bg-violet-500/20", path: "/oraculo",              canSee: () => permIsAdminMaster },
     { id: "portal-cliente",       label: "Portal do Cliente",    icon: ShieldCheck, color: "text-indigo-400", bg: "bg-indigo-500/20", path: "/clientes/portal",     canSee: () => (permIsAdminMaster || canAccessModule("portal-cliente")) && isModEnabled("portal-cliente") },
     // Rev. 4853 — FCSign reusa a permissão de terceiros (rota /integrasign vive em MODULE_DEFINITIONS de terceiros)
     { id: "fcsign", label: "FCSign", icon: PenLine, color: "text-teal-400", bg: "bg-teal-500/20", path: "/integrasign", canSee: () => (permIsAdminMaster || canAccessModule("terceiros") || canAccessModule("fcsign")) && isModEnabled("fcsign") },
+    { id: "gestao-interna", label: "Gestão Interna", icon: Gauge, color: "text-cyan-300", bg: "bg-cyan-500/20", path: "/gestao-interna", canSee: () => permIsAdminMaster && isModEnabled("gestao-interna") },
+    { id: "patrimonio", label: "Patrimônio Imobiliário", icon: Building2, color: "text-sky-300", bg: "bg-sky-500/20", path: "/patrimonio", canSee: () => permIsAdminMaster },
   ];
   const visibleModuleDefs = ALL_MODULE_DEFS.filter(m => m.canSee());
   const sortedModuleDefs = moduleOrder.length === 0 ? visibleModuleDefs :
@@ -2013,7 +2102,16 @@ function DashboardLayoutContent({
                             setTimeout(() => { window.dispatchEvent(new Event('navParamsUpdated')); }, 100);
                           }
                         } else {
-                          setLocation(menuItem.path);
+                          // Rev. 5081 — item SEM querystring limpa os parâmetros pendurados
+                          // (senão a página continua presa na aba do clique anterior)
+                          sessionStorage.removeItem('_navParams');
+                          setSidebarActiveParam('');
+                          if (location === menuItem.path) {
+                            window.dispatchEvent(new Event('navParamsUpdated'));
+                          } else {
+                            setLocation(menuItem.path);
+                            setTimeout(() => { window.dispatchEvent(new Event('navParamsUpdated')); }, 100);
+                          }
                         }
                       };
 

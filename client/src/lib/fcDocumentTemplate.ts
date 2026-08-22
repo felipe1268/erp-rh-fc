@@ -162,6 +162,23 @@ export interface FcDocumentParams {
    * rejeita qualquer on* handler ou conteúdo "javascript".
    */
   forSign?: boolean;
+  /** Rev. 5023 — desliga o rodapé LGPD por página do CSS (@page @bottom-center).
+   *  Usado pelo PDF do servidor, que injeta o rodapé nativo do Puppeteer
+   *  (footerTemplate) — sem isso os dois saem duplicados/sobrepostos. */
+  omitLgpdPageFooter?: boolean;
+  /**
+   * Rev. 5008 — HTML injetado DEPOIS das assinaturas/testemunhas e antes do
+   * rodapé. Usado p/ anexos que continuam o documento (ex.: Anexo I — páginas
+   * da proposta comercial no contrato de terceiros). MESMA regra de segurança
+   * do corpoHtml: é injetado RAW — o chamador escapa/sanitiza.
+   */
+  apendiceHtml?: string;
+  /**
+   * Rev. 5011 — espaçamento mais amplo entre parágrafos/cláusulas (pedido do
+   * user p/ contratos: texto "mais espaçado, técnico, contínuo"). Não altera
+   * o layout aprovado dos demais documentos (opt-in).
+   */
+  espacamentoAmplo?: boolean;
 }
 
 /**
@@ -194,10 +211,9 @@ export function buildFcDocument(p: FcDocumentParams): string {
       ? `<div style="height:50px;display:flex;align-items:flex-end;justify-content:center;margin-bottom:-2px"><!--FCSIGN:SIG:${role}--></div>`
       : `<div style="height:50px"></div>`;
 
-  // Assinaturas — 1ª linha (partes principais, 2 colunas equivalentes)
-  const partesHtml = p.assinaturas.partes
-    .map(
-      (pt) => `
+  // Assinaturas — partes principais em linhas de 2 colunas (Rev. 5005: suporta
+  // 3+ signatários — ex.: contrato de terceiros com 4 assinaturas obrigatórias).
+  const parteTd = (pt: FcAssinaturaParte) => `
     <td style="text-align:center;padding:0 24px;vertical-align:top;width:50%">
       <div style="margin-top:24px">
         ${slotHtml(pt.role)}
@@ -206,9 +222,13 @@ export function buildFcDocument(p: FcDocumentParams): string {
           ${pt.subtitulo ? `<div style="font-family:'Helvetica','Arial',sans-serif;font-size:9pt;color:#6b7280;margin-top:2px">${esc(pt.subtitulo)}</div>` : ""}
         </div>
       </div>
-    </td>`
-    )
-    .join("");
+    </td>`;
+  const _partesRows: string[] = [];
+  for (let i = 0; i < p.assinaturas.partes.length; i += 2) {
+    const dupla = p.assinaturas.partes.slice(i, i + 2);
+    _partesRows.push(`<tr>${dupla.map(parteTd).join("")}${dupla.length === 1 ? `<td style="width:50%"></td>` : ""}</tr>`);
+  }
+  const partesHtml = _partesRows.join("");
 
   const _testData: FcTestemunhasData | null =
     p.assinaturas.testemunhas && typeof p.assinaturas.testemunhas === "object"
@@ -257,8 +277,12 @@ export function buildFcDocument(p: FcDocumentParams): string {
 @page{size:A4;margin:${pageMarginCss}}
 body{font-family:'Helvetica','Arial','Liberation Sans',sans-serif;font-size:11pt;line-height:1.55;color:#1a1a1a}
 .fc-doc{max-width:760px;margin:0 auto;background:#fff;padding:${screenPadCss};box-sizing:border-box}
-.fc-doc p{margin:0 0 10px 0;text-align:justify}
+.fc-doc p{margin:0 0 ${p.espacamentoAmplo ? 14 : 10}px 0;text-align:justify}
 .fc-doc strong{font-weight:700;color:#1a1a1a}
+${p.espacamentoAmplo ? `body{line-height:1.65}
+.fc-doc h3{margin:24px 0 12px 0}
+.fc-doc ul{margin:10px 0 14px 0}
+.fc-doc li{margin-bottom:5px}` : ""}
 ${p.forSign ? "" : `.fc-back-btn{position:fixed;top:14px;left:14px;z-index:9999;display:inline-flex;align-items:center;gap:6px;background:#1B2A4A;color:#fff;border:none;border-radius:6px;padding:8px 16px;font-size:13px;font-family:'Helvetica','Arial',sans-serif;font-weight:600;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.25);text-decoration:none;transition:background .15s}
 .fc-back-btn:hover{background:#243b5e}`}
 @media print{
@@ -266,6 +290,24 @@ ${p.forSign ? "" : `.fc-back-btn{position:fixed;top:14px;left:14px;z-index:9999;
   .fc-doc{max-width:none;padding:0;box-shadow:none;border:none}
   .fc-back-btn{display:none!important}
   *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}
+  /* Rev. 5024 — evita título "órfão" no fim da folha (ex.: "ESCOPO DETALHADO
+     DOS SERVIÇOS (EAP):" sozinho, tabela na página seguinte): títulos e
+     parágrafos que são só um <strong> ficam grudados no conteúdo seguinte. */
+  .fc-doc h1,.fc-doc h2,.fc-doc h3,.fc-doc h4,.fc-doc h5,.fc-doc h6{break-after:avoid-page}
+  .fc-doc p:has(>strong:only-child){break-after:avoid-page}
+  .fc-doc p{orphans:3;widows:3}
+  .fc-doc tr{break-inside:avoid}
+  /* Rev. 5022b — LGPD: registro do emissor no pé de CADA página, dentro da
+     MARGEM (margin-box @bottom-center) — nunca sobrepõe o texto do documento.
+     (position:fixed sobrepunha o conteúdo; ver print do user 12/08/2026.)
+     No PDF do servidor o rodapé é o footerTemplate nativo do Puppeteer. */
+  ${p.omitLgpdPageFooter ? "" : `@page{
+    margin-bottom:16mm;
+    @bottom-center{
+      content:${JSON.stringify(`Documento emitido por ${userName} em ${hojeStr} às ${horaAgora} — ERP Gestão Integrada · Registro LGPD`)};
+      font-family:'Helvetica','Arial',sans-serif;font-size:7pt;color:#9ca3af;
+    }
+  }`}
 }
 </style>
 
@@ -307,7 +349,7 @@ ${p.forSign ? "" : `<button class="fc-back-btn" id="fc-back-btn">&#8592; Fechar<
   ${localDataHtml}
 
   <!-- ===== ASSINATURAS — partes principais ===== -->
-  <table style="margin-top:36px;width:100%;border-collapse:collapse;table-layout:fixed;page-break-inside:avoid"><tbody><tr>${partesHtml}</tr></tbody></table>
+  <table style="margin-top:36px;width:100%;border-collapse:collapse;table-layout:fixed;page-break-inside:avoid"><tbody>${partesHtml}</tbody></table>
 
   ${testemunhasHtml}
 
@@ -318,6 +360,11 @@ ${p.forSign ? "" : `<button class="fc-back-btn" id="fc-back-btn">&#8592; Fechar<
   </tr></tbody></table>
 
 </div>
+
+<!-- ===== APÊNDICE (Rev. 5008/5009 — documento complementar FORA da folha do
+     contrato: o contrato encerra no rodapé acima; o anexo entra como "folha"
+     separada, com quebra de página no print) ===== -->
+${p.apendiceHtml || ""}
 
 ${p.forSign ? "" : `<script>var b=document.getElementById('fc-back-btn');if(b)b.addEventListener('click',function(){window.close();});<\/script>`}
 </body></html>`;

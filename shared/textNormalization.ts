@@ -136,6 +136,13 @@ function processarToken(token: string, idx: number): string {
   return prefix + capitalizarPalavra(core, idx === 0) + suffix;
 }
 
+// Rev. 5099 — títulos de cotação sempre em MAIÚSCULO (independente de como o usuário digite),
+// aproveitando a correção de acentos do normalizarTexto (ex.: "aco" → "AÇO").
+export function tituloMaiusculo(texto: string): string {
+  const norm = normalizarTexto(texto);
+  return typeof norm === "string" ? norm.toUpperCase() : norm;
+}
+
 export function normalizarTexto(texto: string): string {
   if (!texto || typeof texto !== "string") return texto;
   const trimmed = texto.trim();

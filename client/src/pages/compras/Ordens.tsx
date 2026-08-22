@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogMaximizeButton } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -22,8 +22,9 @@ import { TIPOS_PAGAMENTO } from "@shared/paymentConditions";
 import { formatNumeroCotacaoDisplay } from "@shared/numeroCotacao";
 import { formatNumeroOcDisplay } from "@shared/numeroOc";
 import { consolidarOcItens } from "@shared/ocItensConsolidados";
+import { gerarVencimentosRecorrenciaMensal } from "@shared/ocRecorrencia";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search, Trash2, ShoppingBag, ChevronRight, ChevronDown, Loader2, CheckCircle, Truck, PackageCheck, Building2, AlertTriangle, Clock, CircleDot, Phone, Mail, User, Smartphone, FileDown, Printer, Receipt, DollarSign, Wrench, ExternalLink, ChevronsUpDown, ArrowUp, ArrowDown, ArrowUpDown, Check, Paperclip, Upload, X, FileText, Save, Edit3, ClipboardCheck, Calendar, RotateCcw, Ban, Copy, Sparkles, ClipboardList } from "lucide-react";
+import { Plus, Search, Trash2, ShoppingBag, ChevronRight, ChevronDown, Loader2, CheckCircle, Truck, PackageCheck, Building2, AlertTriangle, Clock, CircleDot, Phone, Mail, User, Smartphone, FileDown, Printer, Receipt, DollarSign, Wrench, ExternalLink, ChevronsUpDown, ArrowUp, ArrowDown, ArrowUpDown, Check, Paperclip, Upload, X, FileText, Save, Edit3, ClipboardCheck, Calendar, RotateCcw, Ban, Copy, Sparkles, ClipboardList, RefreshCw, ShieldCheck } from "lucide-react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { calcularSemaforo, semaforoCor, semaforoTooltip, type SemaforoResult } from "@/lib/semaforoEntrega";
 import { PurchaseTimeline } from "@/components/compras/PurchaseTimeline";
@@ -125,6 +126,36 @@ function gerarParcelas(n: number, total: number, primeiroVenc: string): ParcelaF
     };
   });
 }
+
+function contarMesesRecorrencia(dataInicio: string, dataFim: string): number {
+  return gerarVencimentosRecorrenciaMensal(dataInicio, dataFim).length;
+}
+
+function getCondicaoPreProgramadaFornecedor(fornecedor: any): string | null {
+  const cicloPagamento = fornecedor?.cicloPagamento as string | undefined;
+  const numeroParcelas = Number(fornecedor?.cicloNumParcelas ?? 0);
+  const prazoParcela = fornecedor?.cicloPrazoParcela;
+
+  if (cicloPagamento === "avista") return "À Vista";
+  if (numeroParcelas > 0 && prazoParcela !== undefined && prazoParcela !== null) {
+    const condicaoCatalogada = TIPOS_PAGAMENTO.find(
+      tipo => tipo.parcelas === numeroParcelas && tipo.diasDDL[0] === Number(prazoParcela)
+    );
+    return condicaoCatalogada?.label ?? `${numeroParcelas}x ${prazoParcela} DDL`;
+  }
+  return null;
+}
+
+function valorParaCentavos(valor: string | number | null | undefined): number | null {
+  if (valor === null || valor === undefined || String(valor).trim() === "") return null;
+  const texto = String(valor).trim().replace(/\s/g, "");
+  const normalizado = texto.includes(",")
+    ? texto.replace(/\./g, "").replace(",", ".")
+    : texto;
+  const numero = Number(normalizado);
+  return Number.isFinite(numero) ? Math.round(numero * 100) : null;
+}
+
 const newItem = (): ItemForm => ({ descricao: "", unidade: "un", quantidade: "1", precoUnitario: "" });
 
 // Rev. 2486 — Grupos de itens por etapa (EAP). Cada grupo carrega 1 EAP
@@ -444,6 +475,8 @@ export default function Ordens() {
   const [showFdDialog, setShowFdDialog] = useState<any>(null);
   const [fdForm, setFdForm] = useState({ modalidade: "fd_cliente" as "fd_cliente" | "fd_terceiro", valor: "", bdiItemId: 0, contractId: 0 });
   const [showEstornoDialog, setShowEstornoDialog] = useState(false);
+  const [showEnvioSstDialog, setShowEnvioSstDialog] = useState(false);
+  const [epiEscolhas, setEpiEscolhas] = useState<Record<number, { epiId?: number; novoNome?: string }>>({});
   const [showCancelarMaster, setShowCancelarMaster] = useState(false);
   const [cancelMasterMotivo, setCancelMasterMotivo] = useState("");
   const [cancelMasterSenha, setCancelMasterSenha] = useState("");
@@ -463,6 +496,9 @@ export default function Ordens() {
   const [ocIAEapCodigo, setOcIAEapCodigo] = useState<string | undefined>(undefined);
   const [ocIAEapDescricao, setOcIAEapDescricao] = useState<string | undefined>(undefined);
   const [ocIAEapPopover, setOcIAEapPopover] = useState(false);
+  // Rev. 5050 — etapa por ITEM na revisão da OC por IA (NF com itens rateados em várias etapas)
+  const [ocIAItemEaps, setOcIAItemEaps] = useState<Record<number, { codigo: string; descricao: string }>>({});
+  const [ocIAEapItemPopover, setOcIAEapItemPopover] = useState<number | null>(null);
   const ocIAFileRef = useRef<HTMLInputElement>(null);
   // Lista de peças para recebimento (OC locação) — Rev. 4424
   const [listaShowAdd, setListaShowAdd] = useState(false);
@@ -498,7 +534,8 @@ export default function Ordens() {
     frete: "", outrasDespesas: "", impostos: "", desconto: "",
     condicaoPagamento: "", prazoEntregaDias: "", numeroNf: "",
     formaPagamento: "", contaBancariaId: "", cartaoId: "",
-    tipoOc: "compra" as "compra" | "locacao" | "servico",
+    lancamentoRecorrente: false, recorrenciaDataInicio: "", recorrenciaDataFim: "",
+    tipoOc: "compra" as "compra" | "locacao" | "servico" | "epi",
   });
   // Rev. 2486 — Grupos por etapa. `itens` legado computado via flatten()
   // pra preservar compatibilidade com leitores existentes (formHasData,
@@ -507,8 +544,12 @@ export default function Ordens() {
   const itens = flattenGrupos(grupos);
   const [numParc, setNumParc] = useState(1);
   const [parcelas, setParcelas] = useState<ParcelaForm[]>([]);
+  const [condicaoFornecedor, setCondicaoFornecedor] = useState<string | null>(null);
+  const [condicaoPagamentoTravada, setCondicaoPagamentoTravada] = useState(false);
   const [fornecedorPopoverOpen, setFornecedorPopoverOpen] = useState(false);
   const [eapPopoverGi, setEapPopoverGi] = useState<number | null>(null);
+  // Rev. 5052 — popover "mover item p/ etapa" (chave gi-ii)
+  const [moveItemPopover, setMoveItemPopover] = useState<string | null>(null);
   const [anexosForm, setAnexosForm] = useState<AnexoOC[]>([]);
   const [uploadingAnexo, setUploadingAnexo] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -528,6 +569,10 @@ export default function Ordens() {
   const parcelasQ = trpc.purchase.listarParcelasOC.useQuery(
     { ordemId: showDetalhe!, companyId },
     { enabled: showDetalhe !== null && companyId > 0 }
+  );
+  const previaEpiQ = trpc.compras.getPreviaEnvioOcEpi.useQuery(
+    { ordemId: showDetalhe! },
+    { enabled: showEnvioSstDialog && showDetalhe !== null }
   );
   const fornQ = trpc.compras.listarFornecedores.useQuery({ companyId, ativo: true }, { enabled: companyId > 0 });
   const obrasQ = trpc.obras.listActive.useQuery({ companyId }, { enabled: companyId > 0 });
@@ -642,6 +687,23 @@ export default function Ordens() {
     },
     onError: (e) => toast.error(e.message),
   });
+  const confirmarEnvioSst = trpc.compras.confirmarEnvioOcEpi.useMutation({
+    onSuccess: (res: any) => {
+      toast.success(res.jaImportada ? "Esta OC já estava enviada ao SST." : `${res.itens} item(ns) recebido(s) no estoque SST.`);
+      setShowEnvioSstDialog(false);
+      setEpiEscolhas({});
+      q.refetch();
+      detalheQ.refetch();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  useEffect(() => {
+    const itensEpi = previaEpiQ.data?.itens;
+    if (!itensEpi?.length || Object.keys(epiEscolhas).length > 0) return;
+    setEpiEscolhas(Object.fromEntries(itensEpi.map((item: any) => [
+      item.id, item.sugestoes?.[0]?.id ? { epiId: item.sugestoes[0].id } : { novoNome: item.descricao },
+    ])));
+  }, [previaEpiQ.data, epiEscolhas]);
   const excluir = trpc.compras.excluirOrdem.useMutation({
     onSuccess: () => { toast.success("OC excluída!"); q.refetch(); setShowDetalhe(null); },
     onError: (e) => toast.error(e.message),
@@ -687,7 +749,7 @@ export default function Ordens() {
         toast.warning(`Atenção: Documentos PJ pendentes para o prestador: ${res.docsPendentes.join(", ")}. Regularize antes do pagamento.`, { duration: 8000 });
       }
       if (res.contratoGerado) {
-        toast.info(res.contratoGerado.tipo === "aditivo" ? "Contrato PJ existente atualizado via aditivo." : "Contrato PJ gerado automaticamente.", { duration: 5000 });
+        toast.info(res.contratoGerado.tipo === "aditivo" ? "Contrato de prestador de serviço existente atualizado via aditivo." : "Contrato de prestador de serviço gerado automaticamente.", { duration: 5000 });
       }
       q.refetch(); detalheQ.refetch(); setShowAprovacaoExtra(null); setAprovExtraForm({ adminEmail: "", adminSenha: "", justificativa: "" });
     },
@@ -776,9 +838,22 @@ export default function Ordens() {
   function preencherOCDeIA() {
     if (!ocIAResult) return;
     const itensIA = (ocIAResult.itens ?? []) as any[];
-    const gruposIA: GrupoForm[] = itensIA.length > 0
-      ? [{ eapCodigo: ocIAEapCodigo, eapDescricao: ocIAEapDescricao, itens: itensIA.map((it: any) => ({ descricao: it.descricao, unidade: it.unidade, quantidade: String(it.quantidade), precoUnitario: it.precoUnitario != null ? String(it.precoUnitario) : "" })) }]
-      : [newGrupo()];
+    // Rev. 5050 — agrupa por etapa: cada item pode ter etapa própria; sem etapa própria
+    // herda a etapa geral (se houver). Itens de mesma etapa viram um grupo só.
+    let gruposIA: GrupoForm[];
+    if (itensIA.length > 0) {
+      const porEtapa = new Map<string, GrupoForm>();
+      for (let i = 0; i < itensIA.length; i++) {
+        const it = itensIA[i];
+        const eap = ocIAItemEaps[i] ?? (ocIAEapCodigo ? { codigo: ocIAEapCodigo, descricao: ocIAEapDescricao ?? "" } : undefined);
+        const key = eap?.codigo ?? "__sem_etapa__";
+        if (!porEtapa.has(key)) porEtapa.set(key, { eapCodigo: eap?.codigo, eapDescricao: eap?.descricao, itens: [] } as any);
+        porEtapa.get(key)!.itens.push({ descricao: it.descricao, unidade: it.unidade, quantidade: String(it.quantidade), precoUnitario: it.precoUnitario != null ? String(it.precoUnitario) : "" } as any);
+      }
+      gruposIA = Array.from(porEtapa.values());
+    } else {
+      gruposIA = [newGrupo()];
+    }
     setGrupos(gruposIA);
     setForm(p => ({
       ...p,
@@ -792,14 +867,17 @@ export default function Ordens() {
     setOcIAObraId("");
     setOcIAEapCodigo(undefined);
     setOcIAEapDescricao(undefined);
+    setOcIAItemEaps({});
     setShowNova(true);
   }
 
   function resetForm() {
-    setForm({ obraId: "", fornecedorId: "", dataEntregaPrevista: "", dataVencimento: "", observacoes: "", frete: "", outrasDespesas: "", impostos: "", desconto: "", condicaoPagamento: "", prazoEntregaDias: "", numeroNf: "", formaPagamento: "", contaBancariaId: "", cartaoId: "", tipoOc: "compra" });
+    setForm({ obraId: "", fornecedorId: "", dataEntregaPrevista: "", dataVencimento: "", observacoes: "", frete: "", outrasDespesas: "", impostos: "", desconto: "", condicaoPagamento: "", prazoEntregaDias: "", numeroNf: "", formaPagamento: "", contaBancariaId: "", cartaoId: "", lancamentoRecorrente: false, recorrenciaDataInicio: "", recorrenciaDataFim: "", tipoOc: "compra" });
     setGrupos([newGrupo()]);
     setNumParc(1);
     setParcelas([]);
+    setCondicaoFornecedor(null);
+    setCondicaoPagamentoTravada(false);
     setAnexosForm([]);
     setRascunhoId(null);
     setTipoFaturamento("normal");
@@ -827,15 +905,18 @@ export default function Ordens() {
     return {
       id: rascunhoId ?? undefined,
       companyId,
-      obraId: form.obraId && form.obraId !== "none" ? parseInt(form.obraId) : undefined,
+      obraId: form.obraId && form.obraId !== "none" && form.obraId !== "central" ? parseInt(form.obraId) : undefined,
       fornecedorId: form.fornecedorId && form.fornecedorId !== "none" ? parseInt(form.fornecedorId) : undefined,
       numeroNf: form.numeroNf || undefined,
       formaPagamento: form.formaPagamento || undefined,
       contaBancariaId: form.contaBancariaId ? parseInt(form.contaBancariaId) : undefined,
       cartaoId: form.formaPagamento === "cartao_credito" && form.cartaoId ? parseInt(form.cartaoId) : null,
       condicaoPagamento: form.condicaoPagamento || undefined,
-      numeroParcelas: numParc,
-      parcelasJson: parcelas.length > 0 ? parcelas.map(p => ({ numero: p.numero, vencimento: p.vencimento || undefined, valor: parseFloat(p.valor) || 0 })) : undefined,
+      numeroParcelas: form.lancamentoRecorrente ? 1 : numParc,
+      parcelasJson: !form.lancamentoRecorrente && parcelas.length > 0 ? parcelas.map(p => ({ numero: p.numero, vencimento: p.vencimento || undefined, valor: parseFloat(p.valor) || 0 })) : undefined,
+      lancamentoRecorrente: form.lancamentoRecorrente,
+      recorrenciaDataInicio: form.lancamentoRecorrente ? form.recorrenciaDataInicio : undefined,
+      recorrenciaDataFim: form.lancamentoRecorrente ? form.recorrenciaDataFim : undefined,
       prazoEntregaDias: parseInt((form as any).prazoEntregaDias) || undefined,
       dataEntregaPrevista: form.dataEntregaPrevista || undefined,
       dataVencimento: form.dataVencimento || undefined,
@@ -845,13 +926,14 @@ export default function Ordens() {
       impostos: parseFloat(form.impostos) || 0,
       desconto: parseFloat(form.desconto) || 0,
       modalidadeFd: tipoFaturamento,
+       tipoOc: form.tipoOc,
       userId: user?.id,
       userName: user?.name,
       anexos: anexosForm.length > 0 ? anexosForm : undefined,
       itens: validos.map(i => ({
         descricao: i.descricao,
         unidade: i.unidade,
-        quantidade: parseFloat(i.quantidade) || 1,
+        quantidade: Math.max(1, Math.ceil(parseFloat(i.quantidade) || 1)),
         precoUnitario: parseFloat(i.precoUnitario) || 0,
         insumoCodigo: i.eapCodigo ?? undefined,
       })),
@@ -896,6 +978,10 @@ export default function Ordens() {
       formaPagamento: (ocDetalhe as any).formaPagamento ?? "",
       contaBancariaId: (ocDetalhe as any).contaBancariaId ? String((ocDetalhe as any).contaBancariaId) : "",
       cartaoId: (ocDetalhe as any).cartaoId ? String((ocDetalhe as any).cartaoId) : "",
+      lancamentoRecorrente: !!(ocDetalhe as any).lancamentoRecorrente,
+      recorrenciaDataInicio: (ocDetalhe as any).recorrenciaDataInicio ?? "",
+      recorrenciaDataFim: (ocDetalhe as any).recorrenciaDataFim ?? "",
+      tipoOc: (["locacao", "servico", "epi"].includes((ocDetalhe as any).tipo)) ? (ocDetalhe as any).tipo : "compra",
     });
     if (ocDetalhe.itens && ocDetalhe.itens.length > 0) {
       // Rev. 2486 — reagrupa por eapCodigo ao carregar.
@@ -913,29 +999,55 @@ export default function Ordens() {
     setAnexosForm((ocDetalhe.anexos as AnexoOC[]) ?? []);
     setNumParc(ocDetalhe.numeroParcelas ?? 1);
     setParcelas((ocDetalhe as any).parcelasJson ?? []);
+    const fornecedorDaOc = fornecedores.find(f => String(f.id) === String(ocDetalhe.fornecedorId));
+    const condicaoPreProgramada = getCondicaoPreProgramadaFornecedor(fornecedorDaOc);
+    const deveTravarCondicao = !!condicaoPreProgramada && condicaoPreProgramada === (ocDetalhe.condicaoPagamento ?? "");
+    setCondicaoFornecedor(deveTravarCondicao ? condicaoPreProgramada : null);
+    setCondicaoPagamentoTravada(deveTravarCondicao);
     setShowDetalhe(null);
     setShowNova(true);
   }
 
   function handleSalvar() {
-    if (!form.obraId || form.obraId === "none") return toast.error("Selecione a Obra (centro de custo) para esta ordem de compra.");
+    if (form.tipoOc !== "epi" && (!form.obraId || form.obraId === "none" || form.obraId === "central")) {
+      return toast.error("Selecione a Obra (centro de custo) para esta ordem de compra.");
+    }
     if (!form.condicaoPagamento.trim()) return toast.error("Informe a Condição de Pagamento para gerar a OC.");
+    if (form.condicaoPagamento.startsWith("Outras:") && !form.condicaoPagamento.replace(/^Outras:\s*/, "").trim()) {
+      return toast.error("Descreva a outra condição de pagamento.");
+    }
     if (!(form as any).prazoEntregaDias && !form.dataEntregaPrevista) return toast.error("Informe o Prazo de Entrega para gerar a OC.");
+    if (form.lancamentoRecorrente && (!form.recorrenciaDataInicio || !form.recorrenciaDataFim)) return toast.error("Informe as datas inicial e final da recorrência.");
+    if (form.lancamentoRecorrente && form.recorrenciaDataFim < form.recorrenciaDataInicio) return toast.error("A data final da recorrência não pode ser anterior à data inicial.");
+    if (form.lancamentoRecorrente && tipoFaturamento !== "normal") return toast.error("Lançamento recorrente não pode ser usado com Faturamento Direto.");
+    if (form.lancamentoRecorrente && form.formaPagamento === "cartao_credito") return toast.error("Lançamento recorrente não pode ser usado com Cartão de Crédito.");
+    if (!form.lancamentoRecorrente && numParc > 1) {
+      const totalParcelas = parcelas.reduce((s, parcela) => s + (parseFloat(parcela.valor) || 0), 0);
+      if (parcelas.length !== numParc || parcelas.some(parcela => !parcela.vencimento || !(parseFloat(parcela.valor) > 0))) {
+        return toast.error("Preencha o vencimento e o valor de todas as parcelas.");
+      }
+      if (Math.abs(totalParcelas - totalOC) >= 0.02) {
+        return toast.error("O total das parcelas deve ser igual ao total da OC.");
+      }
+    }
     const validos = itens.filter(i => i.descricao.trim());
     if (validos.length === 0) return toast.error("Adicione pelo menos um item.");
     if (rascunhoId) {
       confirmarRascunhoMut.mutate({
         id: rascunhoId,
         companyId,
-        obraId: parseInt(form.obraId),
+        obraId: form.obraId && form.obraId !== "central" ? parseInt(form.obraId) : undefined,
         fornecedorId: form.fornecedorId && form.fornecedorId !== "none" ? parseInt(form.fornecedorId) : undefined,
         numeroNf: form.numeroNf || undefined,
         formaPagamento: form.formaPagamento || undefined,
         contaBancariaId: form.contaBancariaId ? parseInt(form.contaBancariaId) : undefined,
         cartaoId: form.formaPagamento === "cartao_credito" && form.cartaoId ? parseInt(form.cartaoId) : null,
         condicaoPagamento: form.condicaoPagamento,
-        numeroParcelas: numParc,
-        parcelasJson: parcelas.length > 0 ? parcelas.map(p => ({ numero: p.numero, vencimento: p.vencimento || undefined, valor: parseFloat(p.valor) || 0 })) : undefined,
+        numeroParcelas: form.lancamentoRecorrente ? 1 : numParc,
+        parcelasJson: !form.lancamentoRecorrente && parcelas.length > 0 ? parcelas.map(p => ({ numero: p.numero, vencimento: p.vencimento || undefined, valor: parseFloat(p.valor) || 0 })) : undefined,
+        lancamentoRecorrente: form.lancamentoRecorrente,
+        recorrenciaDataInicio: form.lancamentoRecorrente ? form.recorrenciaDataInicio : undefined,
+        recorrenciaDataFim: form.lancamentoRecorrente ? form.recorrenciaDataFim : undefined,
         dataEntregaPrevista: form.dataEntregaPrevista || undefined,
         dataVencimento: form.dataVencimento || undefined,
         observacoes: form.observacoes || undefined,
@@ -944,13 +1056,14 @@ export default function Ordens() {
         impostos: parseFloat(form.impostos) || 0,
         desconto: parseFloat(form.desconto) || 0,
         modalidadeFd: tipoFaturamento,
+         tipoOc: form.tipoOc,
         userId: user?.id,
         userName: user?.name,
         anexos: anexosForm.length > 0 ? anexosForm : undefined,
         itens: validos.map(i => ({
           descricao: i.descricao,
           unidade: i.unidade,
-          quantidade: parseFloat(i.quantidade) || 1,
+          quantidade: Math.max(1, Math.ceil(parseFloat(i.quantidade) || 1)),
           precoUnitario: parseFloat(i.precoUnitario) || 0,
           insumoCodigo: i.eapCodigo ?? undefined,
         })),
@@ -959,15 +1072,18 @@ export default function Ordens() {
     }
     criarManual.mutate({
       companyId,
-      obraId: parseInt(form.obraId),
+      obraId: form.obraId && form.obraId !== "central" ? parseInt(form.obraId) : undefined,
       fornecedorId: form.fornecedorId && form.fornecedorId !== "none" ? parseInt(form.fornecedorId) : undefined,
       numeroNf: form.numeroNf || undefined,
       formaPagamento: form.formaPagamento || undefined,
       contaBancariaId: form.contaBancariaId ? parseInt(form.contaBancariaId) : undefined,
       cartaoId: form.formaPagamento === "cartao_credito" && form.cartaoId ? parseInt(form.cartaoId) : null,
       condicaoPagamento: form.condicaoPagamento,
-      numeroParcelas: numParc,
-      parcelasJson: parcelas.length > 0 ? parcelas.map(p => ({ numero: p.numero, vencimento: p.vencimento || undefined, valor: parseFloat(p.valor) || 0 })) : undefined,
+      numeroParcelas: form.lancamentoRecorrente ? 1 : numParc,
+      parcelasJson: !form.lancamentoRecorrente && parcelas.length > 0 ? parcelas.map(p => ({ numero: p.numero, vencimento: p.vencimento || undefined, valor: parseFloat(p.valor) || 0 })) : undefined,
+      lancamentoRecorrente: form.lancamentoRecorrente,
+      recorrenciaDataInicio: form.lancamentoRecorrente ? form.recorrenciaDataInicio : undefined,
+      recorrenciaDataFim: form.lancamentoRecorrente ? form.recorrenciaDataFim : undefined,
       prazoEntregaDias: parseInt((form as any).prazoEntregaDias) || undefined,
       dataEntregaPrevista: form.dataEntregaPrevista || undefined,
       dataVencimento: form.dataVencimento || undefined,
@@ -984,7 +1100,7 @@ export default function Ordens() {
       itens: validos.map(i => ({
         descricao: i.descricao,
         unidade: i.unidade,
-        quantidade: parseFloat(i.quantidade) || 1,
+        quantidade: Math.max(1, Math.ceil(parseFloat(i.quantidade) || 1)),
         precoUnitario: parseFloat(i.precoUnitario) || 0,
         insumoCodigo: i.eapCodigo ?? undefined,
       })),
@@ -1012,6 +1128,22 @@ export default function Ordens() {
       return { ...g, itens: next.length === 0 ? [newItem()] : next };
     }));
   }
+  // Rev. 5052 — move um ITEM para outra etapa (grupo) direto da linha do item.
+  // Se já existe grupo com aquela EAP, o item entra nele; senão cria grupo novo.
+  function moverItemParaEtapa(gi: number, ii: number, eapCodigo: string, eapDescricao: string) {
+    setGrupos(p => {
+      const item = p[gi]?.itens[ii];
+      if (!item) return p;
+      if (p[gi].eapCodigo === eapCodigo) return p; // já está nessa etapa
+      const next = p.map((g, i) => i === gi ? { ...g, itens: g.itens.filter((_, j) => j !== ii) } : { ...g, itens: [...g.itens] });
+      const destino = next.findIndex(g => g.eapCodigo === eapCodigo);
+      if (destino >= 0) next[destino].itens.push(item);
+      else next.push({ eapCodigo, eapDescricao, itens: [item] });
+      // Remove grupos que ficaram vazios (mantém ao menos 1)
+      const limpo = next.filter(g => g.itens.length > 0);
+      return limpo.length === 0 ? [newGrupo()] : limpo;
+    });
+  }
   function updateItem(gi: number, ii: number, field: keyof ItemForm, val: string) {
     setGrupos(p => p.map((g, i) => i !== gi ? g : ({
       ...g,
@@ -1022,6 +1154,17 @@ export default function Ordens() {
   const fornecedores = fornQ.data ?? [];
   const obras = obrasQ.data ?? [];
   const lista = q.data ?? [];
+  const valorMinCentavos = valorParaCentavos(filtroValorMin);
+  const valorMaxCentavos = valorParaCentavos(filtroValorMax);
+  function correspondeAoFiltroDeValor(valor: string | number | null | undefined): boolean {
+    const totalCentavos = valorParaCentavos(valor);
+    if (totalCentavos === null) return false;
+    // Um único valor é uma busca exata. Com os dois campos preenchidos, aplica faixa inclusiva.
+    if (valorMinCentavos !== null && valorMaxCentavos === null) return totalCentavos === valorMinCentavos;
+    if (valorMinCentavos !== null && totalCentavos < valorMinCentavos) return false;
+    if (valorMaxCentavos !== null && totalCentavos > valorMaxCentavos) return false;
+    return true;
+  }
   const filtBase = lista.filter(o => {
     if (busca && !o.numeroOc?.toLowerCase().includes(busca.toLowerCase())) return false;
     if (filtroFornecedor) {
@@ -1040,9 +1183,7 @@ export default function Ordens() {
         return false;
       }
     }
-    const total = parseFloat((o as any).total ?? "0");
-    if (filtroValorMin && !isNaN(parseFloat(filtroValorMin)) && total < parseFloat(filtroValorMin)) return false;
-    if (filtroValorMax && !isNaN(parseFloat(filtroValorMax)) && total > parseFloat(filtroValorMax)) return false;
+    if ((valorMinCentavos !== null || valorMaxCentavos !== null) && !correspondeAoFiltroDeValor((o as any).total)) return false;
     const dataCriacao = ((o as any).criadoEm ?? "").slice(0, 10);
     if (filtroDataInicio && dataCriacao < filtroDataInicio) return false;
     if (filtroDataFim && dataCriacao > filtroDataFim) return false;
@@ -1112,9 +1253,7 @@ export default function Ordens() {
           if (obraId !== null && obraId !== undefined) return false;
         } else if (String(obraId ?? "") !== filtroObra) return false;
       }
-      const total = parseFloat((o as any).total ?? "0");
-      if (filtroValorMin && !isNaN(parseFloat(filtroValorMin)) && total < parseFloat(filtroValorMin)) return false;
-      if (filtroValorMax && !isNaN(parseFloat(filtroValorMax)) && total > parseFloat(filtroValorMax)) return false;
+      if ((valorMinCentavos !== null || valorMaxCentavos !== null) && !correspondeAoFiltroDeValor((o as any).total)) return false;
       const dataCriacao = ((o as any).criadoEm ?? "").slice(0, 10);
       if (filtroDataInicio && dataCriacao < filtroDataInicio) return false;
       if (filtroDataFim && dataCriacao > filtroDataFim) return false;
@@ -1299,18 +1438,18 @@ export default function Ordens() {
           <div className="flex items-center gap-1.5">
             <DollarSign className="h-4 w-4 text-gray-400 shrink-0" />
             <Input
-              type="number"
-              min={0}
-              placeholder="Valor mín"
+              type="text"
+              inputMode="decimal"
+              placeholder="Valor exato ou inicial"
               className="w-32 bg-white border-gray-300 text-gray-900 h-9 text-sm"
               value={filtroValorMin}
               onChange={e => setFiltroValorMin(e.target.value)}
             />
             <span className="text-gray-400 text-xs">até</span>
             <Input
-              type="number"
-              min={0}
-              placeholder="Valor máx"
+              type="text"
+              inputMode="decimal"
+              placeholder="Valor final"
               className="w-32 bg-white border-gray-300 text-gray-900 h-9 text-sm"
               value={filtroValorMax}
               onChange={e => setFiltroValorMax(e.target.value)}
@@ -1478,7 +1617,7 @@ export default function Ordens() {
                     )}
                     {oc.status === "entregue" && <span className="block text-[10px] font-sans font-normal text-emerald-500">OC concluída</span>}
                     {((oc as any).tipo === "servico" || (oc as any).tipo === "pacote") && (oc as any).contratoId && (
-                      <span className="block text-[10px] font-sans font-normal text-blue-500">Contrato PJ vinculado</span>
+                      <span className="block text-[10px] font-sans font-normal text-blue-500">Contrato de prestador vinculado</span>
                     )}
                   </TableCell>
                   <TableCell>
@@ -1610,7 +1749,7 @@ export default function Ordens() {
                     </p>
                     <div className="space-y-1.5">
                       <p className="text-xs text-gray-600 font-medium">Obra / Centro de Custo</p>
-                      <Select value={ocIAObraId} onValueChange={v => { setOcIAObraId(v); setOcIAEapCodigo(undefined); setOcIAEapDescricao(undefined); }}>
+                      <Select value={ocIAObraId} onValueChange={v => { setOcIAObraId(v); setOcIAEapCodigo(undefined); setOcIAEapDescricao(undefined); setOcIAItemEaps({}); }}>
                         <SelectTrigger className="bg-white border-gray-300 text-gray-900 text-sm h-9">
                           <SelectValue placeholder="Selecione a obra (opcional)..." />
                         </SelectTrigger>
@@ -1625,7 +1764,7 @@ export default function Ordens() {
                     </div>
                     {ocIAObraId && (
                       <div className="space-y-1.5">
-                        <p className="text-xs text-gray-600 font-medium">Etapa do Orçamento (EAP)</p>
+                        <p className="text-xs text-gray-600 font-medium">Etapa do Orçamento (EAP) — geral <span className="text-gray-400 font-normal">(itens podem ter etapa própria na tabela abaixo)</span></p>
                         <Popover open={ocIAEapPopover} onOpenChange={setOcIAEapPopover}>
                           <PopoverTrigger asChild>
                             <button
@@ -1705,6 +1844,7 @@ export default function Ordens() {
                             <th className="text-center px-3 py-2 font-semibold text-gray-600">Qtd</th>
                             <th className="text-center px-3 py-2 font-semibold text-gray-600">Un</th>
                             <th className="text-right px-3 py-2 font-semibold text-gray-600">R$ Unit.</th>
+                            {ocIAObraId && <th className="text-left px-3 py-2 font-semibold text-gray-600">Etapa</th>}
                           </tr>
                         </thead>
                         <tbody>
@@ -1719,6 +1859,50 @@ export default function Ordens() {
                                   ? it.precoUnitario.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
                                   : <span className="text-gray-300">—</span>}
                               </td>
+                              {ocIAObraId && (
+                                <td className="px-3 py-1.5">
+                                  {/* Rev. 5050 — etapa individual do item (sobrepõe a etapa geral) */}
+                                  <Popover open={ocIAEapItemPopover === i} onOpenChange={(o) => setOcIAEapItemPopover(o ? i : null)}>
+                                    <PopoverTrigger asChild>
+                                      <button
+                                        type="button"
+                                        className={`flex items-center gap-1 rounded border px-2 py-1 text-[11px] max-w-[180px] transition-colors bg-white ${ocIAItemEaps[i] ? "border-violet-300 text-violet-700 hover:bg-violet-50" : "border-dashed border-gray-300 text-gray-400 hover:border-violet-300"}`}
+                                      >
+                                        {ocIAItemEaps[i] ? (
+                                          <>
+                                            <code className="font-mono font-semibold shrink-0">{ocIAItemEaps[i].codigo}</code>
+                                            <span className="truncate">{ocIAItemEaps[i].descricao}</span>
+                                            <span onClick={e => { e.stopPropagation(); setOcIAItemEaps(p => { const n = { ...p }; delete n[i]; return n; }); }} className="text-violet-400 hover:text-red-500 shrink-0">✕</span>
+                                          </>
+                                        ) : (
+                                          <span className="truncate">{ocIAEapCodigo ? `herda ${ocIAEapCodigo}` : "definir etapa"}</span>
+                                        )}
+                                      </button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-80 p-0 bg-white border-gray-200 shadow-lg" align="start">
+                                      <Command>
+                                        <CommandInput placeholder="Buscar por código ou descrição..." className="h-9" />
+                                        <CommandList className="max-h-60">
+                                          <CommandEmpty>Nenhum item encontrado.</CommandEmpty>
+                                          <CommandGroup>
+                                            {(ocIAEapQ.data?.items ?? []).filter((e: any) => e.descricao?.trim()).map((e: any) => (
+                                              <CommandItem
+                                                key={e.id}
+                                                value={`${e.eapCodigo ?? ""} ${e.descricao ?? ""}`}
+                                                onSelect={() => { setOcIAItemEaps(p => ({ ...p, [i]: { codigo: e.eapCodigo ?? "", descricao: e.descricao ?? "" } })); setOcIAEapItemPopover(null); }}
+                                                className="cursor-pointer text-xs"
+                                              >
+                                                <code className="font-mono font-semibold mr-2 text-violet-700">{e.eapCodigo}</code>
+                                                <span className="truncate">{e.descricao}</span>
+                                              </CommandItem>
+                                            ))}
+                                          </CommandGroup>
+                                        </CommandList>
+                                      </Command>
+                                    </PopoverContent>
+                                  </Popover>
+                                </td>
+                              )}
                             </tr>
                           ))}
                         </tbody>
@@ -1737,7 +1921,7 @@ export default function Ordens() {
 
             {/* Footer */}
             <div className="px-6 py-4 border-t border-gray-200 flex justify-between items-center">
-              <Button variant="outline" onClick={() => { setOcIAStep("idle"); setOcIAResult(null); setOcIAJobId(null); setOcIAObraId(""); setOcIAEapCodigo(undefined); setOcIAEapDescricao(undefined); }}>
+              <Button variant="outline" onClick={() => { setOcIAStep("idle"); setOcIAResult(null); setOcIAJobId(null); setOcIAObraId(""); setOcIAEapCodigo(undefined); setOcIAEapDescricao(undefined); setOcIAItemEaps({}); }}>
                 Cancelar
               </Button>
               {ocIAStep === "review" && (
@@ -1770,13 +1954,14 @@ export default function Ordens() {
             {/* Obra obrigatória */}
             <div className="space-y-1.5">
               <Label className="text-gray-700 text-sm font-medium flex items-center gap-1">
-                <Building2 className="h-3.5 w-3.5 text-emerald-600" /> Obra / Centro de Custo *
+                <Building2 className="h-3.5 w-3.5 text-emerald-600" /> Obra / Centro de Custo {form.tipoOc !== "epi" ? "*" : ""}
               </Label>
               <Select value={form.obraId} onValueChange={v => setForm(p => ({ ...p, obraId: v }))}>
                 <SelectTrigger className="bg-white border-gray-300 text-gray-900">
                   <SelectValue placeholder="Selecione a obra vinculada..." />
                 </SelectTrigger>
                 <SelectContent className="bg-white border-gray-200">
+                  {form.tipoOc === "epi" && <SelectItem value="central">Almoxarifado Central SST</SelectItem>}
                   {obras.map((o: any) => (
                     <SelectItem key={o.id} value={String(o.id)}>
                       {o.codigo ? `[${o.codigo}] ` : ""}{o.nome}
@@ -1784,13 +1969,13 @@ export default function Ordens() {
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-gray-400">Obrigatório — o custo desta OC será apropriado à obra selecionada.</p>
+              <p className="text-xs text-gray-400">{form.tipoOc === "epi" ? "Escolha uma obra para enviar ao estoque SST local ou o Central SST quando não houver destino de obra." : "Obrigatório — o custo desta OC será apropriado à obra selecionada."}</p>
             </div>
 
             {/* Tipo de OC */}
             <div className="space-y-1.5">
               <Label className="text-gray-700 text-sm font-medium">Tipo de Ordem</Label>
-              <Select value={form.tipoOc} onValueChange={v => setForm(p => ({ ...p, tipoOc: v as "compra" | "locacao" | "servico" }))}>
+              <Select value={form.tipoOc} onValueChange={v => setForm(p => ({ ...p, tipoOc: v as "compra" | "locacao" | "servico" | "epi" }))}>
                 <SelectTrigger className="bg-white border-gray-300 text-gray-900">
                   <SelectValue />
                 </SelectTrigger>
@@ -1798,6 +1983,7 @@ export default function Ordens() {
                   <SelectItem value="compra">Compra</SelectItem>
                   <SelectItem value="locacao">Aluguel / Locação</SelectItem>
                   <SelectItem value="servico">Serviço</SelectItem>
+                  <SelectItem value="epi">EPI / SST</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1826,7 +2012,12 @@ export default function Ordens() {
                       <CommandGroup>
                         <CommandItem
                           value="none"
-                          onSelect={() => { setForm(p => ({ ...p, fornecedorId: "none" })); setFornecedorPopoverOpen(false); }}
+                          onSelect={() => {
+                            setForm(p => ({ ...p, fornecedorId: "none" }));
+                            setCondicaoFornecedor(null);
+                            setCondicaoPagamentoTravada(false);
+                            setFornecedorPopoverOpen(false);
+                          }}
                           className="cursor-pointer"
                         >
                           <Check className={`mr-2 h-4 w-4 ${form.fornecedorId === "none" || !form.fornecedorId ? "opacity-100" : "opacity-0"}`} />
@@ -1841,23 +2032,22 @@ export default function Ordens() {
                               // Rev. 4180 — pré-preenche condicaoPagamento do ciclo do fornecedor
                               const cicloFP = (f as any).cicloFormaPagamento as string | undefined;
                               const cicloN = (f as any).cicloNumParcelas as number | undefined;
-                              const cicloD = (f as any).cicloPrazoParcela as number | undefined;
-                              const cicloPag = (f as any).cicloPagamento as string | undefined;
-                              // Deriva o label da condição a partir do ciclo configurado no fornecedor
-                              let cicloCondicao: string | undefined;
-                              if (cicloPag === "avista") cicloCondicao = "À Vista";
-                              else if (cicloN && cicloD != null) {
-                                const match = TIPOS_PAGAMENTO.find(
-                                  t => t.parcelas === cicloN && t.diasDDL[0] === cicloD
-                                );
-                                cicloCondicao = match?.label;
-                              }
+                              const cicloCondicao = getCondicaoPreProgramadaFornecedor(f);
                               setForm(p => ({
                                 ...p,
                                 fornecedorId: String(f.id),
                                 ...(cicloFP ? { formaPagamento: cicloFP } : {}),
                                 ...(cicloCondicao ? { condicaoPagamento: cicloCondicao } : {}),
                               }));
+                              setCondicaoFornecedor(cicloCondicao);
+                              setCondicaoPagamentoTravada(!!cicloCondicao);
+                              if (cicloCondicao && cicloN && cicloN > 1) {
+                                setNumParc(cicloN);
+                                setParcelas(gerarParcelas(cicloN, totalOC, form.dataVencimento));
+                              } else if (cicloCondicao) {
+                                setNumParc(1);
+                                setParcelas([]);
+                              }
                               setFornecedorPopoverOpen(false);
                             }}
                             className="cursor-pointer"
@@ -2020,6 +2210,38 @@ export default function Ordens() {
                                   {((parseFloat(it.quantidade) || 0) * (parseFloat(it.precoUnitario) || 0)).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
                                 </span>
                               </div>
+                              {/* Rev. 5052 — mover este item p/ outra etapa (funciona também na edição de OC existente) */}
+                              {obraSelecionada && eapItems.length > 0 && (
+                                <Popover open={moveItemPopover === `${gi}-${ii}`} onOpenChange={o => setMoveItemPopover(o ? `${gi}-${ii}` : null)}>
+                                  <PopoverTrigger asChild>
+                                    <button type="button" className="inline-flex items-center gap-1 text-[11px] text-violet-600 hover:text-violet-800 hover:underline">
+                                      <Search className="h-3 w-3" /> {g.eapCodigo ? `Etapa ${g.eapCodigo} — mover p/ outra` : "Definir etapa deste item"}
+                                    </button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-96 p-0 bg-white border-gray-200 shadow-lg" align="start">
+                                    <Command>
+                                      <CommandInput placeholder="Buscar etapa por código ou descrição..." className="h-9" />
+                                      <CommandList className="max-h-60">
+                                        <CommandEmpty>Nenhuma etapa encontrada.</CommandEmpty>
+                                        <CommandGroup>
+                                          {eapItems.map((e: any) => (
+                                            <CommandItem
+                                              key={e.id}
+                                              value={`${e.eapCodigo ?? ""} ${e.descricao ?? ""}`}
+                                              onSelect={() => { moverItemParaEtapa(gi, ii, e.eapCodigo ?? "", e.descricao ?? ""); setMoveItemPopover(null); }}
+                                              className="cursor-pointer text-xs"
+                                            >
+                                              <Check className={`mr-2 h-3 w-3 shrink-0 ${g.eapCodigo === e.eapCodigo ? "opacity-100 text-violet-600" : "opacity-0"}`} />
+                                              <code className="font-mono font-semibold mr-2 text-violet-700">{e.eapCodigo}</code>
+                                              <span className="truncate">{e.descricao}</span>
+                                            </CommandItem>
+                                          ))}
+                                        </CommandGroup>
+                                      </CommandList>
+                                    </Command>
+                                  </PopoverContent>
+                                </Popover>
+                              )}
                             </div>
                           ))}
                           <Button
@@ -2097,28 +2319,157 @@ export default function Ordens() {
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-gray-700 text-sm font-medium">
-                Condição de Pagamento *
-              </Label>
-              <Select
-                value={form.condicaoPagamento}
-                onValueChange={v => setForm(p => ({ ...p, condicaoPagamento: v }))}
-              >
-                <SelectTrigger className="bg-white border-gray-300 text-gray-900">
-                  <SelectValue placeholder="Selecione a condição..." />
-                </SelectTrigger>
-                <SelectContent className="bg-white border-gray-200">
-                  {TIPOS_PAGAMENTO.map(opt => (
-                    <SelectItem key={opt.value} value={opt.label}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-gray-400">Obrigatório — pré-preenchido pelo ciclo do fornecedor quando disponível.</p>
+              <div className="flex items-center justify-between gap-3">
+                <Label className="text-gray-700 text-sm font-medium">
+                  Condição de Pagamento *
+                </Label>
+                {condicaoFornecedor && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-7 border-blue-300 text-blue-700 hover:bg-blue-50 text-xs"
+                    onClick={() => {
+                      if (condicaoPagamentoTravada) {
+                        setCondicaoPagamentoTravada(false);
+                      } else {
+                        setForm(p => ({ ...p, condicaoPagamento: condicaoFornecedor }));
+                        setCondicaoPagamentoTravada(true);
+                      }
+                    }}
+                  >
+                    <Edit3 className="mr-1 h-3 w-3" />
+                    {condicaoPagamentoTravada ? "Alterar condição" : "Usar condição do fornecedor"}
+                  </Button>
+                )}
+              </div>
+              {condicaoPagamentoTravada ? (
+                <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-900">
+                  {form.condicaoPagamento}
+                </div>
+              ) : (
+                <>
+                  <Select
+                    value={form.condicaoPagamento.startsWith("Outras:") ? "__outras__" : form.condicaoPagamento}
+                    onValueChange={v => {
+                      if (v === "__outras__") {
+                        setForm(p => ({ ...p, condicaoPagamento: "Outras: " }));
+                        return;
+                      }
+                      const condicao = TIPOS_PAGAMENTO.find(tipo => tipo.label === v);
+                      setForm(p => ({ ...p, condicaoPagamento: v }));
+                      if (condicao) {
+                        setNumParc(condicao.parcelas);
+                        setParcelas(condicao.parcelas > 1 ? gerarParcelas(condicao.parcelas, totalOC, form.dataVencimento) : []);
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="bg-white border-gray-300 text-gray-900">
+                      <SelectValue placeholder="Selecione a condição..." />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white border-gray-200">
+                      {TIPOS_PAGAMENTO.map(opt => (
+                        <SelectItem key={opt.value} value={opt.label}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                      <SelectItem value="__outras__">Outras condições de pagamento</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {form.condicaoPagamento.startsWith("Outras:") && (
+                    <Input
+                      className="bg-white border-blue-300 text-gray-900"
+                      value={form.condicaoPagamento.replace(/^Outras:\s*/, "")}
+                      onChange={e => setForm(p => ({ ...p, condicaoPagamento: `Outras: ${e.target.value}` }))}
+                      placeholder="Ex.: Fechamento Santa Rita — até 5x"
+                      aria-label="Descrição da outra condição de pagamento"
+                    />
+                  )}
+                </>
+              )}
+              <p className="text-xs text-gray-400">
+                {condicaoPagamentoTravada
+                  ? "Condição pré-programada pelo fornecedor. Use “Alterar condição” para liberar outras opções."
+                  : "Obrigatório — informe livremente uma condição quando ela não estiver no catálogo."}
+              </p>
             </div>
 
-            {/* Parcelamento */}
+            {/* Rev. 5085 — recorrência mensal da OC */}
+            <div className={`rounded-lg border p-4 space-y-3 ${form.lancamentoRecorrente ? "border-violet-300 bg-violet-50/60" : "border-gray-200 bg-gray-50"}`}>
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="space-y-0.5">
+                  <Label className="text-gray-800 text-sm font-semibold">
+                    Lançamento
+                  </Label>
+                  <p className="text-xs text-gray-500">
+                    {form.lancamentoRecorrente
+                      ? "Gera um lançamento mensal com o valor integral desta OC durante o período informado."
+                      : "Lançamento único — use Recorrente para repetir o valor todo mês."}
+                  </p>
+                </div>
+                {/* Toggle Único / Recorrente — mesmo padrão do Novo Lançamento (Financeiro) */}
+                <div className="flex rounded-full border border-gray-300 bg-white overflow-hidden text-xs">
+                  <button type="button"
+                    onClick={() => setForm(p => ({ ...p, lancamentoRecorrente: false }))}
+                    className={`px-3 py-1 font-medium transition-colors ${!form.lancamentoRecorrente ? "bg-gray-800 text-white" : "text-gray-500 hover:bg-gray-50"}`}>
+                    Único
+                  </button>
+                  <button type="button"
+                    onClick={() => {
+                      if (form.lancamentoRecorrente) return;
+                      if (tipoFaturamento !== "normal") {
+                        toast.error("Altere o tipo de faturamento para Empresa FC antes de ativar a recorrência.");
+                        return;
+                      }
+                      if (form.formaPagamento === "cartao_credito") {
+                        toast.error("Altere a forma de pagamento antes de ativar a recorrência.");
+                        return;
+                      }
+                      setForm(p => ({ ...p, lancamentoRecorrente: true }));
+                      setNumParc(1);
+                      setParcelas([]);
+                    }}
+                    className={`px-3 py-1 font-medium transition-colors flex items-center gap-1 ${form.lancamentoRecorrente ? "bg-gray-800 text-white" : "text-gray-500 hover:bg-gray-50"}`}>
+                    <RefreshCw className="w-3 h-3" />Recorrente
+                  </button>
+                </div>
+              </div>
+              {form.lancamentoRecorrente && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-violet-200">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-violet-800">Data inicial *</Label>
+                    <Input
+                      type="date"
+                      className="bg-white border-violet-300 text-gray-900"
+                      value={form.recorrenciaDataInicio}
+                      onChange={e => setForm(p => ({ ...p, recorrenciaDataInicio: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-violet-800">Data final *</Label>
+                    <Input
+                      type="date"
+                      min={form.recorrenciaDataInicio || undefined}
+                      className="bg-white border-violet-300 text-gray-900"
+                      value={form.recorrenciaDataFim}
+                      onChange={e => setForm(p => ({ ...p, recorrenciaDataFim: e.target.value }))}
+                    />
+                  </div>
+                  {contarMesesRecorrencia(form.recorrenciaDataInicio, form.recorrenciaDataFim) > 0 && (
+                    <div className="sm:col-span-2 rounded-md border border-violet-200 bg-white px-3 py-2 text-xs text-violet-800 flex items-center gap-2">
+                      <Calendar className="h-3.5 w-3.5" />
+                      <span>
+                        Serão gerados <b>{contarMesesRecorrencia(form.recorrenciaDataInicio, form.recorrenciaDataFim)} lançamentos mensais</b> de{" "}
+                        <b>{totalOC.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</b>.
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Parcelamento comum — mutuamente exclusivo com recorrência */}
+            {!form.lancamentoRecorrente && (
             <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3">
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <Label className="text-gray-700 text-sm font-semibold">Parcelamento</Label>
@@ -2193,8 +2544,9 @@ export default function Ordens() {
                 <p className="text-xs text-gray-400">Pagamento à vista (1 parcela). Aumente o número de parcelas para configurar o parcelamento.</p>
               )}
             </div>
+            )}
 
-            <div className={`grid gap-4 ${numParc > 1 ? "grid-cols-2" : "grid-cols-3"}`}>
+            <div className={`grid gap-4 ${numParc > 1 || form.lancamentoRecorrente ? "grid-cols-2" : "grid-cols-3"}`}>
               <div className="space-y-1.5">
                 <Label className="text-gray-700 text-sm font-medium">Prazo Entrega (dias) *</Label>
                 <Input type="number" min="1" className="bg-white border-gray-300 text-gray-900" value={(form as any).prazoEntregaDias ?? ""} onChange={e => {
@@ -2227,7 +2579,7 @@ export default function Ordens() {
                   });
                 }} />
               </div>
-              {numParc === 1 && (
+              {numParc === 1 && !form.lancamentoRecorrente && (
                 <div className="space-y-1.5">
                   <Label className="text-gray-700 text-sm font-medium text-orange-700">Vencimento do Pagamento</Label>
                   <Input type="date" className="bg-white border-orange-300 text-gray-900 focus:border-orange-500" value={form.dataVencimento} onChange={e => setForm(p => ({ ...p, dataVencimento: e.target.value }))} />
@@ -2306,8 +2658,11 @@ export default function Ordens() {
                 ))}
               </div>
               <div className="flex justify-between items-center pt-3 border-t border-gray-200 mt-2">
-                <span className="text-gray-700 font-semibold text-sm">Total da OC</span>
-                <span className="text-emerald-700 font-bold text-lg">{totalOC.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
+                <span className="text-gray-700 font-semibold text-sm">{form.lancamentoRecorrente ? "Valor mensal da OC" : "Total da OC"}</span>
+                <span className="text-emerald-700 font-bold text-lg">
+                  {totalOC.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                  {form.lancamentoRecorrente && <span className="text-xs font-medium text-violet-600 ml-1">/ mês</span>}
+                </span>
               </div>
             </div>
 
@@ -2351,7 +2706,7 @@ export default function Ordens() {
 
       {/* Dialog Detalhe OC */}
       <Dialog open={showDetalhe !== null} onOpenChange={v => !v && setShowDetalhe(null)}>
-        <DialogContent showCloseButton={false} className="border-gray-200 w-screen h-screen max-w-none max-h-none rounded-none overflow-y-auto p-0" style={{ background: '#ffffff', color: '#111827' }}>
+        <DialogContent showCloseButton={false} maximizable={false} className="border-gray-200 w-screen h-screen max-w-none max-h-none rounded-none overflow-y-auto p-0" style={{ background: '#ffffff', color: '#111827' }}>
           {/* Rev. 2827 — cabeçalho STICKY com botão de fechar sempre visível.
               Antes o X (absolute) rolava junto com o conteúdo e sumia no tablet. */}
           <DialogHeader className="sticky top-0 z-30 bg-white border-b border-gray-200 px-4 sm:px-6 py-3 space-y-0">
@@ -2369,13 +2724,16 @@ export default function Ordens() {
                   </span>
                 )}
               </DialogTitle>
-              <DialogClose
-                aria-label="Fechar"
-                className="shrink-0 inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-300"
-              >
-                <X className="h-4 w-4" />
-                <span className="hidden sm:inline">Fechar</span>
-              </DialogClose>
+              <div className="shrink-0 flex items-center gap-2">
+                <DialogMaximizeButton className="inline-flex items-center rounded-md border border-gray-300 bg-white p-2 text-gray-600 hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-300" />
+                <DialogClose
+                  aria-label="Fechar"
+                  className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-300"
+                >
+                  <X className="h-4 w-4" />
+                  <span className="hidden sm:inline">Fechar</span>
+                </DialogClose>
+              </div>
             </div>
           </DialogHeader>
           {detalheQ.isLoading ? (
@@ -2558,6 +2916,41 @@ export default function Ordens() {
                     </>
                   )}
                 </div>
+
+                {(detalhe as any).lancamentoRecorrente && (
+                  <div className="rounded-lg border border-violet-300 bg-violet-50 p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Calendar className="h-4 w-4 text-violet-600" />
+                      <span className="text-sm font-semibold text-violet-900">Lançamento recorrente mensal</span>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                      <div>
+                        <span className="text-[10px] uppercase tracking-wide text-violet-500">Início</span>
+                        <p className="font-medium text-violet-950">
+                          {(detalhe as any).recorrenciaDataInicio ? new Date(`${(detalhe as any).recorrenciaDataInicio}T00:00:00`).toLocaleDateString("pt-BR") : "—"}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-[10px] uppercase tracking-wide text-violet-500">Final</span>
+                        <p className="font-medium text-violet-950">
+                          {(detalhe as any).recorrenciaDataFim ? new Date(`${(detalhe as any).recorrenciaDataFim}T00:00:00`).toLocaleDateString("pt-BR") : "—"}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-[10px] uppercase tracking-wide text-violet-500">Quantidade</span>
+                        <p className="font-medium text-violet-950">
+                          {contarMesesRecorrencia((detalhe as any).recorrenciaDataInicio, (detalhe as any).recorrenciaDataFim)} meses
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-[10px] uppercase tracking-wide text-violet-500">Valor mensal</span>
+                        <p className="font-bold text-violet-950">
+                          {parseFloat((detalhe as any).total || "0").toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {(detalhe as { fornecedor?: FornecedorContatoData | null }).fornecedor && (
                   <FornecedorContatoCard contato={(detalhe as { fornecedor?: FornecedorContatoData | null }).fornecedor} />
@@ -3004,7 +3397,9 @@ export default function Ordens() {
                         { s: "aprovada",         label: "Aprovar",           icon: CheckCircle,  cls: "bg-blue-600 hover:bg-blue-500 text-white" },
                         { s: "entregue_parcial", label: "Entrega Parcial",   icon: Truck,        cls: "bg-orange-500 hover:bg-orange-400 text-white" },
                         { s: "entregue",         label: "Marcar Entregue",   icon: PackageCheck, cls: "bg-emerald-600 hover:bg-emerald-500 text-white" },
-                      ].filter(a => a.s !== detalhe.status).filter(a => !(detalhe.status === "aguardando_aprovacao_extra" && a.s === "aprovada")).map(a => (
+                      ].filter(a => a.s !== detalhe.status)
+                        .filter(a => !((detalhe as any).tipo === "epi" && a.s === "entregue"))
+                        .filter(a => !(detalhe.status === "aguardando_aprovacao_extra" && a.s === "aprovada")).map(a => (
                         <Button key={a.s} size="sm" onClick={() => {
                           if (["aprovada", "entregue", "entregue_parcial"].includes(a.s)) {
                             setDataLancamentoInput(new Date().toISOString().split("T")[0]);
@@ -3018,7 +3413,19 @@ export default function Ordens() {
                           <a.icon className="h-3 w-3" /> {a.label}
                         </Button>
                       ))}
+                      {(detalhe as any).tipo === "epi" && (
+                        <Button
+                          size="sm"
+                          onClick={() => { setEpiEscolhas({}); setShowEnvioSstDialog(true); }}
+                          className="bg-blue-600 hover:bg-blue-500 text-white text-xs gap-1"
+                        >
+                          <ShieldCheck className="h-3 w-3" /> Enviar para SST
+                        </Button>
+                      )}
                     </div>
+                    {(detalhe as any).tipo === "epi" && (
+                      <p className="text-[10px] text-blue-600">Confirme os EPIs comprados antes do recebimento. O estoque será enviado somente ao SST, nunca ao Almoxarifado genérico.</p>
+                    )}
                   </div>
                 )}
 
@@ -3146,6 +3553,93 @@ export default function Ordens() {
               </div>
             );
           })() : null}
+        </DialogContent>
+      </Dialog>
+      {/* Dialog — Conferência de recebimento OC EPI no SST */}
+      <Dialog open={showEnvioSstDialog} onOpenChange={open => { if (!open) { setShowEnvioSstDialog(false); setEpiEscolhas({}); } }}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" style={{ background: "#ffffff", color: "#111827" }}>
+          <DialogHeader>
+            <DialogTitle className="text-blue-700 flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5" /> Conferir e enviar EPI ao SST
+            </DialogTitle>
+          </DialogHeader>
+          {previaEpiQ.isLoading ? (
+            <div className="py-10 flex justify-center"><Loader2 className="h-5 w-5 animate-spin text-blue-500" /></div>
+          ) : previaEpiQ.data ? (
+            <div className="space-y-4">
+              <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
+                Destino: <strong>{previaEpiQ.data.oc.destino === "obra" ? "estoque SST da obra da OC" : "estoque SST Central"}</strong>.
+                Revise cada correspondência antes de confirmar.
+              </div>
+              {previaEpiQ.data.itens.map((item: any) => {
+                const escolha = epiEscolhas[item.id] ?? {};
+                return (
+                  <div key={item.id} className="rounded-lg border border-gray-200 p-3 space-y-2">
+                    <div className="flex justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-sm text-gray-900">{item.descricao}</p>
+                        <p className="text-xs text-gray-500">Quantidade: {item.quantidade} {item.unidade || "un"}</p>
+                      </div>
+                      {item.importado && <span className="text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-1 h-fit">Já enviado</span>}
+                    </div>
+                    {!item.importado && (
+                      <>
+                        <Select
+                          value={escolha.epiId ? String(escolha.epiId) : "__novo__"}
+                          onValueChange={value => setEpiEscolhas(prev => ({
+                            ...prev,
+                            [item.id]: value === "__novo__" ? { novoNome: prev[item.id]?.novoNome || item.descricao } : { epiId: Number(value) },
+                          }))}
+                        >
+                          <SelectTrigger className="bg-white border-gray-300 text-sm"><SelectValue /></SelectTrigger>
+                          <SelectContent className="bg-white">
+                            {item.sugestoes?.length > 0 && <div className="px-2 py-1 text-[10px] font-semibold text-gray-400">SUGESTÕES</div>}
+                            {item.sugestoes?.map((epi: any) => (
+                              <SelectItem key={`s-${epi.id}`} value={String(epi.id)}>{epi.nome}{epi.tamanho ? ` — ${epi.tamanho}` : ""} ({epi.score}% compatível)</SelectItem>
+                            ))}
+                            {previaEpiQ.data.catalogo
+                              .filter((epi: any) => !item.sugestoes?.some((s: any) => s.id === epi.id))
+                              .map((epi: any) => <SelectItem key={epi.id} value={String(epi.id)}>{epi.nome}{epi.tamanho ? ` — ${epi.tamanho}` : ""}</SelectItem>)}
+                            <SelectItem value="__novo__">Criar novo item de EPI…</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        {!escolha.epiId && (
+                          <Input
+                            value={escolha.novoNome ?? item.descricao}
+                            onChange={event => setEpiEscolhas(prev => ({ ...prev, [item.id]: { novoNome: event.target.value } }))}
+                            placeholder="Nome do novo EPI"
+                            className="bg-white border-gray-300 text-sm"
+                          />
+                        )}
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : <p className="py-8 text-center text-sm text-gray-500">Não foi possível carregar a conferência do SST.</p>}
+          <DialogFooter className="pt-3">
+            <Button variant="outline" onClick={() => setShowEnvioSstDialog(false)} disabled={confirmarEnvioSst.isPending}>Cancelar</Button>
+            <Button
+              className="bg-blue-600 hover:bg-blue-500 text-white gap-1.5"
+              disabled={confirmarEnvioSst.isPending || !previaEpiQ.data || previaEpiQ.data.itens.some((item: any) => !item.importado && !epiEscolhas[item.id]?.epiId && !epiEscolhas[item.id]?.novoNome?.trim())}
+              onClick={() => {
+                if (!previaEpiQ.data) return;
+                confirmarEnvioSst.mutate({
+                  ordemId: previaEpiQ.data.oc.id,
+                  itens: previaEpiQ.data.itens.filter((item: any) => !item.importado).map((item: any) => {
+                    const escolha = epiEscolhas[item.id] ?? {};
+                    return escolha.epiId
+                      ? { ordemItemId: item.id, epiId: escolha.epiId }
+                      : { ordemItemId: item.id, novoEpi: { nome: escolha.novoNome!.trim() } };
+                  }),
+                });
+              }}
+            >
+              {confirmarEnvioSst.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+              Confirmar recebimento SST
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
       {/* Dialog — Data de Lançamento (Rev. 4075) */}

@@ -41,6 +41,12 @@ type ContaForm = {
   // Rev. 3876 — Cheque especial
   chequeEspecialAtivo: boolean;
   chequeEspecialLimite: string;
+  // Rev. 5031 — CNAB240 Caixa (folha de pagamento)
+  convenio: string;
+  cnabCodigoCompromisso: string;
+  cnabTipoCompromisso: string;
+  cnabParametroTransmissao: string;
+  cnabAmbiente: "T" | "P";
 };
 
 const emptyForm: ContaForm = {
@@ -61,6 +67,11 @@ const emptyForm: ContaForm = {
   telefoneAgencia: "",
   chequeEspecialAtivo: false,
   chequeEspecialLimite: "",
+  convenio: "",
+  cnabCodigoCompromisso: "",
+  cnabTipoCompromisso: "02",
+  cnabParametroTransmissao: "",
+  cnabAmbiente: "P",
 };
 
 function fmtDataBR(iso?: string | null): string {
@@ -151,6 +162,11 @@ export default function ContasBancarias() {
       chequeEspecialAtivo: Number(conta.chequeEspecialAtivo) === 1,
       chequeEspecialLimite: conta.chequeEspecialLimite != null && Number(conta.chequeEspecialLimite) > 0
         ? String(conta.chequeEspecialLimite) : "",
+      convenio: conta.convenio || "",
+      cnabCodigoCompromisso: conta.cnabCodigoCompromisso || conta.cnab_codigo_compromisso || "",
+      cnabTipoCompromisso: conta.cnabTipoCompromisso || conta.cnab_tipo_compromisso || "02",
+      cnabParametroTransmissao: conta.cnabParametroTransmissao || conta.cnab_parametro_transmissao || "",
+      cnabAmbiente: (conta.cnabAmbiente || conta.cnab_ambiente) === "T" ? "T" : "P",
     });
     setDialogOpen(true);
   };
@@ -189,6 +205,21 @@ export default function ContasBancarias() {
       chequeEspecialLimite: form.chequeEspecialAtivo ? (parseFloat(form.chequeEspecialLimite) || 0) : 0,
     };
 
+    // Rev. 5031 — CNAB240 Caixa: campos do convênio (só validados quando preenchidos)
+    if (form.cnabCodigoCompromisso && !/^\d{4}$/.test(form.cnabCodigoCompromisso)) {
+      toast.error("Código do Compromisso deve ter exatamente 4 dígitos"); return;
+    }
+    if (form.cnabParametroTransmissao && !/^\d{2}$/.test(form.cnabParametroTransmissao)) {
+      toast.error("Parâmetro de Transmissão deve ter exatamente 2 dígitos"); return;
+    }
+    const cnabFields = {
+      convenio: form.convenio.trim() || undefined,
+      cnabCodigoCompromisso: form.cnabCodigoCompromisso.trim() || undefined,
+      cnabTipoCompromisso: form.cnabTipoCompromisso.trim() || undefined,
+      cnabParametroTransmissao: form.cnabParametroTransmissao.trim() || undefined,
+      cnabAmbiente: form.cnabAmbiente || undefined,
+    };
+
     if (editingId) {
       updateMut.mutate({
         id: editingId,
@@ -203,6 +234,7 @@ export default function ContasBancarias() {
         ...saldoFields,
         ...contatoFields,
         ...chequeEspecialFields,
+        ...cnabFields,
       });
     } else {
       createMut.mutate({ companyId, companyIds, banco: form.banco,
@@ -216,6 +248,7 @@ export default function ContasBancarias() {
         ...saldoFields,
         ...contatoFields,
         ...chequeEspecialFields,
+        ...cnabFields,
       });
     }
   };
@@ -741,6 +774,52 @@ export default function ContasBancarias() {
               </label>
             </div>
           </section>
+
+          {/* ── CNAB240 Caixa — Rev. 5031 (só para contas Caixa) ── */}
+          {(form.codigoBanco === "104" || /caixa econ/i.test(form.banco)) && !form.caixaInterno && (
+            <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <header className="flex items-center gap-2.5 px-5 py-3 border-b border-slate-100 bg-slate-50/70">
+                <div className="w-8 h-8 rounded-lg bg-blue-600/10 flex items-center justify-center shrink-0">
+                  <CreditCard className="h-4 w-4 text-blue-700" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-[#1B2A4A]">Convênio CNAB240 — Folha de Pagamento (Caixa)</h3>
+                  <p className="text-[11px] text-slate-400">Dados fornecidos pela Caixa ao contratar o serviço de pagamento de salários — necessários para gerar o arquivo de remessa</p>
+                </div>
+              </header>
+              <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <Label>Convênio (até 6 dígitos)</Label>
+                  <Input value={form.convenio} inputMode="numeric" maxLength={6}
+                    onChange={e => setForm(f => ({ ...f, convenio: e.target.value.replace(/\D/g, "") }))}
+                    placeholder="Ex: 123456" />
+                </div>
+                <div>
+                  <Label>Código do Compromisso (4 dígitos)</Label>
+                  <Input value={form.cnabCodigoCompromisso} inputMode="numeric" maxLength={4}
+                    onChange={e => setForm(f => ({ ...f, cnabCodigoCompromisso: e.target.value.replace(/\D/g, "") }))}
+                    placeholder="Ex: 1234" />
+                </div>
+                <div>
+                  <Label>Parâmetro de Transmissão (2 dígitos)</Label>
+                  <Input value={form.cnabParametroTransmissao} inputMode="numeric" maxLength={2}
+                    onChange={e => setForm(f => ({ ...f, cnabParametroTransmissao: e.target.value.replace(/\D/g, "") }))}
+                    placeholder="Ex: 01" />
+                </div>
+                <div>
+                  <Label>Ambiente</Label>
+                  <Select value={form.cnabAmbiente} onValueChange={(v: "T" | "P") => setForm(f => ({ ...f, cnabAmbiente: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="P">Produção (pagamento real)</SelectItem>
+                      <SelectItem value="T">Teste (validação do arquivo)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-slate-400 mt-1">Use "Teste" para validar o primeiro arquivo com a Caixa antes de enviar em produção.</p>
+                </div>
+              </div>
+            </section>
+          )}
 
           {/* ── Seção 3 · Contatos da agência (Rev. 3384) ── */}
           <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">

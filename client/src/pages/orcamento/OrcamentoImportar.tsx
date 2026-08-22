@@ -582,6 +582,29 @@ export default function OrcamentoImportar() {
           { duration: 20000 }
         );
       }
+      // Rev. 5025 — transparência: avisa quais itens tiveram valores RECALCULADOS
+      // pelo sistema (unitário = total ÷ qtd quando a coluna unitária não foi lida;
+      // MO ajustada para fechar o total). Antes era silencioso.
+      const unitRec: string[] = (res as any).unitariosRecalculados ?? [];
+      const unitRecCount: number = (res as any).unitariosRecalculadosCount ?? 0;
+      if (unitRecCount > 0) {
+        const amostraU = unitRec.slice(0, 10).join(", ");
+        const sufixoU = unitRecCount > unitRec.length ? ` (e mais ${unitRecCount - unitRec.length})` : "";
+        toast.warning(
+          `Atenção: ${unitRecCount} item(ns) tiveram o valor UNITÁRIO recalculado pelo sistema (total ÷ quantidade), pois a coluna de unitário não foi lida ou veio zerada nessas linhas. Itens: ${amostraU}${sufixoU}. Se os unitários da planilha deveriam prevalecer, confira o mapeamento de colunas e reimporte.`,
+          { duration: 25000 }
+        );
+      }
+      const moAj: string[] = (res as any).moAjustados ?? [];
+      const moAjCount: number = (res as any).moAjustadosCount ?? 0;
+      if (moAjCount > 0) {
+        const amostraM = moAj.slice(0, 10).join(", ");
+        const sufixoM = moAjCount > moAj.length ? ` (e mais ${moAjCount - moAj.length})` : "";
+        toast.warning(
+          `${moAjCount} item(ns) misto(s) tiveram a M.O. ajustada para fechar o total da linha (diferença acima de R$ 0,05 entre Mat + MO e o Total da planilha). Itens: ${amostraM}${sufixoM}.`,
+          { duration: 20000 }
+        );
+      }
       setTimeout(() => setStep("bdi"), 800);
     } catch (err: any) {
       clearInterval(interval);
@@ -826,7 +849,7 @@ export default function OrcamentoImportar() {
                     </div>
                     <span className="text-2xl font-bold text-purple-600">{metaPerc}%</span>
                   </div>
-                  <Slider min={5} max={40} step={1} value={[metaPerc]}
+                  <Slider min={0} max={100} step={1} value={[metaPerc]}
                     onValueChange={([v]) => setMetaPerc(v)} />
                   <p className="text-xs text-muted-foreground">Padrão recomendado: 20%</p>
                 </div>

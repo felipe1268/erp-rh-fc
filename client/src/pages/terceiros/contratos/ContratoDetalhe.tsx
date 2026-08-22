@@ -19,6 +19,8 @@ import {
   CheckCircle2, FilePlus, Camera, Paperclip, Wallet,
 } from "lucide-react";
 import { gerarContratoAssinadoPdf } from "@/lib/contratoAssinadoPdf";
+import { buildContratoPreviewSrcDoc } from "@/lib/contratoSrcDoc";
+import { buildAnexoSections } from "@/lib/contratoAnexoPages";
 import { toast } from "sonner";
 import { formatNumeroOcDisplay } from "@shared/numeroOc";
 import { OcMiniDialog } from "@/components/compras/ItemCatalogo";
@@ -347,9 +349,47 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
   ]);
 
   const criarEnvelopeMut = trpc.integrasign.criarEnvelope.useMutation({
-    onSuccess: (r) => { toast.success("Envelope criado no FcSign!"); setShowFcSignModal(false); navigate(`/integrasign?envelope=${r.id}`); },
     onError: (e) => toast.error(e.message),
   });
+  // Rev. 5055 — opção de GERAR LINK de assinatura além do e-mail (pedido do usuário).
+  const [fcSignModo, setFcSignModo] = useState<"email" | "link">("email");
+  const enviarEnvelopeContratoMut = trpc.integrasign.enviarParaAssinatura.useMutation({ onError: (e) => toast.error(e.message) });
+  const [contratoLinksEnvId, setContratoLinksEnvId] = useState<number | null>(null);
+  const contratoLinksEnv = trpc.integrasign.getEnvelope.useQuery(
+    { companyId: contrato?.companyId ?? 0, id: contratoLinksEnvId ?? 0 },
+    { enabled: !!contratoLinksEnvId && !!contrato, refetchInterval: 5000 },
+  );
+  const reenviarEmailContratoMut = trpc.integrasign.reenviarNotificacao.useMutation({ onError: (e) => toast.error(e.message) });
+  // Recuperável: se a criação deu certo mas o ENVIO falhou, guarda o id do
+  // rascunho e o retry só reenvia (não cria envelope duplicado).
+  const envRascunhoRef = useRef<number | null>(null);
+  const handleCriarEnvelopeContrato = async () => {
+    const empNome = (contrato as any).empresa?.razaoSocial || "";
+    try {
+      const env: any = envRascunhoRef.current != null
+        ? { id: envRascunhoRef.current }
+        : await criarEnvelopeMut.mutateAsync({
+        companyId: contrato.companyId,
+        contratoTerceiroId: id,
+        obraId: contrato.obraId || undefined,
+        titulo: `${contrato.numeroContrato} — ${empNome}`.trim(),
+        descricao: contrato.descricao || undefined,
+        textoContrato: textoAtual || undefined,
+        signatarios: fcSignSignatarios.map((s, i) => ({ ...s, ordemAssinatura: i + 1, empresaNome: s.empresaNome || empNome })),
+      });
+      envRascunhoRef.current = env.id;
+      await enviarEnvelopeContratoMut.mutateAsync({ companyId: contrato.companyId, envelopeId: env.id, enviarEmail: fcSignModo === "email" } as any);
+      envRascunhoRef.current = null;
+      setShowFcSignModal(false);
+      if (fcSignModo === "link") {
+        setContratoLinksEnvId(env.id);
+        toast.success("Links de assinatura ativos! Copie e envie para cada signatário.");
+      } else {
+        toast.success("Envelope enviado! Os signatários foram notificados por e-mail.");
+        navigate(`/integrasign?envelope=${env.id}`);
+      }
+    } catch { /* onError já mostrou o toast */ }
+  };
 
   const restaurarMut = trpc.terceiroContratos.restaurarRevisao.useMutation({
     onSuccess: (r) => { toast.success(`Revisão restaurada — v${r.versao}`); setTextoEditado(null); utils.terceiroContratos.getContrato.invalidate({ id }); utils.terceiroContratos.listarRevisoes.invalidate({ contratoId: id }); },
@@ -369,6 +409,65 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
     );
 
   const textoAtual = textoEditado ?? contrato?.textoContrato ?? null;
+
+  const contratoAssinadoDoc = (contrato as any)?.assinaturaStatus === "concluido";
+  // Rev. 5054 — pedido do user (IMG_5554): o documento no detalhe deve ter a
+  // formatação EXATAMENTE igual ao template da Central / prévia da cotação.
+  // Renderiza o HTML do servidor (mesmo motor buildFcDocument da prévia) em vez
+  // da aproximação linha-a-linha em texto puro. Texto puro segue como fonte do
+  // FcSign/PDF e como fallback (template legado sem HTML ou edição manual).
+  const docHtmlQ = trpc.terceiroContratos.documentoHtml.useQuery(
+    { contratoId: id },
+    // refetchOnWindowFocus off: um refetch trocava a identidade de anexosContrato
+    // e CANCELAVA a renderização dos anexos no meio (iPad: trocar de app/print).
+    { enabled: tab === "documento" && id > 0 && !!contrato && !contratoAssinadoDoc && !textoEditado, staleTime: 5 * 60_000, refetchOnWindowFocus: false },
+  );
+  // Rev. 5054 — anexos (proposta, projetos, cronograma, outros) renderizados
+  // DENTRO do documento após as assinaturas, igual à prévia da cotação
+  // (pedido do user IMG_5555: "Cadê os anexos?").
+  const [docAnexoSections, setDocAnexoSections] = useState<Array<{ titulo: string; subtitulo?: string; pages: string[] }> | null>(null);
+  const [docAnexoStatus, setDocAnexoStatus] = useState<"idle" | "renderizando" | "ok" | "erro">("idle");
+  // Chave ESTÁVEL: identidade do objeto anexosContrato muda a cada refetch do RQ
+  // e reiniciava/cancelava a renderização (páginas de PDF levam vários segundos).
+  const [docAnexoTentativa, setDocAnexoTentativa] = useState(0);
+  const docAnexoKey = `${docAnexoTentativa}|${(docHtmlQ.data as any)?.propostaUrl ?? ""}|${JSON.stringify((docHtmlQ.data as any)?.anexosContrato ?? null)}`;
+  const docAnexoDadosRef = useRef<any>(null);
+  docAnexoDadosRef.current = docHtmlQ.data;
+  useEffect(() => {
+    let cancel = false;
+    setDocAnexoSections(null);
+    const dados = docAnexoDadosRef.current;
+    if (!(dados as any)?.propostaUrl) { setDocAnexoStatus("idle"); return; }
+    setDocAnexoStatus("renderizando");
+    (async () => {
+      try {
+        const sections = await buildAnexoSections(dados, () => cancel);
+        if (cancel) return;
+        if (sections) { setDocAnexoSections(sections); setDocAnexoStatus("ok"); }
+        else setDocAnexoStatus("erro");
+      } catch (e) {
+        console.error("[ContratoDetalhe] Falha ao renderizar anexos:", e);
+        if (!cancel) setDocAnexoStatus("erro");
+      }
+    })();
+    return () => { cancel = true; };
+  }, [docAnexoKey]);
+  const [docLogoDataUrl, setDocLogoDataUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let cancel = false;
+    setDocLogoDataUrl(null);
+    const logoUrl = String((docHtmlQ.data as any)?.docMeta?.empresa?.logoUrl || "");
+    if (!logoUrl) return;
+    (async () => {
+      try {
+        // iframe sandboxed (origem opaca, sem cookie) não carrega /uploads autenticado
+        const blob = await fetch(logoUrl).then(r => { if (!r.ok) throw new Error("logo"); return r.blob(); });
+        const dataUrl = await new Promise<string>((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result as string); fr.onerror = rej; fr.readAsDataURL(blob); });
+        if (!cancel && dataUrl.startsWith("data:image/")) setDocLogoDataUrl(dataUrl);
+      } catch { /* fallback: URL absoluta no builder */ }
+    })();
+    return () => { cancel = true; };
+  }, [(docHtmlQ.data as any)?.docMeta?.empresa?.logoUrl]);
 
   // Rev. 3065 — o módulo Terceiros é SÓ visualizar/assinar/baixar (o template é editado em
   // Configurações › Contrato Terceiros). Quando o contrato ainda não tem texto e não está
@@ -1312,6 +1411,7 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
               const janela = modo === "abrir" ? window.open("", "_blank") : null;
               try {
                 await gerarContratoAssinadoPdf({
+                  anexoProposta: (contrato as any)?.propostaUrl ? { url: (contrato as any).propostaUrl, nome: (contrato as any).propostaNome } : null,
                   titulo: d.envelope.titulo || contrato.numeroContrato || "Contrato",
                   textoContrato: d.envelope.textoContrato || textoAtual || "",
                   hash: d.envelope.hashDocumento || "",
@@ -1451,9 +1551,12 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
                   disabled={!textoAtual || criarEnvelopeMut.isPending}
                   onClick={() => {
                     const emp = (contrato as any).empresa;
+                    // Rev. 5005 — o servidor injeta Financeiro e Sócio Administrador
+                    // deterministicamente; ordem final: Contratado → Gestor do Projeto →
+                    // Financeiro → Sócio Administrador (testemunhas opcionais no meio).
                     setFcSignSignatarios([
                       { papel: "fornecedor", ordemAssinatura: 1, nome: emp?.responsavelNome || emp?.razaoSocial || "", email: emp?.email || "", cpfCnpj: emp?.cnpj || "", cargo: "Representante Legal", empresaNome: emp?.razaoSocial || "" },
-                      { papel: "gestor_projeto", ordemAssinatura: 2, nome: (contrato as any).obraResponsavel || "", email: "", cpfCnpj: "", cargo: "Gestor de Projeto", empresaNome: "FC Engenharia" },
+                      { papel: "gestor_projeto", ordemAssinatura: 2, nome: (contrato as any).obraResponsavel || "", email: (contrato as any).obraResponsavelEmail || "", cpfCnpj: "", cargo: "Gestor de Projeto", empresaNome: "FC Engenharia" },
                     ]);
                     setShowFcSignModal(true);
                   }}
@@ -1471,6 +1574,17 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
                   <Clock className="w-3 h-3" />
                   v{(contrato as any).versaoTexto}
                 </span>
+              )}
+              {(contrato as any).propostaUrl && (
+                <button
+                  type="button"
+                  className="text-[11px] text-emerald-700 flex items-center gap-1 hover:underline"
+                  title="Proposta comercial do fornecedor — anexada automaticamente ao final do PDF do contrato (Anexo I)"
+                  onClick={() => window.open((contrato as any).propostaUrl, "_blank", "noopener")}
+                >
+                  <Paperclip className="w-3 h-3" />
+                  Anexo I: {(contrato as any).propostaNome || "Proposta Comercial"}
+                </button>
               )}
               <div className="ml-auto flex items-center gap-2">
                 <div className="flex items-center gap-1 text-[10px] text-gray-400">
@@ -1505,6 +1619,44 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
                     </Button>
                   </>
                 )}
+              </div>
+            ) : (docHtmlQ.data as any)?.html && !textoEditado && !contratoAssinadoDoc ? (
+              /* Rev. 5054 — formatação 100% fiel ao template da Central / prévia da
+                 cotação: mesmo motor buildFcDocument, HTML preenchido no servidor. */
+              <div className="bg-gray-100 rounded-xl p-4 sm:p-8">
+                {/* Rev. 5054 — status VISÍVEL dos anexos (antes falhava/cancelava em silêncio) */}
+                {docAnexoStatus === "renderizando" && (
+                  <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 text-xs">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+                    Renderizando anexos (proposta, projetos...) — eles aparecem no fim do documento em alguns segundos.
+                  </div>
+                )}
+                {docAnexoStatus === "erro" && (
+                  <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs">
+                    <span>Não foi possível renderizar os anexos dentro do documento.</span>
+                    <button
+                      className="underline font-medium"
+                      onClick={() => { setDocAnexoTentativa(t => t + 1); }}
+                    >
+                      Tentar de novo
+                    </button>
+                    {(docHtmlQ.data as any)?.propostaUrl && (
+                      <button className="underline font-medium" onClick={() => window.open((docHtmlQ.data as any).propostaUrl, "_blank", "noopener")}>Abrir proposta</button>
+                    )}
+                  </div>
+                )}
+                {docAnexoStatus === "ok" && !!docAnexoSections?.length && (
+                  <div className="mb-3 px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs">
+                    {docAnexoSections.length} anexo{docAnexoSections.length > 1 ? "s" : ""} incluído{docAnexoSections.length > 1 ? "s" : ""} no fim do documento: {docAnexoSections.map(s => s.titulo.split("—")[0].trim()).join(", ")}
+                  </div>
+                )}
+                <iframe
+                  title="Documento do contrato"
+                  className="w-full bg-white rounded-sm shadow-xl border border-gray-300"
+                  style={{ minHeight: "calc(100vh - 300px)" }}
+                  sandbox=""
+                  srcDoc={buildContratoPreviewSrcDoc(docHtmlQ.data, docAnexoSections ?? undefined, docLogoDataUrl, (user as any)?.name || (user as any)?.email)}
+                />
               </div>
             ) : (
               <div className="flex justify-center">
@@ -1561,7 +1713,7 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
                           const trimmed = line.trim();
                           if (!trimmed) return <div key={idx} className="h-3" />;
 
-                          if (/^\{\{FLUXOGRAMA_PAGAMENTO\}\}$/.test(trimmed)) {
+                          if (/^\{\{FLUXOGRAMA_PAGAMENTO\}\}$/.test(trimmed) || /^MEDIÇÃO \(dia .*→.*PAGAMENTO/.test(trimmed)) {
                             const c = contrato as any;
                             return (
                               <FluxogramaPagamento
@@ -1668,35 +1820,50 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
                       })()}
                     </div>
 
-                    {/* Assinaturas */}
+                    {/* Assinaturas — Rev. 5005: 4 obrigatórias na ordem Contratado →
+                        Gestor do Projeto → Financeiro → Sócio Administrador; 2 testemunhas opcionais */}
                     <div className="border-t border-gray-300 px-[72px] py-6 mt-auto relative z-10">
                       <div className="grid grid-cols-2 gap-20 mt-4">
                         <div className="text-center">
                           <div className="mt-16 pt-2 border-t border-gray-500">
-                            <p className="text-[11px] font-bold text-gray-700 uppercase tracking-wide">Contratante</p>
-                            <p className="text-[10px] text-gray-500 mt-0.5">{cd?.razaoSocial || "—"}</p>
+                            <p className="text-[11px] font-bold text-gray-700 uppercase tracking-wide">1. Contratada</p>
+                            <p className="text-[10px] text-gray-500 mt-0.5">{contrato.empresa?.razaoSocial || "—"}</p>
                           </div>
                         </div>
                         <div className="text-center">
                           <div className="mt-16 pt-2 border-t border-gray-500">
-                            <p className="text-[11px] font-bold text-gray-700 uppercase tracking-wide">Contratada</p>
-                            <p className="text-[10px] text-gray-500 mt-0.5">{contrato.empresa?.razaoSocial || "—"}</p>
+                            <p className="text-[11px] font-bold text-gray-700 uppercase tracking-wide">2. Gestor do Projeto</p>
+                            <p className="text-[10px] text-gray-500 mt-0.5">{(contrato as any).obraResponsavel || "—"}</p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-20">
+                        <div className="text-center">
+                          <div className="mt-16 pt-2 border-t border-gray-500">
+                            <p className="text-[11px] font-bold text-gray-700 uppercase tracking-wide">3. Financeiro</p>
+                            <p className="text-[10px] text-gray-500 mt-0.5">{(contrato as any).testemunhaFinanceiro || "—"}</p>
+                          </div>
+                        </div>
+                        <div className="text-center">
+                          <div className="mt-16 pt-2 border-t border-gray-500">
+                            <p className="text-[11px] font-bold text-gray-700 uppercase tracking-wide">4. Sócio Administrador</p>
+                            <p className="text-[10px] text-gray-500 mt-0.5">{cd?.razaoSocial || "—"}</p>
                           </div>
                         </div>
                       </div>
                       <div className="mt-10">
-                        <p className="text-[11px] font-bold text-gray-700 uppercase tracking-wide mb-4">Testemunhas</p>
+                        <p className="text-[11px] font-bold text-gray-700 uppercase tracking-wide mb-4">Testemunhas <span className="font-normal text-gray-400 normal-case">(opcional)</span></p>
                         <div className="grid grid-cols-2 gap-20">
                           <div className="text-center">
                             <div className="mt-8 pt-2 border-t border-gray-400">
-                              <p className="text-[10px] text-gray-700 font-medium">{(contrato as any).testemunhaFinanceiro || "_______________"}</p>
-                              <p className="text-[9px] text-gray-400 mt-0.5">Responsável Financeiro</p>
+                              <p className="text-[10px] text-gray-700 font-medium">_______________</p>
+                              <p className="text-[9px] text-gray-400 mt-0.5">Testemunha 1 — Nome / CPF</p>
                             </div>
                           </div>
                           <div className="text-center">
                             <div className="mt-8 pt-2 border-t border-gray-400">
-                              <p className="text-[10px] text-gray-700 font-medium">{(contrato as any).obraResponsavel || "_______________"}</p>
-                              <p className="text-[9px] text-gray-400 mt-0.5">Gestor de Projeto</p>
+                              <p className="text-[10px] text-gray-700 font-medium">_______________</p>
+                              <p className="text-[9px] text-gray-400 mt-0.5">Testemunha 2 — Nome / CPF</p>
                             </div>
                           </div>
                         </div>
@@ -1795,8 +1962,8 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
                         <Input className="h-8 text-xs" value={sig.nome} onChange={e => { const arr = [...fcSignSignatarios]; arr[idx] = { ...arr[idx], nome: e.target.value }; setFcSignSignatarios(arr); }} />
                       </div>
                       <div>
-                        <Label className="text-[10px] text-gray-400">Email</Label>
-                        <Input className="h-8 text-xs" type="email" value={sig.email} onChange={e => { const arr = [...fcSignSignatarios]; arr[idx] = { ...arr[idx], email: e.target.value }; setFcSignSignatarios(arr); }} />
+                        <Label className="text-[10px] text-gray-400">Email{fcSignModo === "link" ? " (opcional)" : ""}</Label>
+                        <Input className="h-8 text-xs" type="email" placeholder={fcSignModo === "link" ? "opcional — assina pelo link" : ""} value={sig.email} onChange={e => { const arr = [...fcSignSignatarios]; arr[idx] = { ...arr[idx], email: e.target.value }; setFcSignSignatarios(arr); }} />
                       </div>
                       <div>
                         <Label className="text-[10px] text-gray-400">CPF/CNPJ</Label>
@@ -1818,31 +1985,114 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
                 <Plus className="w-3 h-3" /> Adicionar signatário
               </button>
 
+              {/* Rev. 5055 — como notificar: e-mail automático OU links p/ compartilhar */}
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <button
+                  className={`rounded-xl border p-2.5 text-left transition ${fcSignModo === "email" ? "border-indigo-400 bg-indigo-50 ring-2 ring-indigo-100" : "border-gray-200 bg-white hover:border-gray-300"}`}
+                  onClick={() => setFcSignModo("email")}
+                >
+                  <span className="flex items-center gap-1.5 text-xs font-semibold text-gray-800"><Send className="w-3.5 h-3.5 text-indigo-600" /> Enviar por e-mail</span>
+                  <span className="block mt-0.5 text-[10px] text-gray-500">Cada signatário recebe o convite automaticamente.</span>
+                </button>
+                <button
+                  className={`rounded-xl border p-2.5 text-left transition ${fcSignModo === "link" ? "border-teal-400 bg-teal-50 ring-2 ring-teal-100" : "border-gray-200 bg-white hover:border-gray-300"}`}
+                  onClick={() => setFcSignModo("link")}
+                >
+                  <span className="flex items-center gap-1.5 text-xs font-semibold text-gray-800"><Link2 className="w-3.5 h-3.5 text-teal-600" /> Gerar links</span>
+                  <span className="block mt-0.5 text-[10px] text-gray-500">Você copia o link de cada um e envia por onde quiser (WhatsApp etc). E-mail fica opcional.</span>
+                </button>
+              </div>
+
               <div className="flex gap-3 mt-5 justify-end">
                 <Button variant="outline" onClick={() => setShowFcSignModal(false)}>Cancelar</Button>
                 <Button
-                  className="bg-indigo-600 hover:bg-indigo-700 gap-2"
-                  disabled={criarEnvelopeMut.isPending || fcSignSignatarios.some(s => !s.nome || !s.email)}
-                  onClick={() => {
-                    const empNome = (contrato as any).empresa?.razaoSocial || "";
-                    criarEnvelopeMut.mutate({
-                      companyId: contrato.companyId,
-                      contratoTerceiroId: id,
-                      obraId: contrato.obraId || undefined,
-                      titulo: `${contrato.numeroContrato} — ${empNome}`.trim(),
-                      descricao: contrato.descricao || undefined,
-                      textoContrato: textoAtual || undefined,
-                      signatarios: fcSignSignatarios.map((s, i) => ({ ...s, ordemAssinatura: i + 1, empresaNome: s.empresaNome || empNome })),
-                    });
-                  }}
+                  className={`gap-2 ${fcSignModo === "link" ? "bg-teal-600 hover:bg-teal-700" : "bg-indigo-600 hover:bg-indigo-700"}`}
+                  disabled={criarEnvelopeMut.isPending || enviarEnvelopeContratoMut.isPending || fcSignSignatarios.some(s => !s.nome || (fcSignModo === "email" && !s.email))}
+                  onClick={handleCriarEnvelopeContrato}
                 >
-                  {criarEnvelopeMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                  Criar Envelope
+                  {(criarEnvelopeMut.isPending || enviarEnvelopeContratoMut.isPending) ? <Loader2 className="w-4 h-4 animate-spin" /> : fcSignModo === "link" ? <Link2 className="w-4 h-4" /> : <Send className="w-4 h-4" />}
+                  {fcSignModo === "link" ? "Criar e gerar links" : "Criar Envelope"}
                 </Button>
               </div>
             </div>
           </div>
         )}
+
+        {/* Rev. 5055 — Links de assinatura do CONTRATO (assinar na hora, copiar link, WhatsApp) */}
+        <Dialog open={!!contratoLinksEnvId} onOpenChange={(o) => { if (!o) setContratoLinksEnvId(null); }}>
+          <DialogContent className="max-w-lg p-0 gap-0 overflow-y-auto max-h-[92dvh] rounded-2xl">
+            <div className="bg-gradient-to-br from-[#0f2027] via-[#1B2A4A] to-teal-800 px-5 pt-5 pb-4 text-white">
+              <h2 className="text-base font-bold flex items-center gap-2"><Link2 className="w-4 h-4" /> Links de assinatura</h2>
+              <p className="text-[11px] text-teal-100 mt-0.5">Contrato {contrato.numeroContrato} — envie o link de cada signatário por onde preferir. A ordem de assinatura é respeitada.</p>
+            </div>
+            <div className="p-4 space-y-2.5">
+              {contratoLinksEnv.isLoading && <div className="flex justify-center p-6"><Loader2 className="w-5 h-5 animate-spin text-teal-600" /></div>}
+              {(() => {
+                const sigs: any[] = ((contratoLinksEnv.data as any)?.signatarios || []);
+                const obrig = [...sigs].sort((a: any, b: any) => a.ordemAssinatura - b.ordemAssinatura);
+                const atualId = obrig.find((s: any) => s.papel !== "testemunha" && s.status !== "assinado")?.id ?? null;
+                const papelLbl = (s: any) => s.cargo || (s.papel === "fornecedor" ? "Fornecedor" : s.papel === "diretor" ? "Sócio Administrador" : s.papel === "testemunha" ? "Testemunha" : "Contratante");
+                return obrig.map((s: any, i: number) => {
+                  const assinado = s.status === "assinado";
+                  const ehAtual = s.id === atualId || s.papel === "testemunha";
+                  const link = `${window.location.origin}/integrasign/assinar/${s.token}`;
+                  const zapTxt = encodeURIComponent(`Olá, ${s.nome}! Segue o link para conferir e assinar o contrato ${contrato.numeroContrato} digitalmente pelo FCSign:\n\n${link}`);
+                  return (
+                    <div key={s.id} className={`rounded-2xl border bg-white p-3.5 ${ehAtual && !assinado ? "border-teal-300 ring-2 ring-teal-100" : assinado ? "border-emerald-200" : "border-slate-200 opacity-70"}`}>
+                      <div className="flex items-center gap-2.5">
+                        <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${assinado ? "bg-emerald-500" : ehAtual ? "bg-teal-600" : "bg-slate-300"}`}>
+                          {assinado ? <Check className="w-4 h-4" /> : i + 1}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-slate-800 break-words leading-tight">{s.nome}</p>
+                          <p className="text-[11px] text-slate-500">{papelLbl(s)}{s.email ? ` · ${s.email}` : " · sem e-mail (assina pelo link)"}</p>
+                        </div>
+                        {assinado && <span className="text-[10px] font-medium text-emerald-600">Assinado ✓</span>}
+                        {!assinado && !ehAtual && <span className="text-[10px] text-slate-400">aguarda a vez</span>}
+                      </div>
+                      {!assinado && (
+                        <div className="mt-2.5 flex flex-wrap gap-1.5">
+                          <Button size="sm" className="h-8 text-xs bg-teal-600 hover:bg-teal-700 text-white" disabled={!ehAtual}
+                            title={ehAtual ? "Colher a assinatura agora, neste aparelho" : "Ainda não é a vez desta pessoa"}
+                            onClick={() => window.open(link, "_blank", "noopener")}>
+                            <PenLine className="w-3.5 h-3.5 mr-1" /> Assinar agora
+                          </Button>
+                          <Button size="sm" variant="outline" className="h-8 text-xs"
+                            onClick={async () => { try { await navigator.clipboard.writeText(link); toast.success("Link copiado!"); } catch { toast.error("Não foi possível copiar"); } }}>
+                            <Link2 className="w-3.5 h-3.5 mr-1" /> Copiar link
+                          </Button>
+                          <Button size="sm" variant="outline" className="h-8 text-xs border-green-300 text-green-700 hover:bg-green-50"
+                            onClick={() => window.open(`https://wa.me/?text=${zapTxt}`, "_blank", "noopener")}>
+                            <Send className="w-3.5 h-3.5 mr-1" /> WhatsApp
+                          </Button>
+                          {s.email && (
+                            <Button size="sm" variant="outline" className="h-8 text-xs" disabled={reenviarEmailContratoMut.isPending}
+                              onClick={async () => {
+                                try {
+                                  await reenviarEmailContratoMut.mutateAsync({ companyId: contrato.companyId, signatarioId: s.id });
+                                  toast.success("Convite enviado por e-mail!");
+                                  contratoLinksEnv.refetch();
+                                } catch { /* onError já avisou */ }
+                              }}>
+                              <Send className="w-3.5 h-3.5 mr-1" /> E-mail
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                });
+              })()}
+              {(contratoLinksEnv.data as any)?.status === "concluido" && (
+                <div className="rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-2 text-xs text-emerald-700 font-medium">Todas as assinaturas concluídas! 🎉</div>
+              )}
+              <div className="flex gap-2 pt-1">
+                <Button variant="outline" size="sm" className="flex-1" onClick={() => navigate(`/integrasign?envelope=${contratoLinksEnvId}`)}>Abrir no FcSign</Button>
+                <Button size="sm" className="flex-1 bg-slate-800 hover:bg-slate-900" onClick={() => setContratoLinksEnvId(null)}>Fechar</Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Modal Gerar Medição */}
         {showGerarMedicao && (

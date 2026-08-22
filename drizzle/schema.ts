@@ -99,6 +99,8 @@ export const asos = pgTable("asos", {
         // Rev. 4622 — restrições OPERACIONAIS estruturadas (JSON array de keys
         // do dicionário shared/restricoesOperacionais.ts), definidas pelo RH.
         restricoesOperacionais: text(),
+        // Rev. 5044 — data em que a RENOVAÇÃO do exame foi agendada (informativo p/ alertas)
+        dataAgendamentoRenovacao: date({ mode: 'string' }),
         createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
         updatedAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
         deletedAt: timestamp({ mode: 'string' }),
@@ -720,6 +722,11 @@ export const companyBankAccounts = pgTable("company_bank_accounts", {
         emailGerente: varchar("email_gerente", { length: 150 }),
         enderecoAgencia: varchar("endereco_agencia", { length: 300 }),
         telefoneAgencia: varchar("telefone_agencia", { length: 30 }),
+        // Rev. 5031 — CNAB240 Caixa (folha): dados do convênio fornecidos pela Caixa.
+        cnabTipoCompromisso: varchar("cnab_tipo_compromisso", { length: 2 }),
+        cnabCodigoCompromisso: varchar("cnab_codigo_compromisso", { length: 4 }),
+        cnabParametroTransmissao: varchar("cnab_parametro_transmissao", { length: 2 }),
+        cnabAmbiente: varchar("cnab_ambiente", { length: 1 }),
         // Rev. 3876 — Cheque especial: flag de controle (liga/desliga alerta) + limite disponível.
         chequeEspecialAtivo: smallint("cheque_especial_ativo").default(0),
         chequeEspecialLimite: numeric("cheque_especial_limite", { precision: 15, scale: 2 }).default("0"),
@@ -1305,6 +1312,9 @@ export const employees = pgTable("employees", {
         dataListaNegra: date({ mode: 'string' }),
         codigoContabil: varchar({ length: 20 }),
         codigoInterno: varchar({ length: 10 }),
+        // Rev. 4984 — empregador que assina os DOCUMENTOS do colaborador:
+        // 'FC' (padrão) ou 'JF' (Julio Ferraz). Não altera vínculo no sistema.
+        empregadorDocumentos: varchar("empregador_documentos", { length: 4 }).default('FC'),
         // Rev. 2854 — Tamanhos de EPI/uniforme (mapeamento de compra + estoque)
         tamanhoCalcado: varchar({ length: 10 }),
         tamanhoCamisa: varchar({ length: 10 }),
@@ -1683,6 +1693,7 @@ export const evalAvaliacoes = pgTable("eval_avaliacoes", {
         updatedAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
         obraId: integer(),
         evaluatorName: varchar("evaluator_name", { length: 255 }),
+        actorUserId: integer("actor_user_id"),
 },
 (table) => [
         index("eav_company").on(table.companyId),
@@ -2512,6 +2523,9 @@ export const notificationLogs = pgTable("notification_logs", {
         lidoEm: timestamp({ mode: 'string' }),
         disparadoPor: varchar({ length: 255 }),
         disparadoPorId: integer(),
+        // Chave estável dos alertas automáticos. Linhas históricas/manuais
+        // permanecem nulas e fora da deduplicação.
+        dedupKey: varchar("dedup_key", { length: 255 }),
         enviadoEm: timestamp({ mode: 'string' }).defaultNow().notNull(),
         createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 },
@@ -2521,6 +2535,9 @@ export const notificationLogs = pgTable("notification_logs", {
         index("nl_tipo").on(table.companyId, table.tipoMovimentacao),
         index("nl_tracking").on(table.trackingId),
         index("nl_data").on(table.companyId, table.enviadoEm),
+        uniqueIndex("uq_notification_logs_auto_dedup")
+          .on(table.companyId, table.dedupKey)
+          .where(sql`${table.dedupKey} IS NOT NULL`),
 ]);
 
 export const notificationRecipients = pgTable("notification_recipients", {
@@ -2720,6 +2737,9 @@ export const obras = pgTable("obras", {
         terceiroDiaPagamento: integer("terceiro_dia_pagamento"),
         terceiroPrazoAprovacaoDias: integer("terceiro_prazo_aprovacao_dias"),
         terceiroPagamentoConformeRecebimento: smallint("terceiro_pagamento_conforme_recebimento").default(0),
+        // Rev. 5001 — Critério de Medição de MDO da obra (JSON: {tipo, condicoes[], descontos[]}).
+        // Obrigatório p/ gerar contrato de terceiros; injetado no texto do contrato ({{criteriosMedicao}}).
+        terceiroCriterioMedicao: text("terceiro_criterio_medicao"),
         gerenciadoraNome: varchar("gerenciadora_nome", { length: 255 }),
         gerenciadoraLogoUrl: text("gerenciadora_logo_url"),
         clienteLogoUrl: text("cliente_logo_url"),
@@ -2942,6 +2962,8 @@ export const pjMedicoes = pgTable("pj_medicoes", {
         aprovadoEm: timestamp({ mode: 'string' }),
         // you can use { mode: 'date' }, if you want to have Date as type for this column
         dataPagamento: date({ mode: 'string' }),
+        // Rev. 5143 — vencimento do pagamento da medição (vai pro Contas a Pagar ao aprovar)
+        dataVencimento: date({ mode: 'string' }),
         comprovanteUrl: text(),
         observacoes: text(),
         criadoPor: varchar({ length: 255 }),
@@ -3380,7 +3402,8 @@ export const systemCriteria = pgTable("system_criteria", {
         companyId: integer().notNull(),
         categoria: varchar({ length: 50 }).notNull(),
         chave: varchar({ length: 100 }).notNull(),
-        valor: varchar({ length: 255 }).notNull(),
+        // Rev. 5003 — TEXT: o JSON do critério de medição padrão (com datas) não cabe em 255
+        valor: text().notNull(),
         descricao: varchar({ length: 500 }),
         valorPadraoClt: varchar({ length: 255 }),
         unidade: varchar({ length: 50 }),
@@ -3581,13 +3604,30 @@ export const trainings = pgTable("trainings", {
         instrutor: varchar({ length: 255 }),
         entidade: varchar({ length: 255 }),
         certificadoUrl: text(),
+        // Rev. 5028 — assinaturas digitais do certificado (dataURL PNG)
+        assinaturaInstrutor: text(),
+        assinaturaColaborador: text(),
         statusTreinamento: text().default('Valido').notNull(),
         observacoes: text(),
+        // Rev. 5044 — data agendada da RECICLAGEM/renovação (turma marcada pelo TST)
+        dataAgendamentoRenovacao: date({ mode: 'string' }),
+        // Rev. 5051 — reciclagem concluída: novo treinamento aponta pro anterior (cadeia de histórico)
+        treinamentoAnteriorId: integer(),
         createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
         updatedAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
         deletedAt: timestamp({ mode: 'string' }),
         deletedBy: varchar({ length: 255 }),
         deletedByUserId: integer(),
+});
+
+// Rev. 5030 — sugestões de instrutor/entidade suprimidas pelo RH/master (tabela snake_case)
+export const trainingSugestaoExclusoes = pgTable("training_sugestao_exclusoes", {
+        id: serial("id").notNull(),
+        companyId: integer("company_id").notNull(),
+        tipo: text("tipo").notNull(), // 'instrutor' | 'entidade'
+        valor: text("valor").notNull(),
+        createdBy: integer("created_by"),
+        createdAt: timestamp("created_at", { mode: 'string' }).defaultNow(),
 });
 
 export const unmatchedDixiRecords = pgTable("unmatched_dixi_records", {
@@ -3691,6 +3731,8 @@ export const users = pgTable("users", {
         modulesAccess: text(),
         allowedObraIds: text("allowed_obra_ids"),
         status: varchar({ length: 20 }).default('ativo'),
+        // Rev. 5047 — CPF do usuário (identificação de signatário interno no FCSign)
+        cpf: varchar({ length: 14 }),
 },
 (table) => [
         index("users_openId_unique").on(table.openId),
@@ -3729,6 +3771,8 @@ export const vacationPeriods = pgTable("vacation_periods", {
         mediaDSRHE: varchar("media_dsr_he", { length: 20 }),
         ajusteInss: varchar("ajuste_inss", { length: 20 }),
         valorLiquido: varchar("valor_liquido", { length: 20 }),
+        // Rev. 5041 — férias complementar ("por fora") p/ quem tem complemento salarial
+        valorFeriasComplementar: varchar("valor_ferias_complementar", { length: 20 }),
         bonusValor: varchar("bonus_valor", { length: 20 }),
         bonusDesc: text("bonus_desc"),
         pensaoDesconto: varchar("pensao_desconto", { length: 20 }),
@@ -4035,6 +4079,48 @@ export const vrBenefits = pgTable("vr_benefits", {
 (table) => [
         index("vr_company_mes").on(table.companyId, table.mesReferencia),
         index("vr_employee").on(table.employeeId),
+]);
+
+// Rev. 5042 — VALE TRANSPORTE: controle mensal (jan-dez) por funcionário.
+// Um registro-mês (vt_meses) governa o ciclo aberto → consolidado → enviado
+// (título único no Contas a Pagar com anexo do boleto).
+export const vtMeses = pgTable("vt_meses", {
+        id: serial().notNull(),
+        companyId: integer().notNull(),
+        mesReferencia: varchar({ length: 7 }).notNull(), // YYYY-MM
+        status: text().default('aberto').notNull(), // aberto | consolidado | enviado
+        anexoUrl: text(),
+        anexoNome: varchar({ length: 255 }),
+        anexosJson: text(), // Rev. 5043 — lista [{url,nome}] p/ múltiplos boletos
+        taxasJson: text(), // Rev. 5044 — taxas administrativas [{descricao,valor}] (1 por boleto/fornecedor)
+        entryId: integer(),
+        consolidadoPor: varchar({ length: 255 }),
+        consolidadoEm: timestamp({ mode: 'string' }),
+        enviadoPor: varchar({ length: 255 }),
+        enviadoEm: timestamp({ mode: 'string' }),
+        createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
+        updatedAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
+},
+(table) => [
+        index("vt_meses_company_mes").on(table.companyId, table.mesReferencia),
+]);
+
+export const vtLancamentos = pgTable("vt_lancamentos", {
+        id: serial().notNull(),
+        companyId: integer().notNull(),
+        employeeId: integer().notNull(),
+        mesReferencia: varchar({ length: 7 }).notNull(), // YYYY-MM
+        diasTrabalhados: integer().default(0).notNull(),
+        valorDiario: varchar({ length: 20 }), // BR "4,50"
+        valorTotal: varchar({ length: 20 }),  // BR — dias × valorDiario
+        observacoes: text(),
+        criadoPor: varchar({ length: 255 }),
+        createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
+        updatedAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
+},
+(table) => [
+        index("vt_lanc_company_mes").on(table.companyId, table.mesReferencia),
+        index("vt_lanc_employee").on(table.employeeId),
 ]);
 
 export const vaFaltaAlerts = pgTable("va_falta_alerts", {
@@ -4366,6 +4452,12 @@ export const terceiroContratos = pgTable("terceiro_contratos", {
   textoContrato:     text("texto_contrato"),
   versaoTexto:       integer("versao_texto").default(0),
   descricao:         varchar({ length: 500 }).notNull(),
+  // Rev. 5013 — título/assunto do contrato digitado pelo usuário na prévia (ex.:
+  // "Contrato de Prestação de Serviços para Fornecimento de Mão de Obra").
+  tituloContrato:    varchar("titulo_contrato", { length: 200 }),
+  // Rev. 5019 — snapshot dos anexos do wizard da prévia (projetos/cronograma/
+  // outros + matriz de fornecimento) congelado na geração do contrato.
+  anexosContrato:    jsonb("anexos_contrato"),
   tipoContrato:      varchar("tipo_contrato", { length: 50 }).default("empreitada_global"), // empreitada_global | preco_unitario | misto
   // Rev. 2830 — NATUREZA do contrato (o QUE ele cobre), distinta do tipoContrato (modelo de PREÇO):
   // mao_de_obra (só MDO) | material (só material) | mao_de_obra_material (MDO + material juntos).
@@ -4400,10 +4492,18 @@ export const terceiroContratos = pgTable("terceiro_contratos", {
   fluxogramaEtapas:  text("fluxograma_etapas"),
   prazoEmissaoNf:    integer("prazo_emissao_nf").default(3),
   prazoLiberacaoOp:  integer("prazo_liberacao_op").default(5),
+  // Rev. 5000 — proposta comercial do fornecedor (anexo da cotação) copiada
+  // para o contrato na geração; vira ANEXO do PDF do contrato.
+  propostaUrl:       text("proposta_url"),
+  propostaNome:      varchar("proposta_nome", { length: 255 }),
   // === Cancelamento por admin master (Rev. 2909) ===
   canceladoPor:      varchar("cancelado_por", { length: 255 }),
   canceladoEm:       timestamp("cancelado_em", { mode: "string" }),
   motivoCancelamento: text("motivo_cancelamento"),
+  // Rev. — Critérios de Medição CONGELADOS no contrato (snapshot dos critérios
+  // "definidos" do catálogo global na criação; mudanças globais posteriores não
+  // afetam contratos em andamento).
+  criteriosMedicaoJson: text("criterios_medicao_json"),
 });
 
 export const terceiroContratoItens = pgTable("terceiro_contrato_itens", {
@@ -6656,10 +6756,10 @@ export const fornecedores = pgTable("fornecedores", {
   cidade:           varchar({ length: 100 }),
   estado:           varchar({ length: 2 }),
   cep:              varchar({ length: 10 }),
-  telefone:         varchar({ length: 20 }),
+  telefone:         varchar({ length: 60 }),
   email:            varchar({ length: 255 }),
   contatoNome:      varchar("contato_nome", { length: 255 }),
-  contatoCelular:   varchar("contato_celular", { length: 20 }),
+  contatoCelular:   varchar("contato_celular", { length: 60 }),
   contatoEmail:     varchar("contato_email", { length: 255 }),
   banco:            varchar({ length: 100 }),
   agencia:          varchar({ length: 20 }),
@@ -7032,7 +7132,9 @@ export const comprasCotacoes = pgTable("compras_cotacoes", {
   aprovadoPorNome:  varchar("aprovado_por_nome", { length: 255 }),
   aprovadoEm:       timestamp("aprovado_em", { mode: "string" }),
   criadoEm:         timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
-});
+}, (t) => [
+  index("idx_compras_cotacoes_company_created").on(t.companyId, t.criadoEm, t.id),
+]);
 
 export const comprasCotacoesItens = pgTable("compras_cotacoes_itens", {
   id:               serial().primaryKey(),
@@ -7050,7 +7152,9 @@ export const comprasCotacoesItens = pgTable("compras_cotacoes_itens", {
   somenteMo:        boolean("somente_mo").default(false),
   // Rev. 4255 — item pausado: não entra na cotação dos fornecedores mas permanece no mapa para referência.
   pausado:          boolean("pausado").default(false),
-});
+}, (t) => [
+  index("idx_compras_cotacoes_itens_cotacao").on(t.cotacaoId),
+]);
 
 export const comprasCotacaoFornecedores = pgTable("compras_cotacao_fornecedores", {
   id:               serial().primaryKey(),
@@ -7070,6 +7174,15 @@ export const comprasCotacaoFornecedores = pgTable("compras_cotacao_fornecedores"
   valorFrete:       numeric("valor_frete", { precision: 14, scale: 2 }).default("0"),
   transportadora:   varchar("transportadora", { length: 255 }),
   moduloMedicao:    varchar("modulo_medicao", { length: 30 }),
+  // Rev. 5012 — prazo do contrato definido nas Condições de Pagamento (pedido do
+  // user): data de início da mobilização + duração do contrato (dias corridos).
+  // Quando preenchidos, mandam nas datas da Cláusula 2ª do contrato de terceiros
+  // (têm prioridade sobre as datas derivadas do cronograma/EAP).
+  mobilizacaoDataInicio: varchar("mobilizacao_data_inicio", { length: 10 }),
+  duracaoContratoDias:   integer("duracao_contrato_dias"),
+  // Rev. 5019 — anexos do contrato (wizard da prévia): matriz de fornecimento,
+  // projetos por disciplina (Anexo II), cronograma (Anexo III) e outros (IV+).
+  anexosContrato:   jsonb("anexos_contrato"),
   isEstoque:        boolean("is_estoque").default(false),
   almoxarifadoOrigemId: integer("almoxarifado_origem_id"),
   cartaoId:         integer("cartao_id"),
@@ -7096,6 +7209,10 @@ export const comprasCotacaoRespostas = pgTable("compras_cotacao_respostas", {
   cotacaoId:     integer("cotacao_id").notNull(),
   fornecedorId:  integer("fornecedor_id").notNull(),
   itemId:        integer("item_id").notNull(),
+  // Atendimento pelo estoque: registra o item físico escolhido no seletor.
+  // Sem este vínculo, o fluxo precisava encontrar o item de novo pelo nome e
+  // podia apontar para outro cadastro de estoque com descrição semelhante.
+  almoxarifadoItemId: integer("almoxarifado_item_id"),
   propostaId:    integer("proposta_id"),
   quantidade:    numeric("quantidade", { precision: 14, scale: 4 }).default("0"),
   precoUnitario: numeric("preco_unitario", { precision: 14, scale: 4 }).default("0"),
@@ -7162,6 +7279,11 @@ export const comprasOrdens = pgTable("compras_ordens", {
   retencaoLiberacao:      varchar("retencao_liberacao", { length: 10 }).default("final"),
   numeroParcelas:     integer("numero_parcelas").default(1),
   parcelasJson:       jsonb("parcelas_json"),
+  // Rev. 5085 — lançamento mensal recorrente da OC no Financeiro.
+  // O total da OC é o valor DE CADA mês; o período define quantos títulos nascem.
+  lancamentoRecorrente: boolean("lancamento_recorrente").default(false),
+  recorrenciaDataInicio: varchar("recorrencia_data_inicio", { length: 10 }),
+  recorrenciaDataFim:    varchar("recorrencia_data_fim", { length: 10 }),
   contaBancariaId:    integer("conta_bancaria_id"),
   status:             varchar({ length: 30 }).notNull().default("pendente"),
   aprovacaoStatus:    varchar("aprovacao_status", { length: 30 }).default("aguardando"),
@@ -7218,7 +7340,9 @@ export const comprasOrdens = pgTable("compras_ordens", {
   canceladoPor:          varchar("cancelado_por", { length: 255 }),
   canceladoEm:           timestamp("cancelado_em", { mode: "string" }),
   motivoCancelamento:    text("motivo_cancelamento"),
-});
+}, (t) => [
+  index("idx_compras_ordens_company_cotacao").on(t.companyId, t.cotacaoId),
+]);
 
 export const comprasOrdensItens = pgTable("compras_ordens_itens", {
   id:               serial().primaryKey(),
@@ -7233,6 +7357,30 @@ export const comprasOrdensItens = pgTable("compras_ordens_itens", {
   precoUnitario:    numeric("preco_unitario", { precision: 14, scale: 4 }).default("0"),
   total:            numeric({ precision: 14, scale: 2 }).default("0"),
 });
+
+// Rastreia o recebimento de cada linha de OC EPI no SST. O vínculo único por
+// item de OC torna o envio idempotente e permite estornar somente o movimento
+// que aquela compra originou.
+export const comprasOcEpiImportacoes = pgTable("compras_oc_epi_importacoes", {
+  id: serial().primaryKey(),
+  companyId: integer("company_id").notNull(),
+  ordemId: integer("ordem_id").notNull(),
+  ordemItemId: integer("ordem_item_id").notNull(),
+  epiId: integer("epi_id").notNull(),
+  obraId: integer("obra_id"),
+  quantidade: integer().notNull(),
+  recebidoEm: timestamp("recebido_em", { mode: "string" }).defaultNow().notNull(),
+  recebidoPorId: integer("recebido_por_id"),
+  recebidoPorNome: varchar("recebido_por_nome", { length: 255 }),
+  estornadoEm: timestamp("estornado_em", { mode: "string" }),
+  estornadoPorId: integer("estornado_por_id"),
+  estornadoPorNome: varchar("estornado_por_nome", { length: 255 }),
+  estornoMotivo: text("estorno_motivo"),
+}, (t) => [
+  uniqueIndex("ux_compras_oc_epi_importacoes_ordem_item").on(t.ordemItemId),
+  index("idx_compras_oc_epi_importacoes_oc").on(t.companyId, t.ordemId),
+  index("idx_compras_oc_epi_importacoes_epi").on(t.epiId),
+]);
 
 export const comprasEntregasProgramadas = pgTable("compras_entregas_programadas", {
   id:               serial().primaryKey(),
@@ -7541,9 +7689,16 @@ export const almoxarifadoNotificacoes = pgTable("almoxarifado_notificacoes", {
   destinoModulo:    varchar("destino_modulo", { length: 30 }).notNull(),
   titulo:           varchar({ length: 255 }).notNull(),
   mensagem:         text(),
+  // Chave estável dos alertas automáticos. Não preenchemos o histórico para
+  // preservar todas as notificações já gravadas.
+  dedupKey:         varchar("dedup_key", { length: 255 }),
   lida:             boolean().default(false),
   criadoEm:         timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
-});
+}, (t) => [
+  uniqueIndex("uq_almoxarifado_notificacoes_auto_dedup")
+    .on(t.companyId, t.dedupKey)
+    .where(sql`${t.dedupKey} IS NOT NULL`),
+]);
 
 // ============================================================
 // MÓDULO FINANCEIRO COMPLETO — FC Engenharia (Rev. 341)
@@ -8919,6 +9074,9 @@ export const medicaoCampo = pgTable("medicao_campo", {
   boletimId:        integer("boletim_id"),
   medicaoId:        integer("medicao_id"), // Rev. 3078 — vínculo ao terceiro_medicoes (levantamento da medição de terceiro)
   origem:           varchar({ length: 20 }).default("cliente").notNull(), // Rev. 3078 — cliente | terceiro (IDs de contrato colidem entre tabelas)
+  // Planta é da OBRA: biblioteca de plantas ancora em obra_id (contrato_id=0).
+  // Campos-medição comuns seguem no contrato; contrato entra só no apontamento.
+  obraId:           integer("obra_id"),
   // Rev. 4797 — consolidação (Poka-Yoke): consolidado = levantamento só-leitura
   consolidadoEm:    timestamp("consolidado_em"),
   consolidadoPorNome: varchar("consolidado_por_nome", { length: 255 }),
@@ -8999,6 +9157,18 @@ export const medicaoCampoContornos = pgTable("medicao_campo_contornos", {
   observacoes:      text(),
   /** Rev. 4840 — posição customizada da etiqueta numerada (JSON {x,y} 0..1) */
   etiquetaJson:     text("etiqueta_json"),
+  // Rev. — desconto de vãos aplicado ao contorno (mapa de vãos da obra):
+  // detalhe por esquadria em vaos_json; desconto_vaos (m²) já abatido de
+  // area/quantidade; requadro_ml = metros lineares de requadro gerados aqui.
+  vaosJson:         text("vaos_json"),
+  descontoVaos:     numeric("desconto_vaos", { precision: 18, scale: 4 }),
+  requadroMl:       numeric("requadro_ml", { precision: 18, scale: 4 }),
+  // Rev. 4863 — MÚLTIPLOS itens da EAP por contorno (ex.: contrapiso = lona +
+  // brita + tela + concreto na MESMA área). JSON: [{orcamentoItemId, eapCodigo,
+  // descricao, unidade, modo:'fator'|'fixo', fator?, quantidade?}] — 'fator'
+  // multiplica a quantidade do contorno (m³=espessura, kg=taxa, m²=1);
+  // 'fixo' usa quantidade digitada (un, m avulso).
+  itensJson:        text("itens_json"),
   criadoEm:         timestamp("criado_em").defaultNow(),
   atualizadoEm:     timestamp("atualizado_em").defaultNow(),
   deletedAt:        timestamp("deleted_at"),
@@ -9057,6 +9227,77 @@ export const medicaoServicosCatalogo = pgTable("medicao_servicos_catalogo", {
 }, (t) => [
   index("idx_msc_company").on(t.companyId),
   uniqueIndex("uq_msc_company_chave").on(t.companyId, t.chave),
+]);
+
+// Rev. — CRITÉRIOS DE MEDIÇÃO (catálogo GLOBAL por empresa, em Configurações →
+// Critérios do Sistema). Cada ficha define COMO um serviço é medido: regra de
+// vão (limite m², desconto), requadro (paga? fórmula? quem paga) e status de
+// maturidade (rascunho → em_estudo → definido). Só critério "definido" entra em
+// contrato — e é CONGELADO (copiado) no contrato na criação.
+export const medicaoCriterios = pgTable("medicao_criterios", {
+  id:                    serial().primaryKey(),
+  companyId:             integer("company_id").notNull(),
+  servico:               varchar({ length: 100 }).notNull(),   // ex.: "Reboco Externo"
+  chaveServico:          varchar("chave_servico", { length: 50 }), // vínculo opcional à chave do catálogo de serviços do levantamento
+  unidade:               varchar({ length: 10 }).default("m2"),
+  status:                varchar({ length: 20 }).notNull().default("rascunho"), // rascunho | em_estudo | definido
+  limiteVaoM2:           numeric("limite_vao_m2", { precision: 10, scale: 2 }).default("2.00"),
+  descontaAcima:         varchar("desconta_acima", { length: 20 }).default("integral"), // integral | nao_desconta
+  pagaRequadro:          integer("paga_requadro").default(0),
+  requadroIncluiPeitoril: integer("requadro_inclui_peitoril").default(0), // 1 = perímetro fechado (4 lados); 0 = 2×altura + 1×largura
+  quemPagaRequadro:      varchar("quem_paga_requadro", { length: 100 }),  // texto livre: "Reboco Externo", "quem executar primeiro"...
+  referencia:            text(),   // critério de literatura (TCPO/SINAPI) — ponto de partida
+  regraFc:               text("regra_fc"), // decisão/ajuste da empresa
+  incluso:               text(),   // o que está incluso no preço (taliscamento, andaime...)
+  observacoes:           text(),
+  ordem:                 integer().default(0),
+  ativo:                 integer().default(1),
+  atualizadoPor:         varchar("atualizado_por", { length: 255 }),
+  criadoEm:              timestamp("criado_em").defaultNow(),
+  atualizadoEm:          timestamp("atualizado_em").defaultNow(),
+}, (t) => [index("idx_mcrit_company").on(t.companyId)]);
+
+// Rev. — MAPA DE VÃOS da obra: tipologias de esquadrias (J1, P1...) e os PINS
+// marcados sobre o DXF de cada pavimento. O pin é a identidade única do vão —
+// o requadro de um vão é pago UMA única vez (ledger nos campos requadro_*).
+export const obraEsquadriaTipologias = pgTable("obra_esquadria_tipologias", {
+  id:        serial().primaryKey(),
+  companyId: integer("company_id").notNull(),
+  obraId:    integer("obra_id").notNull(),
+  codigo:    varchar({ length: 20 }).notNull(),  // J1, P1...
+  tipo:      varchar({ length: 10 }).notNull(),  // porta | janela
+  largura:   numeric({ precision: 8, scale: 3 }).notNull(),  // m
+  altura:    numeric({ precision: 8, scale: 3 }).notNull(),  // m
+  peitoril:  numeric({ precision: 8, scale: 3 }),            // m (janela)
+  descricao: varchar({ length: 255 }),
+  criadoEm:  timestamp("criado_em").defaultNow(),
+  deletedAt: timestamp("deleted_at"),
+}, (t) => [index("idx_oetip_obra").on(t.obraId), index("idx_oetip_company").on(t.companyId)]);
+
+export const obraEsquadrias = pgTable("obra_esquadrias", {
+  id:           serial().primaryKey(),
+  companyId:    integer("company_id").notNull(),
+  obraId:       integer("obra_id").notNull(),
+  pavimentoId:  integer("pavimento_id").notNull(), // obra_pavimentos
+  tipologiaId:  integer("tipologia_id").notNull(), // obra_esquadria_tipologias
+  codigo:       varchar({ length: 30 }).notNull(), // J1-03 (sequencial por pavimento)
+  posX:         numeric("pos_x", { precision: 10, scale: 6 }).notNull(), // normalizado 0..1 sobre a bbox do DXF
+  posY:         numeric("pos_y", { precision: 10, scale: 6 }).notNull(),
+  // Ledger do requadro — carimbado atomicamente na 1ª cobrança; NULL = livre.
+  requadroPagoEm:         timestamp("requadro_pago_em"),
+  requadroPagoServico:    varchar("requadro_pago_servico", { length: 100 }),
+  requadroPagoOrigem:     varchar("requadro_pago_origem", { length: 20 }),  // cliente | terceiro
+  requadroPagoContratoId: integer("requadro_pago_contrato_id"),
+  requadroPagoCampoId:    integer("requadro_pago_campo_id"),    // medicao_campo
+  requadroPagoContornoId: integer("requadro_pago_contorno_id"), // medicao_campo_contornos
+  observacoes:  text(),
+  criadoEm:     timestamp("criado_em").defaultNow(),
+  atualizadoEm: timestamp("atualizado_em").defaultNow(),
+  deletedAt:    timestamp("deleted_at"),
+}, (t) => [
+  index("idx_oesq_pav").on(t.pavimentoId),
+  index("idx_oesq_obra").on(t.obraId),
+  index("idx_oesq_company").on(t.companyId),
 ]);
 
 export const medicaoCampoFotos = pgTable("medicao_campo_fotos", {
@@ -10998,12 +11239,66 @@ export const rhDocumentos = pgTable("rh_documentos", {
   assinaturaIp:    varchar("assinatura_ip", { length: 64 }),
   assinaturaGeo:   text("assinatura_geo"),
   termoAceito:     integer("termo_aceito").default(0),
+  // Rev. 5100 — Assinatura do empregador (separada e independente da do colaborador)
+  empregadorAssinaturaUrl:  text("empregador_assinatura_url"),
+  empregadorAssinaturaKey:  text("empregador_assinatura_key"),
+  empregadorAssinaturaHash: varchar("empregador_assinatura_hash", { length: 64 }),
+  empregadorAssinadoEm:     timestamp("empregador_assinado_em", { mode: "string" }),
+  // Identidade imutável do signatário: sempre o sócio administrador (employee.id e nome)
+  empregadorSocioId:        integer("empregador_socio_id"),          // employee.id do sócio
+  empregadorSocioNome:      varchar("empregador_socio_nome", { length: 255 }),
+  // Operador que disparou a ação (batch=admin user; automatico="Sistema")
+  empregadorOperadorNome:   varchar("empregador_operador_nome", { length: 255 }),
+  empregadorModo:           varchar("empregador_modo", { length: 20 }),  // "automatico" | "lote"
+  empregadorConfigId:       integer("empregador_config_id"),              // rh_employer_sig_config.id; preserva evidência mesmo após rotação
   criadoPorId:     integer("criado_por_id"),
   criadoPorNome:   varchar("criado_por_nome", { length: 255 }),
   createdAt:       timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
   updatedAt:       timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
   deletedAt:       timestamp("deleted_at", { mode: "string" }),
-});
+}, (table) => [
+  index("idx_rhdoc_emp").on(table.companyId, table.employeeId),
+  uniqueIndex("uq_rhdoc_checklist_ativo").on(table.companyId, table.employeeId, table.tipo)
+    .where(sql`${table.deletedAt} IS NULL AND (
+      ${table.tipo} IN (
+        'ficha_registro', 'contrato_experiencia', 'regulamento_interno',
+        'codigo_etica', 'termo_lgpd', 'termo_confidencialidade',
+        'termo_equipamentos', 'acordo_banco_horas', 'acordo_compensacao',
+        'contrato_trabalho_clt', 'adesao_plano_saude', 'adesao_vt',
+        'adesao_va', 'adesao_seguro_vida'
+      ) OR ${table.tipo} LIKE 'custom\\_%' ESCAPE '\\'
+    )`),
+]);
+
+// ============================================================================
+// Rev. 5100 — CONFIGURAÇÃO DE ASSINATURA DO EMPREGADOR (por empresa)
+// Armazena a assinatura digital institucional (PNG) do sócio administrador
+// para aplicação automática/em-lote nos documentos do dossiê. Controlado
+// apenas por admin/admin_master com acesso à empresa. Nunca exposto ao
+// colaborador ou à listagem pública.
+// ============================================================================
+export const rhEmployerSigConfig = pgTable("rh_employer_sig_config", {
+  id:                serial().primaryKey(),
+  companyId:         integer("company_id").notNull(),
+  // Sócio administrador vinculado (employee.id, tipoContrato='Socio')
+  socioAdminEmployeeId: integer("socio_admin_employee_id"),
+  socioAdminNome:    varchar("socio_admin_nome", { length: 255 }),
+  // Assinatura PNG do empregador armazenada no storage
+  assinaturaUrl:     text("assinatura_url"),
+  assinaturaKey:     text("assinatura_key"),
+  assinaturaHash:    varchar("assinatura_hash", { length: 64 }),
+  // Assinatura automática habilitada? (após assinatura do colaborador)
+  autoSignAtivo:     integer("auto_sign_ativo").notNull().default(0), // 0|1
+  // Auditoria de quem configurou
+  configuradoPorId:  integer("configurado_por_id"),
+  configuradoPorNome: varchar("configurado_por_nome", { length: 255 }),
+  configuradoEm:     timestamp("configurado_em", { mode: "string" }).defaultNow().notNull(),
+  updatedAt:         timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+  deletedAt:         timestamp("deleted_at", { mode: "string" }),
+}, (table) => [
+  index("idx_rhempsig_company").on(table.companyId),
+  uniqueIndex("uq_rhempsig_company").on(table.companyId).where(sql`${table.deletedAt} IS NULL`),
+]);
 
 // ============================================================================
 // Rev. 4672 — FASE 4: Dependentes do colaborador + PDI e Feedbacks (Avaliação)
@@ -11095,3 +11390,358 @@ export const whatsappMensagens = pgTable("whatsapp_mensagens", {
   timestampWa: timestamp("timestamp_wa", { mode: "string" }),
   createdAt:   timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
 });
+
+// ============================================================================
+// APONTAMENTO DE CAMPO — fato primário da produção diária (ronda do apontador).
+// O apontamento NUNCA gera dinheiro sozinho: é insumo p/ medição (pré-carga),
+// RDO, produtividade e avanço físico. Ledger anti-duplicidade: soma de
+// percentual por (contorno|local)+serviço não pode passar de 100%.
+// ============================================================================
+export const apontamentosProducao = pgTable("apontamentos_producao", {
+  id:              serial().primaryKey(),
+  companyId:       integer("company_id").notNull(),
+  obraId:          integer("obra_id").notNull(),
+  pavimentoId:     integer("pavimento_id"),                   // obra_pavimentos.id (opcional)
+  contornoId:      integer("contorno_id"),                    // medicao_campo_contornos.id (ambiente do levantamento)
+  local:           varchar({ length: 200 }),                  // texto livre quando não há contorno ("Apto 302", "Fachada Norte")
+  servico:         varchar({ length: 100 }).notNull(),        // nome da ficha do catálogo de critérios
+  contratoId:      integer("contrato_id"),                    // terceiro_contratos.id (sugerido/confirmado)
+  contratoItemId:  integer("contrato_item_id"),               // terceiro_contrato_itens.id (opcional)
+  percentual:      numeric({ precision: 5, scale: 2 }).notNull().default("100"), // % do trecho executado neste apontamento
+  quantidade:      numeric({ precision: 14, scale: 3 }),      // qtde absoluta correspondente (se conhecida)
+  unidade:         varchar({ length: 10 }).default("m2"),
+  fotoUrl:         varchar("foto_url", { length: 500 }),
+  observacoes:     text(),
+  data:            date().notNull(),                          // dia da execução
+  status:          varchar({ length: 20 }).notNull().default("apontado"), // apontado | validado | glosado
+  medicaoId:       integer("medicao_id"),                     // terceiro_medicoes.id quando consumido (fase 2)
+  criadoPor:       varchar("criado_por", { length: 255 }),
+  validadoPor:     varchar("validado_por", { length: 255 }),
+  validadoEm:      timestamp("validado_em"),
+  ativo:           integer().default(1),
+  criadoEm:        timestamp("criado_em").defaultNow(),
+}, (t) => [
+  index("idx_aponta_company_obra_data").on(t.companyId, t.obraId, t.data),
+  index("idx_aponta_contrato").on(t.contratoId),
+]);
+
+// Mapa de Frentes: qual contrato é responsável por qual pavimento da obra —
+// resolve automaticamente o contrato quando várias equipes fazem o mesmo serviço.
+export const contratoFrentes = pgTable("contrato_frentes", {
+  id:          serial().primaryKey(),
+  companyId:   integer("company_id").notNull(),
+  contratoId:  integer("contrato_id").notNull(),  // terceiro_contratos.id
+  obraId:      integer("obra_id").notNull(),
+  pavimentoId: integer("pavimento_id").notNull(), // obra_pavimentos.id
+  criadoPor:   varchar("criado_por", { length: 255 }),
+  criadoEm:    timestamp("criado_em").defaultNow(),
+}, (t) => [
+  index("idx_cfrente_contrato").on(t.contratoId),
+  uniqueIndex("uq_cfrente_contrato_pav").on(t.contratoId, t.pavimentoId),
+]);
+
+// Plano de Desligamento (layoff) — fila sequencial de demissões programadas por mês.
+// Visível para Admin Master + equipe RH (módulo rh-dp). Rev. layoff-v1.
+export const planoDesligamento = pgTable("plano_desligamento", {
+  id:           serial().primaryKey(),
+  companyId:    integer("company_id").notNull(),
+  employeeId:   integer("employee_id").notNull(),
+  mesPlanejado: varchar("mes_planejado", { length: 7 }).notNull(), // YYYY-MM
+  ordem:        integer().notNull().default(0),                    // sequência dentro do mês
+  status:       varchar({ length: 30 }).notNull().default("planejado"), // planejado | em_analise | ferias | aviso_previo | desligado | cancelado
+  observacoes:  text(),
+  criadoPor:    varchar("criado_por", { length: 255 }),
+  criadoEm:     timestamp("criado_em").defaultNow(),
+  atualizadoEm: timestamp("atualizado_em"),
+  deletedAt:    timestamp("deleted_at"),
+}, (t) => [
+  index("idx_plano_deslig_company_mes").on(t.companyId, t.mesPlanejado),
+]);
+
+// ============================================================================
+// MÓDULO REEMBOLSO (Rev. 5052)
+// Fundo fixo (caixinha) + solicitações de reembolso com despesas e comprovantes.
+// Aprovação gera título no Contas a Pagar (origem_modulo='reembolso').
+// ============================================================================
+export const reembolsoFundos = pgTable("reembolso_fundos", {
+  id:          serial().primaryKey(),
+  companyId:   integer("company_id").notNull(),
+  employeeId:  integer("employee_id").notNull(),
+  valorFundo:  varchar("valor_fundo", { length: 20 }).notNull(),   // dot-decimal "500.00"
+  descricao:   text(),
+  status:      varchar({ length: 20 }).notNull().default("ativo"), // ativo | encerrado
+  criadoPor:   varchar("criado_por", { length: 255 }),
+  criadoEm:    timestamp("criado_em").defaultNow(),
+  encerradoEm: timestamp("encerrado_em"),
+  deletedAt:   timestamp("deleted_at"),
+}, (t) => [
+  index("idx_reemb_fundo_company").on(t.companyId),
+]);
+
+export const reembolsoSolicitacoes = pgTable("reembolso_solicitacoes", {
+  id:            serial().primaryKey(),
+  companyId:     integer("company_id").notNull(),
+  employeeId:    integer("employee_id").notNull(),
+  fundoId:       integer("fundo_id"),                                 // NULL = reembolso avulso; preenchido = prestação de contas de caixinha
+  tipo:          varchar({ length: 20 }).notNull().default("avulso"), // avulso | caixinha
+  status:        varchar({ length: 30 }).notNull().default("pendente"), // pendente | aprovada | aprovada_parcial | reprovada | cancelada
+  motivo:        text(),                                              // motivo geral / observação do solicitante
+  motivoDecisao: text("motivo_decisao"),                              // justificativa do aprovador
+  valorTotal:    varchar("valor_total", { length: 20 }).notNull().default("0"),
+  valorAprovado: varchar("valor_aprovado", { length: 20 }),
+  // Snapshot dos dados de recebimento no momento da solicitação
+  pagamentoTipo:  varchar("pagamento_tipo", { length: 20 }),          // pix | conta
+  pagamentoChave: text("pagamento_chave"),                            // chave PIX ou "banco/agencia/conta"
+  aprovadoPorNome: varchar("aprovado_por_nome", { length: 255 }),
+  aprovadoEm:    timestamp("aprovado_em"),
+  criadoPorUserId: integer("criado_por_user_id"),
+  criadoPorNome: varchar("criado_por_nome", { length: 255 }),
+  criadoEm:      timestamp("criado_em").defaultNow(),
+  deletedAt:     timestamp("deleted_at"),
+}, (t) => [
+  index("idx_reemb_sol_company").on(t.companyId),
+  index("idx_reemb_sol_employee").on(t.employeeId),
+]);
+
+export const reembolsoDespesas = pgTable("reembolso_despesas", {
+  id:             serial().primaryKey(),
+  companyId:      integer("company_id").notNull(),
+  solicitacaoId:  integer("solicitacao_id").notNull(),
+  obraId:         integer("obra_id"),
+  categoria:      varchar({ length: 60 }).notNull().default("outros"), // transporte | alimentacao | material | hospedagem | combustivel | pedagio | outros
+  descricao:      text().notNull(),
+  dataDespesa:    varchar("data_despesa", { length: 10 }).notNull(),   // YYYY-MM-DD
+  valor:          varchar({ length: 20 }).notNull(),                    // dot-decimal
+  comprovanteUrl: text("comprovante_url"),
+  comprovanteKey: text("comprovante_key"),
+  // Rev. 5064 — dados do estabelecimento extraídos da notinha (IA)
+  estabelecimentoNome:     text("estabelecimento_nome"),
+  estabelecimentoCnpj:     varchar("estabelecimento_cnpj", { length: 20 }),
+  estabelecimentoEndereco: text("estabelecimento_endereco"),
+  // Rev. 5072 — rastreio antifraude do documento fiscal (chave de acesso NF-e/NFC-e, nº do cupom)
+  docChave: varchar("doc_chave", { length: 60 }),
+  docNumero: varchar("doc_numero", { length: 30 }),
+  docFingerprint: varchar("doc_fingerprint", { length: 140 }),
+  // Rev. 5062 — alocação de custo no planejamento orçamentário (EAP) da obra
+  orcamentoItemId: integer("orcamento_item_id"),
+  eapCodigo:      varchar("eap_codigo", { length: 40 }),
+  eapDescricao:   text("eap_descricao"),
+  // Rev. 5080 — itens discriminados da nota (IA extrai; [{qtd,descricao,valor}])
+  itensJson:      json("itens_json"),
+  // Rev. 5081 — vínculo com veículo da Frota (poka-yoke: evita duplo lançamento)
+  vehicleId:          integer("vehicle_id"),
+  vehiclePlaca:       varchar("vehicle_placa", { length: 15 }),   // snapshot da placa no momento do lançamento
+  vehicleModelo:      varchar("vehicle_modelo", { length: 100 }),
+  kmNaManutencao:     varchar("km_na_manutencao", { length: 15 }), // hodômetro no momento do serviço
+  kmProxima:          varchar("km_proxima", { length: 15 }),        // km prevista para próxima manutenção
+  frotaManutencaoId:  integer("frota_manutencao_id"), // fleet_maintenances.id criado na aprovação
+  status:         varchar({ length: 20 }).notNull().default("pendente"), // pendente | aprovada | reprovada
+  motivoReprovacao: text("motivo_reprovacao"),
+  criadoEm:       timestamp("criado_em").defaultNow(),
+  deletedAt:      timestamp("deleted_at"),
+}, (t) => [
+  index("idx_reemb_desp_sol").on(t.solicitacaoId),
+  index("idx_reemb_desp_company").on(t.companyId),
+]);
+
+// ─── FECHAMENTO CONSOLIDADO DE FORNECEDOR (Task #187) ─────────────────────────
+// Persiste um fechamento por fornecedor+janela de competência, transformando o
+// grupo sintético "grp:fech|…" em um registro auditável com ciclo de vida
+// (rascunho → conferido → pago → cancelado).
+// Regras: bucketiza por data_competencia (nunca vencimento); FD nunca entra;
+// um financial_entry só pode estar em UM fechamento não-cancelado (unique parcial).
+// Aditiva/self-heal (CREATE TABLE IF NOT EXISTS) — ZERO ALTER/DROP/DELETE.
+
+export const fechamentoFornecedor = pgTable("fechamento_fornecedor", {
+  id: serial().primaryKey(),
+  company_id: integer("company_id").notNull(),
+  // Fornecedor estável: empresas_terceiras.id (nunca nome, que pode mudar)
+  supplier_id: integer("supplier_id").notNull(),
+  supplier_nome: varchar("supplier_nome", { length: 255 }).notNull(),
+  // Vínculo estável com cadastro de fornecedor de Compras (empresas_terceiras.fornecedor_id)
+  // Gravado no momento da criação para validação de identidade nas OCs sem nome normalizado.
+  supplier_fornecedor_id: integer("supplier_fornecedor_id"), // nullable: nem todo terceiro tem vínculo
+  // Janela de competência calculada por _cicloWindow (ex.: "2025-01", "2025-01-16", "2025-W03")
+  janela: varchar("janela", { length: 20 }).notNull(),
+  ciclo: varchar("ciclo", { length: 30 }).notNull(), // mensal|quinzenal|quinzenal_semana|semanal
+  // Datas derivadas da janela
+  data_fechamento: varchar("data_fechamento", { length: 10 }), // último dia da janela (YYYY-MM-DD)
+  // Valores declarados na composição (gravados na confirmação)
+  valor_itens: numeric("valor_itens", { precision: 15, scale: 2 }).default("0").notNull(),
+  valor_ajustes: numeric("valor_ajustes", { precision: 15, scale: 2 }).default("0").notNull(),
+  valor_total: numeric("valor_total", { precision: 15, scale: 2 }).default("0").notNull(),
+  // Dados do boleto/pagamento declarados
+  boleto_codigo: varchar("boleto_codigo", { length: 100 }),
+  boleto_vencimento: varchar("boleto_vencimento", { length: 10 }), // YYYY-MM-DD
+  forma_pagamento: varchar("forma_pagamento", { length: 30 }),
+  num_parcelas: integer("num_parcelas").default(1),
+  prazo_parcela: integer("prazo_parcela").default(30),
+  observacoes: text("observacoes"),
+  // Estado do fechamento
+  status: varchar("status", { length: 20 }).default("rascunho").notNull(), // rascunho|conferido|pago|cancelado
+  // Auditoria de estado
+  confirmado_em: timestamp("confirmado_em", { mode: "string" }),
+  confirmado_por_id: integer("confirmado_por_id"),
+  confirmado_por_nome: varchar("confirmado_por_nome", { length: 255 }),
+  pago_em: timestamp("pago_em", { mode: "string" }),
+  pago_por_id: integer("pago_por_id"),
+  pago_por_nome: varchar("pago_por_nome", { length: 255 }),
+  cancelado_em: timestamp("cancelado_em", { mode: "string" }),
+  cancelado_por_id: integer("cancelado_por_id"),
+  cancelado_por_nome: varchar("cancelado_por_nome", { length: 255 }),
+  cancelado_motivo: text("cancelado_motivo"),
+  // Ciclo de criação
+  created_by_id: integer("created_by_id"),
+  created_by_nome: varchar("created_by_nome", { length: 255 }),
+  created_at: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  updated_at: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+}, (t) => [
+  index("idx_ff_company").on(t.company_id),
+  index("idx_ff_supplier").on(t.company_id, t.supplier_id),
+  index("idx_ff_janela").on(t.company_id, t.supplier_id, t.janela),
+  index("idx_ff_status").on(t.company_id, t.status),
+  // Unique partial: one active (rascunho|conferido|pago) closing per company+supplier+janela.
+  // Created via raw SQL in self-heal (WHERE clause not expressible in drizzle index builder).
+  // index("uq_ff_active_janela") — see _core/index.ts
+]);
+
+// ============================================================================
+// MÓDULO TELEFONES CORPORATIVOS (Rev. 5150)
+// telefones_planos   — plano/contrato com a operadora (1 por empresa)
+// telefones_linhas   — cada linha vinculada a um employee
+// telefones_uso      — consumo mensal por linha (competência YYYY-MM)
+// ============================================================================
+export const telefonesPlanos = pgTable("telefones_planos", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull(),
+  operadora: varchar("operadora", { length: 100 }),
+  nomePlano: varchar("nome_plano", { length: 200 }),
+  cnpjOperadora: varchar("cnpj_operadora", { length: 20 }),
+  telefoneOperadora: varchar("telefone_operadora", { length: 30 }),
+  valorMensal: varchar("valor_mensal", { length: 30 }),
+  diaVencimento: integer("dia_vencimento"),
+  dataInicio: varchar("data_inicio", { length: 10 }),
+  dataFim: varchar("data_fim", { length: 10 }),
+  multaRescisoria: varchar("multa_rescisoria", { length: 30 }),
+  fidelidadeMeses: integer("fidelidade_meses"),
+  franquiaDadosGb: varchar("franquia_dados_gb", { length: 30 }),
+  clausulasJson: text("clausulas_json"),
+  observacoes: text("observacoes"),
+  contratoUrl: text("contrato_url"),
+  contratoKey: text("contrato_key"),
+  contratoNome: varchar("contrato_nome", { length: 255 }),
+  iaExtraiu: integer("ia_extraiu").default(0),
+  iaExtraiuEm: timestamp("ia_extraiu_em", { mode: "string" }),
+  criadoPorId: integer("criado_por_id"),
+  criadoPorNome: varchar("criado_por_nome", { length: 255 }),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+}, (t) => [
+  index("idx_tel_planos_company").on(t.companyId),
+]);
+
+export const telefonesLinhas = pgTable("telefones_linhas", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull(),
+  planoId: integer("plano_id"),
+  numero: varchar("numero", { length: 30 }).notNull(),
+  operadora: varchar("operadora", { length: 100 }),
+  nomePlanoLinha: varchar("nome_plano_linha", { length: 200 }),
+  employeeId: integer("employee_id"),
+  employeeNome: varchar("employee_nome", { length: 255 }),
+  imei: varchar("imei", { length: 60 }),
+  dataAquisicao: varchar("data_aquisicao", { length: 10 }),
+  status: varchar("status", { length: 20 }).default("ativa").notNull(),
+  observacoes: text("observacoes"),
+  criadoPorId: integer("criado_por_id"),
+  criadoPorNome: varchar("criado_por_nome", { length: 255 }),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+  deletedAt: timestamp("deleted_at", { mode: "string" }),
+}, (t) => [
+  index("idx_tel_linhas_company").on(t.companyId),
+  index("idx_tel_linhas_employee").on(t.employeeId),
+]);
+
+export const telefonesUso = pgTable("telefones_uso", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull(),
+  linhaId: integer("linha_id").notNull(),
+  competencia: varchar("competencia", { length: 7 }).notNull(),
+  creditoUsado: varchar("credito_usado", { length: 30 }),
+  creditoTotal: varchar("credito_total", { length: 30 }),
+  dadosMb: varchar("dados_mb", { length: 30 }),
+  dadosTotalMb: varchar("dados_total_mb", { length: 30 }),
+  armazenamentoMb: varchar("armazenamento_mb", { length: 30 }),
+  armazenamentoTotalMb: varchar("armazenamento_total_mb", { length: 30 }),
+  observacoes: text("observacoes"),
+  lancadoPorId: integer("lancado_por_id"),
+  lancadoPorNome: varchar("lancado_por_nome", { length: 255 }),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+}, (t) => [
+  index("idx_tel_uso_linha").on(t.linhaId),
+  index("idx_tel_uso_company_comp").on(t.companyId, t.competencia),
+]);
+
+// Itens do fechamento: cada financial_entry vinculado ao fechamento.
+// Unique parcial: um financial_entry só pode estar em 1 fechamento não-cancelado.
+export const fechamentoFornecedorItens = pgTable("fechamento_fornecedor_itens", {
+  id: serial().primaryKey(),
+  fechamento_id: integer("fechamento_id").notNull(),
+  company_id: integer("company_id").notNull(),
+  entry_id: integer("entry_id").notNull(),
+  // Valor snapshot no momento da composição (para detectar divergência posterior)
+  valor_previsto_snapshot: numeric("valor_previsto_snapshot", { precision: 15, scale: 2 }).notNull(),
+  ativo: smallint("ativo").default(1).notNull(), // 0 = removido da composição
+  removido_em: timestamp("removido_em", { mode: "string" }),
+  removido_por_id: integer("removido_por_id"),
+  created_at: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+}, (t) => [
+  index("idx_ffi_fechamento").on(t.fechamento_id),
+  index("idx_ffi_company").on(t.company_id),
+  index("idx_ffi_entry").on(t.entry_id),
+]);
+
+// Ajustes do fechamento: valores adicionais/descontos assinados e tipados.
+// total_conferido = soma_itens_ativos + soma_ajustes (tolerância 5 centavos).
+export const fechamentoFornecedorAjustes = pgTable("fechamento_fornecedor_ajustes", {
+  id: serial().primaryKey(),
+  fechamento_id: integer("fechamento_id").notNull(),
+  company_id: integer("company_id").notNull(),
+  // Tipo do ajuste — sign rules enforced server-side:
+  //   desconto|glosa: valor MUST be <=0
+  //   acrescimo|juros|taxa|frete: valor MUST be >=0
+  //   correcao|arredondamento|outro: signed (any)
+  tipo: varchar("tipo", { length: 40 }).notNull(), // desconto|glosa|acrescimo|juros|taxa|frete|correcao|arredondamento|outro
+  descricao: text("descricao"),
+  valor: numeric("valor", { precision: 15, scale: 2 }).notNull(), // sinalizado: negativo = desconto
+  ativo: smallint("ativo").default(1).notNull(),
+  created_by_id: integer("created_by_id"),
+  created_at: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+}, (t) => [
+  index("idx_ffa_fechamento").on(t.fechamento_id),
+  index("idx_ffa_company").on(t.company_id),
+]);
+
+// Vínculos de pagamento: baixas geradas pelo pagarConsolidadoFornecedor via fechamentoId.
+// Permite rastrear quais financial_entry_baixas pertencem a este fechamento.
+export const fechamentoFornecedorPagamentos = pgTable("fechamento_fornecedor_pagamentos", {
+  id: serial().primaryKey(),
+  fechamento_id: integer("fechamento_id").notNull(),
+  company_id: integer("company_id").notNull(),
+  entry_id: integer("entry_id").notNull(),
+  baixa_id: integer("baixa_id").notNull(), // financial_entry_baixas.id
+  valor: numeric("valor", { precision: 15, scale: 2 }).notNull(),
+  data_pagamento: varchar("data_pagamento", { length: 10 }),
+  // Lotes/grupos dos instrumentos usados nesta tentativa de pagamento.
+  // Permanecem no histórico após o estorno para permitir reversão auditável.
+  cheque_proprio_lote_id: varchar("cheque_proprio_lote_id", { length: 36 }),
+  cheque_terceiro_grupo_id: varchar("cheque_terceiro_grupo_id", { length: 36 }),
+  estornado_em: timestamp("estornado_em", { mode: "string" }),
+  created_at: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+}, (t) => [
+  index("idx_ffp_fechamento").on(t.fechamento_id),
+  index("idx_ffp_company").on(t.company_id),
+  index("idx_ffp_baixa").on(t.baixa_id),
+]);

@@ -21,21 +21,23 @@ import { nowBrasilia, todayBrasiliaLong } from "@/lib/dateUtils";
 import { removeAccents } from "@/lib/searchUtils";
 import {
   Search, FileText, AlertTriangle, ShieldAlert, GraduationCap, Stethoscope,
-  Plus, Upload, Download, Eye, Trash2, FileUp, ClipboardList, Calendar, Pencil, Printer, FileDown, CheckSquare, Square, X, Paperclip, Clock, Shield, ExternalLink, Filter, CheckCircle2, Zap, Info, PenTool, Building2, BookOpen, Users, MessageSquare, Loader2, ChevronDown, ChevronRight, Lock, Sparkles, ClipboardCheck, XCircle, HardHat
+  Plus, Upload, Download, Eye, Trash2, FileUp, ClipboardList, Calendar, Pencil, Printer, FileDown, CheckSquare, Square, X, Paperclip, Clock, Shield, ExternalLink, Filter, CheckCircle2, Zap, Info, PenTool, Building2, BookOpen, Users, MessageSquare, Loader2, ChevronDown, ChevronRight, Lock, Sparkles, ClipboardCheck, XCircle, HardHat, Award, CalendarClock, ChevronUp, ArrowUpDown, RefreshCw, History
 } from "lucide-react";
+import { generateCertificadoTreinamentoPdf } from "@/lib/certificadoTreinamentoPdf";
 import { useState, useMemo, useEffect, useCallback, useRef, Fragment } from "react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAuth } from "@/_core/hooks/useAuth";
 import RaioXFuncionario from "@/components/RaioXFuncionario";
 import FullScreenDialog from "@/components/FullScreenDialog";
+import { SignaturePad } from "@/components/SignaturePad";
 import DocumentPreviewDialog, { canPreviewFile } from "@/components/DocumentPreviewDialog";
 import PersonPhoto from "@/components/PersonPhoto";
 import FichaEpiDialog from "@/components/FichaEpiDialog";
 import { CipaBadge } from "@/components/CipaBadge";
-import TermosResponsabilidadePanel from "@/components/controleDocumentos/TermosResponsabilidadePanel";
 import ChecklistDocsPanel from "@/components/controleDocumentos/ChecklistDocsPanel";
 import { TRAINING_RULES, TRAINING_CATEGORIES, calcularDataValidade, type TrainingRule } from "../../../shared/trainingRules";
+import { EMPLOYEE_STATUS_DESLIGADOS } from "@shared/modules";
 
 // ============ HELPERS ============
 function StatusBadge({ status, diasRestantes }: { status: string; diasRestantes: number }) {
@@ -46,6 +48,56 @@ function StatusBadge({ status, diasRestantes }: { status: string; diasRestantes:
     return <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${cor}`}>{status}</span>;
   }
   return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">VÁLIDO</Badge>;
+}
+
+// Rev. 5030 — input com sugestões e "x" para o master/RH excluir itens repetidos da lista
+function SugestaoInput({ value, onChange, items, canDelete, onDelete }: {
+  value: string;
+  onChange: (v: string) => void;
+  items: string[];
+  canDelete: boolean;
+  onDelete: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const h = (e: MouseEvent) => { if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
+  const q = (value || "").trim().toLowerCase();
+  const filtrados = q ? items.filter(i => i.toLowerCase().includes(q)) : items;
+  return (
+    <div ref={wrapRef} className="relative">
+      <Input
+        className="mt-1"
+        value={value}
+        onFocus={() => setOpen(true)}
+        onChange={e => { onChange(e.target.value); setOpen(true); }}
+        autoComplete="off"
+      />
+      {open && filtrados.length > 0 && (
+        <div className="absolute z-50 mt-1 w-full max-h-56 overflow-y-auto rounded-md border bg-white shadow-lg">
+          {filtrados.map((n) => (
+            <div key={n} className="flex items-center justify-between gap-2 px-3 py-1.5 text-sm hover:bg-blue-50 cursor-pointer"
+              onClick={() => { onChange(n); setOpen(false); }}>
+              <span className="truncate" title={n}>{n}</span>
+              {canDelete && (
+                <button
+                  type="button"
+                  className="shrink-0 rounded p-0.5 text-gray-400 hover:text-red-600 hover:bg-red-50"
+                  title="Excluir esta sugestão da lista"
+                  onClick={(e) => { e.stopPropagation(); if (confirm(`Excluir "${n}" das sugestões?`)) onDelete(n); }}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function formatTipoASO(tipo: string) {
@@ -86,11 +138,16 @@ function IntegracoesPanel({ companyId, onClickEmployee }: { companyId: number; o
   const { data: kpis } = trpc.integracoes.kpis.useQuery({ companyId }, { enabled: !!companyId });
   const { data: allClientes = [] } = trpc.clientes.list.useQuery({ companyId }, { enabled: !!companyId });
   const { data: todosEmp = [] } = trpc.employees.list.useQuery({ companyId }, { enabled: !!companyId });
-  // Inclui Ativo, Férias e Afastado (apenas Desligado/Inativo são excluídos)
+  // Ativos para novas integrações incluem Férias, Afastado, Licença, Aviso
+  // e Recluso. Somente os status terminais ficam de fora.
+  const statusDesligados = useMemo(
+    () => new Set(EMPLOYEE_STATUS_DESLIGADOS.map((status) => status.toLowerCase())),
+    [],
+  );
   const empAtivos = useMemo(() => (todosEmp as any[]).filter((e: any) => {
     const s = String(e.status || "").toLowerCase();
-    return s !== "desligado" && s !== "inativo";
-  }), [todosEmp]);
+    return !statusDesligados.has(s);
+  }), [todosEmp, statusDesligados]);
   const [empSearch, setEmpSearch] = useState("");
 
   const criarMut = trpc.integracoes.criar.useMutation({
@@ -1397,7 +1454,12 @@ function ValidadePanel({ companyId, companyIds, onClickEmployee, forceTipo, forc
                           </div>
                         </td>
                         <td className="p-2 text-xs">{doc.tipoDoc === "ASO" ? formatTipoASO(doc.descricao) : doc.descricao}</td>
-                        <td className="p-2 text-xs font-mono">{formatDate(doc.dataValidade)}</td>
+                        <td className="p-2 text-xs font-mono">
+                          {formatDate(doc.dataValidade)}
+                          {doc.dataAgendamentoRenovacao && (
+                            <div className="text-[10px] text-blue-700 font-medium font-sans">Agendado: {formatDate(doc.dataAgendamentoRenovacao)}</div>
+                          )}
+                        </td>
                         <td className="p-2">
                           <span className={`text-xs font-bold ${doc.status === "VENCIDO" ? "text-red-600" : doc.diasRestantes <= 30 ? "text-yellow-600" : doc.diasRestantes <= 60 ? "text-orange-600" : "text-green-600"}`}>
                             {doc.status === "VENCIDO" ? `${Math.abs(doc.diasRestantes)}d atrás` : `${doc.diasRestantes}d`}
@@ -2722,7 +2784,7 @@ function DocumentosPanel({ companyId, companyIds, employees, onClickEmployee, Em
                       onChange={e => {
                         const file = e.target.files?.[0];
                         if (file) {
-                          if (file.size > 10 * 1024 * 1024) { toast.error("Arquivo muito grande (máx 10MB)"); return; }
+                          if (file.size > 15 * 1024 * 1024) { toast.error("Arquivo muito grande (máx 15MB)"); return; }
                           setDocForm({ ...docForm, _file: file });
                         }
                       }}
@@ -2867,6 +2929,26 @@ export default function ControleDocumentos() {
   const nomeEmpresaCompleto = selectedCompany?.razaoSocial || selectedCompany?.nomeFantasia || "Empresa";
   const nomeEmpresaCurto = selectedCompany?.nomeFantasia || selectedCompany?.razaoSocial || "Empresa";
   const companyLogoUrl = selectedCompany?.logoUrl || "";
+  // Rev. 4986 — empregador documental "JF" (Julio Ferraz): advertências (e demais
+  // documentos por colaborador) saem com logo/razão/CNPJ da empresa registradora.
+  const { data: jfEmpresaDocs } = trpc.companies.empregadorJf.useQuery(undefined, { staleTime: 5 * 60 * 1000 });
+  const advEmpresaDocs = (a: any) => {
+    const isJF = a?.empregadorDocumentos === "JF" && !!jfEmpresaDocs;
+    const jf = jfEmpresaDocs as any;
+    return isJF
+      ? {
+          nome: jf.razaoSocial || jf.nomeFantasia || "JULIO FERRAZ PROJETOS E OBRAS LTDA",
+          logoUrl: jf.logoUrl || "",
+          logoBar: jf.logoUrl || "/logo-fc-branco-amarelo.png?v=1712",
+          empresa: { razaoSocial: jf.razaoSocial, cnpj: jf.cnpj || "", endereco: jf.endereco, cidade: jf.cidade, estado: jf.estado, logoUrl: jf.logoUrl },
+        }
+      : {
+          nome: nomeEmpresaCompleto,
+          logoUrl: companyLogoUrl,
+          logoBar: "/logo-fc-branco-amarelo.png?v=1712",
+          empresa: { razaoSocial: nomeEmpresaCompleto, cnpj: (selectedCompany as any)?.cnpj || "", endereco: (selectedCompany as any)?.endereco, cidade: (selectedCompany as any)?.cidade, estado: (selectedCompany as any)?.estado, logoUrl: companyLogoUrl },
+        };
+  };
   // Rev. 2747 — Advertência consome o template Vigente (advertencia) quando existir.
   const advTplQ = trpc.systemDocumentTemplates.getVigente.useQuery({ tipo: "advertencia" });
   const [search, setSearch] = useState("");
@@ -2888,12 +2970,133 @@ export default function ControleDocumentos() {
   const createAso = trpc.docs.asos.create.useMutation({ onSuccess: () => { refetchAso(); toast.success("ASO cadastrado!"); } });
   const updateAso = trpc.docs.asos.update.useMutation({ onSuccess: () => { refetchAso(); toast.success("ASO atualizado!"); } });
   const deleteAso = trpc.docs.asos.delete.useMutation({ onSuccess: () => { refetchAso(); toast.success("ASO excluído!"); } });
+  // Rev. 5044 — agendamento da renovação do exame (aparece aqui e na Central de Alertas)
+  const agendarRenovacaoMut = trpc.docs.asos.agendarRenovacao.useMutation({
+    onSuccess: (_d: any, vars: any) => { refetchAso(); toast.success(vars?.data ? "Renovação agendada!" : "Agendamento removido."); setAgendandoAso(null); },
+    onError: (e: any) => toast.error(e?.message || "Erro ao salvar agendamento"),
+  });
+  const [agendandoAso, setAgendandoAso] = useState<{ id: number; companyId: number; nome: string; data: string } | null>(null);
+  // Rev. 5044 — turma de reciclagem de TREINAMENTO (vários colaboradores, uma data)
+  const agendarTreinMut = trpc.docs.treinamentos.agendarRenovacao.useMutation({
+    onSuccess: (d: any, vars: any) => { refetchTrein(); toast.success(vars?.data ? `Turma agendada! ${d?.agendados ?? 0} treinamento(s).` : "Agendamento removido."); setAgendandoTrein(null); },
+    onError: (e: any) => toast.error(e?.message || "Erro ao salvar agendamento"),
+  });
+  const [agendandoTrein, setAgendandoTrein] = useState<{ base: any; data: string; extraIds: Set<number> } | null>(null);
   const uploadAsoDoc = trpc.docs.asos.uploadDoc.useMutation({ onSuccess: () => { refetchAso(); } });
 
   const createTrein = trpc.docs.treinamentos.create.useMutation({ onSuccess: () => { refetchTrein(); toast.success("Treinamento cadastrado!"); } });
   const updateTrein = trpc.docs.treinamentos.update.useMutation({ onSuccess: () => { refetchTrein(); toast.success("Treinamento atualizado!"); } });
   const deleteTrein = trpc.docs.treinamentos.delete.useMutation({ onSuccess: () => { refetchTrein(); toast.success("Treinamento excluído!"); } });
   const uploadTreinDoc = trpc.docs.treinamentos.uploadDoc.useMutation({ onSuccess: () => { refetchTrein(); toast.success("Certificado anexado!"); } });
+
+  // Rev. 5028 — assinaturas digitais do certificado + sugestões de instrutor/entidade
+  const [certTreinRow, setCertTreinRow] = useState<any | null>(null);
+  const [certSigInstrutor, setCertSigInstrutor] = useState<string | null>(null);
+  const [certSigColaborador, setCertSigColaborador] = useState<string | null>(null);
+  // Os pads só montam depois da hidratação (SignaturePad restaura `value` apenas no mount)
+  const [certSigHydrated, setCertSigHydrated] = useState(false);
+  const certAssinaturasQ = trpc.docs.treinamentos.getAssinaturas.useQuery(
+    { id: certTreinRow?.id ?? 0, companyId: certTreinRow?.companyId ?? companyId },
+    { enabled: !!certTreinRow, staleTime: 0 }
+  );
+  useEffect(() => {
+    if (certTreinRow && certAssinaturasQ.data) {
+      setCertSigInstrutor(certAssinaturasQ.data.assinaturaInstrutor || null);
+      setCertSigColaborador(certAssinaturasQ.data.assinaturaColaborador || null);
+      setCertSigHydrated(true);
+    }
+  }, [certTreinRow?.id, certAssinaturasQ.data]);
+  const salvarAssinaturasTrein = trpc.docs.treinamentos.salvarAssinaturas.useMutation();
+  // Rev. 5030 — master/RH exclui sugestão repetida da lista
+  const excluirSugestaoTrein = trpc.docs.treinamentos.excluirSugestao.useMutation({
+    onSuccess: () => { utilsTrein.docs.treinamentos.sugestoes.invalidate(); toast.success("Sugestão removida da lista."); },
+    onError: (e: any) => toast.error(e?.message || "Não foi possível remover a sugestão."),
+  });
+  const utilsTrein = trpc.useUtils();
+  // Rev. 5030 — visualizar o certificado direto (com ou sem assinaturas salvas)
+  const visualizarCertificadoTrein = async (t: any) => {
+    const winRef = window.open("", "_blank"); // aberto DENTRO do clique (anti popup-blocker)
+    try {
+      const sigs = await utilsTrein.client.docs.treinamentos.getAssinaturas.query({ id: t.id, companyId: t.companyId ?? companyId });
+      await gerarCertificadoTrein(t, { colaborador: sigs?.assinaturaColaborador || null, instrutor: sigs?.assinaturaInstrutor || null }, winRef);
+    } catch (e: any) {
+      try { winRef?.close(); } catch { /* noop */ }
+      toast.error(e?.message || "Falha ao gerar a visualização do certificado");
+    }
+  };
+  const { data: treinSugestoes } = trpc.docs.treinamentos.sugestoes.useQuery(
+    { companyId, companyIds },
+    { enabled: companyId > 0 || (companyIds && companyIds.length > 0), staleTime: 60_000 }
+  );
+
+  // Rev. 5044 — treinamento de NR-01 / Ordem de Serviço gera a OS Digital em vez do certificado
+  const isOsTrein = (t: any) => {
+    const norma = String(t?.norma || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+    const nome = String(t?.nome || "").toLowerCase();
+    return norma === "NR01" || norma === "NR1" || nome.includes("ordem de serv");
+  };
+
+  const gerarCertificadoTrein = async (t: any, assinaturas?: { colaborador?: string | null; instrutor?: string | null }, winRefIn?: Window | null) => {
+    // winRef deve ser aberto DENTRO do clique (anti popup-blocker); quem faz await antes passa o seu
+    const winRef = winRefIn !== undefined ? winRefIn : window.open("", "_blank");
+    // Rev. 5044 — treinamento NR-01/Ordem de Serviço: gera a OS Digital (com as
+    // assinaturas do dialog) em vez do certificado padrão
+    if (isOsTrein(t)) {
+      try {
+        const resp = await fetch("/api/download/ordem-servico-pdf", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            companyId: t.companyId ?? companyId,
+            employeeId: t.employeeId,
+            assinaturaColaborador: assinaturas?.colaborador ?? null,
+            assinaturaInstrutor: assinaturas?.instrutor ?? null,
+            instrutorNome: t.instrutor || null,
+          }),
+        });
+        if (!resp.ok) {
+          const j = await resp.json().catch(() => null);
+          throw new Error(j?.error || "Falha ao gerar a Ordem de Serviço");
+        }
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        if (winRef) winRef.location.href = url; else window.open(url, "_blank");
+        setTimeout(() => URL.revokeObjectURL(url), 120_000);
+      } catch (e: any) {
+        try { winRef?.close(); } catch { /* noop */ }
+        toast.error(e?.message || "Erro ao gerar a Ordem de Serviço");
+      }
+      return;
+    }
+    const isJF = t.empregadorDocumentos === "JF" && !!jfEmpresaDocs;
+    const jf = jfEmpresaDocs as any;
+    // Rev. 5032 — conteúdo programático: template ISO SST vigente > observações do treinamento
+    let conteudoProg: string = "";
+    try {
+      const tpl = await utilsTrein.client.docs.treinamentos.getConteudoProgramatico.query({
+        id: t.id, companyId: t.companyId ?? companyId,
+      });
+      if (tpl?.itens?.length) conteudoProg = tpl.itens.join("\n");
+    } catch { /* segue com as observações */ }
+    if (!conteudoProg) conteudoProg = (t.observacoes || "").trim();
+    return generateCertificadoTreinamentoPdf({
+      treinamentoId: t.id,
+      employeeNome: t.nomeCompleto || "",
+      treinamentoNome: t.nome || "",
+      norma: t.norma,
+      cargaHoraria: t.cargaHoraria,
+      dataRealizacao: t.dataRealizacao,
+      instrutor: t.instrutor,
+      entidade: t.entidade,
+      conteudoProgramatico: conteudoProg,
+      assinaturaColaborador: assinaturas?.colaborador ?? null,
+      assinaturaInstrutor: assinaturas?.instrutor ?? null,
+      empregadorJf: isJF ? { nome: jf.razaoSocial || jf.nomeFantasia || "JULIO FERRAZ PROJETOS E OBRAS LTDA", logoUrl: jf.logoUrl || "" } : null,
+      mode: "preview",
+      winRef,
+    }).catch((e) => { try { winRef?.close(); } catch { /* noop */ } toast.error(e?.message || "Erro ao gerar certificado"); });
+  };
 
   const createAtest = trpc.docs.atestados.create.useMutation({ onSuccess: () => { refetchAtest(); toast.success("Atestado cadastrado!"); } });
   const updateAtest = trpc.docs.atestados.update.useMutation({ onSuccess: () => { refetchAtest(); toast.success("Atestado atualizado!"); } });
@@ -3001,6 +3204,7 @@ export default function ControleDocumentos() {
 
   // ============ FILTER ============
   const [statusFilter, setStatusFilter] = useState("todos");
+  const [asoOrdenacao, setAsoOrdenacao] = useState<"padrao" | "alfabetico" | "vencimento">("padrao");
   const [expandedAsoEmps, setExpandedAsoEmps] = useState<Set<number>>(new Set());
   const toggleAsoEmp = (empId: number) => setExpandedAsoEmps(prev => {
     const next = new Set(prev);
@@ -3062,8 +3266,19 @@ export default function ControleDocumentos() {
       const g = map.get(key)!;
       (a.isHistorico ? g.historicos : g.atuais).push(a);
     }
-    return Array.from(map.values());
-  }, [filteredAso]);
+    const groups = Array.from(map.values());
+    if (asoOrdenacao === "alfabetico") {
+      groups.sort((a, b) => (a.nomeCompleto || "").localeCompare(b.nomeCompleto || "", "pt-BR"));
+    } else if (asoOrdenacao === "vencimento") {
+      const venc = (g: { atuais: any[]; historicos: any[] }) => {
+        const src = g.atuais.length > 0 ? g.atuais : g.historicos;
+        const datas = src.map((a: any) => String(a.dataValidade || "").slice(0, 10)).filter(Boolean);
+        return datas.length ? datas.sort()[0] : "9999-12-31";
+      };
+      groups.sort((a, b) => venc(a).localeCompare(venc(b)) || (a.nomeCompleto || "").localeCompare(b.nomeCompleto || "", "pt-BR"));
+    }
+    return groups;
+  }, [filteredAso, asoOrdenacao]);
 
   const filteredNrRules = useMemo(() => {
     if (!nrSearch.trim()) return null;
@@ -3084,14 +3299,55 @@ export default function ControleDocumentos() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
+  // Rev. 5051 — modo RECICLAGEM (só agendados) + histórico da cadeia de reciclagem
+  const [reciclagemMode, setReciclagemMode] = useState(false);
+  const [historicoTrein, setHistoricoTrein] = useState<any | null>(null);
+  const historicoTreinQuery = trpc.docs.treinamentos.historico.useQuery(
+    { id: historicoTrein?.id ?? 0, companyId: historicoTrein?.companyId ?? companyId, companyIds },
+    { enabled: !!historicoTrein }
+  );
+
+  // Rev. 5050 — ordenação clicável na aba Treinamentos (setinhas no cabeçalho)
+  const [treinSort, setTreinSort] = useState<{ key: string; dir: 1 | -1 } | null>(null);
+  const toggleTreinSort = (key: string) =>
+    setTreinSort(prev => (prev?.key === key ? (prev.dir === 1 ? { key, dir: -1 } : null) : { key, dir: 1 }));
+
   const filteredTrein = useMemo(() => {
-    let list = treinList as any[];
+    // Rev. 5051 — substituídos por reciclagem saem da lista principal (ficam no histórico)
+    let list = (treinList as any[]).filter((t: any) => !t.substituido);
+    if (reciclagemMode) list = list.filter((t: any) => !!t.dataAgendamentoRenovacao);
     if (search) {
       const s = removeAccents(search);
       list = list.filter((t: any) => removeAccents(t.nomeCompleto || '').includes(s) || removeAccents(t.nome || '').includes(s));
     }
+    if (treinSort) {
+      const { key, dir } = treinSort;
+      const statusRank = (t: any) => t.statusCalculado === 'vencido' ? 0 : t.statusCalculado === 'a_vencer' ? 1 : t.statusCalculado === 'valido' ? 2 : 3;
+      const val = (t: any) => {
+        switch (key) {
+          case 'colaborador': return removeAccents(t.nomeCompleto || '');
+          case 'treinamento': return removeAccents(t.nome || '');
+          case 'norma': return removeAccents(t.norma || '');
+          case 'realizacao': return t.dataRealizacao || '';
+          case 'validade': return t.dataValidade || '';
+          case 'status': return statusRank(t);
+          default: return '';
+        }
+      };
+      list = [...list].sort((a, b) => {
+        const va = val(a), vb = val(b);
+        if (va < vb) return -1 * dir;
+        if (va > vb) return 1 * dir;
+        return 0;
+      });
+    }
     return list;
-  }, [treinList, search]);
+  }, [treinList, search, treinSort, reciclagemMode]);
+
+  const reciclagemCount = useMemo(
+    () => (treinList as any[]).filter((t: any) => !t.substituido && !!t.dataAgendamentoRenovacao).length,
+    [treinList]
+  );
 
   const filteredAtest = useMemo(() => {
     let list = atestList as any[];
@@ -3119,7 +3375,7 @@ export default function ControleDocumentos() {
     input.onchange = async (e: any) => {
       const file = e.target.files[0];
       if (!file) return;
-      if (file.size > 10 * 1024 * 1024) { toast.error("Arquivo muito grande (máx 10MB)"); return; }
+      if (file.size > 15 * 1024 * 1024) { toast.error("Arquivo muito grande (máx 15MB)"); return; }
       const reader = new FileReader();
       reader.onload = async () => {
         const base64 = (reader.result as string).split(",")[1];
@@ -3163,6 +3419,18 @@ export default function ControleDocumentos() {
   };
 
   const openNewTrein = () => { setEditingTreinId(null); setTreinForm({}); setShowTreinDialog(true); };
+  // Rev. 5051 — reciclagem concluída: novo treinamento pré-preenchido, vinculado ao anterior
+  const openReciclarTrein = (t: any) => {
+    setEditingTreinId(null);
+    setTreinForm({
+      employeeId: t.employeeId, nome: t.nome || "", norma: t.norma || "", cargaHoraria: t.cargaHoraria || "",
+      instrutor: t.instrutor || "", entidade: t.entidade || "",
+      dataRealizacao: t.dataAgendamentoRenovacao || "",
+      companyId: t.companyId, // empresa DONA do treinamento (pode ser secundária do grupo)
+      treinamentoAnteriorId: t.id, _reciclagemDe: `${t.nome}${t.norma ? ` (${t.norma})` : ""} — vencimento ${formatDate(t.dataValidade)}`,
+    });
+    setShowTreinDialog(true);
+  };
   const openEditTrein = (t: any) => {
     setEditingTreinId(t.id);
     setTreinForm({ employeeId: t.employeeId, nome: t.nome || "", norma: t.norma || "", cargaHoraria: t.cargaHoraria || "", dataRealizacao: t.dataRealizacao || "", dataValidade: t.dataValidade || "", instrutor: t.instrutor || "", entidade: t.entidade || "", observacoes: t.observacoes || "" });
@@ -3301,6 +3569,7 @@ export default function ControleDocumentos() {
         cpf: emp?.cpf || "",
         funcao: emp?.funcao || "",
         setor: emp?.setor || "OBRA",
+        empregadorDocumentos: (emp as any)?.empregadorDocumentos || "FC",
         tipoAdvertencia: advForm.tipoAdvertencia,
         dataOcorrencia: advForm.dataOcorrencia,
         motivo: advForm.motivo,
@@ -3628,6 +3897,16 @@ export default function ControleDocumentos() {
               </SelectContent>
             </Select>
           )}
+          {activeTab === "aso" && (
+            <Select value={asoOrdenacao} onValueChange={(v) => setAsoOrdenacao(v as any)}>
+              <SelectTrigger className="w-[200px]"><SelectValue placeholder="Ordenar" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="padrao">Ordem padrão</SelectItem>
+                <SelectItem value="alfabetico">Ordem alfabética (A→Z)</SelectItem>
+                <SelectItem value="vencimento">Ordem de vencimento</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
         </div>
 
         {/* TABS */}
@@ -3663,9 +3942,6 @@ export default function ControleDocumentos() {
             </TabsTrigger>
             <TabsTrigger value="integracoes" className={`gap-1.5 rounded-lg border-2 transition-all duration-200 font-medium ${activeTab === "integracoes" ? "border-indigo-600 bg-indigo-50 text-indigo-700 shadow-sm" : "border-transparent bg-muted/50 text-muted-foreground hover:bg-indigo-50/50 hover:text-indigo-600"}`}>
               <Users className="h-4 w-4" /> Integrações
-            </TabsTrigger>
-            <TabsTrigger value="termos-responsabilidade" className={`gap-1.5 rounded-lg border-2 transition-all duration-200 font-medium ${activeTab === "termos-responsabilidade" ? "border-blue-600 bg-blue-50 text-blue-700 shadow-sm" : "border-transparent bg-muted/50 text-muted-foreground hover:bg-blue-50/50 hover:text-blue-600"}`}>
-              <FileText className="h-4 w-4" /> Termo de Recebimento
             </TabsTrigger>
             <TabsTrigger value="dossie" className={`gap-1.5 rounded-lg border-2 transition-all duration-200 font-medium ${activeTab === "dossie" ? "border-cyan-600 bg-cyan-50 text-cyan-700 shadow-sm" : "border-transparent bg-muted/50 text-muted-foreground hover:bg-cyan-50/50 hover:text-cyan-600"}`}>
               <FileDown className="h-4 w-4" /> Dossiê
@@ -3767,7 +4043,14 @@ export default function ControleDocumentos() {
                             <td className="py-2">{formatDate(a.dataExame)}</td>
                             <td className="py-2">{a.validadeDias || 365} dias</td>
                             <td className="py-2"><StatusBadge status={a.status} diasRestantes={a.diasRestantes} /></td>
-                            <td className="py-2">{formatDate(a.dataValidade)}</td>
+                            <td className="py-2">
+                              {formatDate(a.dataValidade)}
+                              {a.dataAgendamentoRenovacao && (
+                                <div className="text-[11px] text-blue-700 font-medium flex items-center gap-1 mt-0.5">
+                                  <Clock className="h-3 w-3" /> Agendado: {formatDate(a.dataAgendamentoRenovacao)}
+                                </div>
+                              )}
+                            </td>
                             <td className="py-2">
                               <span className={a.resultado === "Apto" ? "text-green-600 font-medium" : a.resultado === "Inapto" ? "text-red-600 font-medium" : "text-yellow-600 font-medium"}>
                                 {a.resultado === "Apto_Restricao" ? "Apto c/ Restrição" : a.resultado}
@@ -3787,6 +4070,9 @@ export default function ControleDocumentos() {
                                 </Button>
                                 <Button size="icon" variant="ghost" className="h-7 w-7" title="Anexar PDF" onClick={() => handleUploadDoc("aso", a.id, a)}>
                                   <FileUp className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button size="icon" variant="ghost" className={`h-7 w-7 ${a.dataAgendamentoRenovacao ? "text-blue-600" : ""}`} title={a.dataAgendamentoRenovacao ? `Renovação agendada: ${formatDate(a.dataAgendamentoRenovacao)}` : "Agendar renovação"} onClick={() => setAgendandoAso({ id: a.id, companyId: a.companyId, nome: a.nomeCompleto, data: a.dataAgendamentoRenovacao || "" })}>
+                                  <CalendarClock className="h-3.5 w-3.5" />
                                 </Button>
                                 {a.documentoUrl && (
                                   <Button size="icon" variant="ghost" className="h-7 w-7" title="Ver documento" onClick={() => window.open(a.documentoUrl, "_blank")}>
@@ -3819,23 +4105,48 @@ export default function ControleDocumentos() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-3">
                 <CardTitle className="text-base">Treinamentos e Capacitações</CardTitle>
-                <Button size="sm" onClick={openNewTrein}><Plus className="h-4 w-4 mr-1" /> Novo Treinamento</Button>
+                <div className="flex items-center gap-2">
+                  {/* Rev. 5051 — filtro de colaboradores com reciclagem agendada */}
+                  <Button
+                    size="sm"
+                    variant={reciclagemMode ? "default" : "outline"}
+                    className={reciclagemMode ? "bg-amber-600 hover:bg-amber-700 text-white" : "border-amber-400 text-amber-700 hover:bg-amber-50"}
+                    onClick={() => setReciclagemMode(m => !m)}
+                    title="Mostrar só colaboradores com reciclagem agendada"
+                  >
+                    <RefreshCw className="h-4 w-4 mr-1" /> RECICLAGEM{reciclagemCount > 0 ? ` (${reciclagemCount})` : ""}
+                  </Button>
+                  <Button size="sm" onClick={openNewTrein}><Plus className="h-4 w-4 mr-1" /> Novo Treinamento</Button>
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b text-left">
-                        <th className="pb-2 font-medium">Colaborador</th>
-                        <th className="pb-2 font-medium">Treinamento</th>
-                        <th className="pb-2 font-medium">Norma</th>
-                        <th className="pb-2 font-medium">Carga Horária</th>
-                        <th className="pb-2 font-medium">Realização</th>
-                        <th className="pb-2 font-medium">Validade</th>
-                        <th className="pb-2 font-medium">Status</th>
-                        <th className="pb-2 font-medium">Instrutor/Entidade</th>
-                        <th className="pb-2 font-medium">Certificado</th>
-                        <th className="pb-2 font-medium">Ações</th>
+                        {([
+                          ["colaborador", "Colaborador"],
+                          ["treinamento", "Treinamento"],
+                          ["norma", "Norma"],
+                          [null, "Carga Horária"],
+                          ["realizacao", "Realização"],
+                          ["validade", "Validade"],
+                          ["status", "Status"],
+                          [null, "Instrutor/Entidade"],
+                          [null, "Certificado"],
+                          [null, "Ações"],
+                        ] as [string | null, string][]).map(([key, label]) => (
+                          <th key={label} className="pb-2 font-medium">
+                            {key ? (
+                              <button type="button" className="inline-flex items-center gap-1 hover:text-blue-700" onClick={() => toggleTreinSort(key)}>
+                                {label}
+                                {treinSort?.key === key
+                                  ? (treinSort.dir === 1 ? <ChevronUp className="h-3.5 w-3.5 text-blue-700" /> : <ChevronDown className="h-3.5 w-3.5 text-blue-700" />)
+                                  : <ArrowUpDown className="h-3 w-3 text-muted-foreground/60" />}
+                              </button>
+                            ) : label}
+                          </th>
+                        ))}
                       </tr>
                     </thead>
                     <tbody>
@@ -3856,9 +4167,33 @@ export default function ControleDocumentos() {
                           <td className="py-2">{t.norma || "-"}</td>
                           <td className="py-2">{t.cargaHoraria || "-"}</td>
                           <td className="py-2">{formatDate(t.dataRealizacao)}</td>
-                          <td className="py-2">{formatDate(t.dataValidade)}</td>
+                          <td className="py-2">
+                            {formatDate(t.dataValidade)}
+                            {t.dataAgendamentoRenovacao && (
+                              <div className="text-[11px] text-blue-700 font-medium flex items-center gap-1 mt-0.5">
+                                <Clock className="h-3 w-3" /> Agendado: {formatDate(t.dataAgendamentoRenovacao)}
+                              </div>
+                            )}
+                          </td>
                           <td className="py-2">
                             {t.dataValidade ? <StatusBadge status={t.statusCalculado} diasRestantes={t.diasRestantes} /> : <span className="text-xs text-muted-foreground">Sem validade</span>}
+                            {/* Rev. 5051 — indicador de histórico da cadeia de reciclagem */}
+                            {t.historicoCount > 0 && (
+                              <div className="mt-1">
+                                <button type="button" className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-700 hover:bg-slate-200 whitespace-nowrap" title="Ver todos os treinamentos anteriores" onClick={() => setHistoricoTrein(t)}>
+                                  <History className="h-3 w-3" /> {t.historicoCount} anterior{t.historicoCount > 1 ? "es" : ""}
+                                </button>
+                              </div>
+                            )}
+                            {/* Rev. 5048 — certificado anexado (assinado fisicamente) OU as 2
+                                assinaturas digitais colhidas = assinado; senão, tag de pendência */}
+                            {!t.certificadoUrl && !(t.temAssinaturaInstrutor && t.temAssinaturaColaborador) && (
+                              <div className="mt-1">
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-amber-100 text-amber-800 whitespace-nowrap">
+                                  ✍️ Assinatura pendente
+                                </span>
+                              </div>
+                            )}
                           </td>
                           <td className="py-2">
                             {t.instrutor && <div className="text-xs">{t.instrutor}</div>}
@@ -3880,6 +4215,23 @@ export default function ControleDocumentos() {
                               </Button>
                               <Button size="icon" variant="ghost" className="h-7 w-7" title="Anexar certificado" onClick={() => handleUploadDoc("trein", t.id)}>
                                 <FileUp className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button size="icon" variant="ghost" className={`h-7 w-7 ${t.dataAgendamentoRenovacao ? "text-blue-600" : ""}`} title={t.dataAgendamentoRenovacao ? `Reciclagem agendada: ${formatDate(t.dataAgendamentoRenovacao)}` : "Agendar reciclagem (turma)"} onClick={() => setAgendandoTrein({ base: t, data: t.dataAgendamentoRenovacao || "", extraIds: new Set<number>() })}>
+                                <CalendarClock className="h-3.5 w-3.5" />
+                              </Button>
+                              {/* Rev. 5051 — concluir reciclagem: novo treinamento que substitui este */}
+                              {t.dataAgendamentoRenovacao && (
+                                <Button size="icon" variant="ghost" className="h-7 w-7 text-emerald-600" title="Reciclagem concluída — lançar novo treinamento (substitui este)" onClick={() => openReciclarTrein(t)}>
+                                  <RefreshCw className="h-3.5 w-3.5" />
+                                </Button>
+                              )}
+                              {/* Rev. 5028 — abre dialog de assinaturas antes de gerar o certificado/OS */}
+                              <Button size="icon" variant="ghost" className="h-7 w-7 text-amber-600" title={isOsTrein(t) ? "Gerar Ordem de Serviço (NR-01)" : "Gerar certificado"} onClick={() => { setCertSigInstrutor(null); setCertSigColaborador(null); setCertSigHydrated(false); setCertTreinRow(t); }}>
+                                <Award className="h-3.5 w-3.5" />
+                              </Button>
+                              {/* Rev. 5030 — visualiza o documento (antes ou depois das assinaturas) */}
+                              <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-600" title={isOsTrein(t) ? "Visualizar Ordem de Serviço" : "Visualizar certificado"} onClick={() => visualizarCertificadoTrein(t)}>
+                                <Eye className="h-3.5 w-3.5" />
                               </Button>
                               {t.certificadoUrl && (
                                 <Button size="icon" variant="ghost" className="h-7 w-7" title="Ver certificado" onClick={() => window.open(t.certificadoUrl, "_blank")}>
@@ -4095,6 +4447,7 @@ export default function ControleDocumentos() {
                                   cpf: a.cpf,
                                   funcao: a.funcao,
                                   setor: a.setor || "OBRA",
+                                  empregadorDocumentos: (a as any).empregadorDocumentos || "FC",
                                   tipoAdvertencia: a.tipoAdvertencia,
                                   dataOcorrencia: a.dataOcorrencia,
                                   motivo: a.motivo,
@@ -4132,7 +4485,8 @@ export default function ControleDocumentos() {
                               {a.tipoAdvertencia !== "Verbal" && <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-600 hover:text-blue-800 hover:bg-blue-50" title="Imprimir Documento CLT" onClick={() => {
                                 const userName = authUser?.name || authUser?.username || "Usuário";
                                 const dataEmissao = nowBrasilia();
-                                const logoUrl = companyLogoUrl;
+                                const advEmp = advEmpresaDocs(a);
+                                const logoUrl = advEmp.logoUrl;
                                 const tipo = a.tipoAdvertencia === "Suspensao" ? "Suspensão" : a.tipoAdvertencia === "JustaCausa" ? "Justa Causa" : a.tipoAdvertencia;
                                 const tipoTitulo = a.tipoAdvertencia === "Suspensao" ? "SUSPENSÃO DISCIPLINAR" : a.tipoAdvertencia === "JustaCausa" ? "RESCISÃO POR JUSTA CAUSA" : a.tipoAdvertencia === "Escrita" ? "ADVERTÊNCIA POR ESCRITO" : "ADVERTÊNCIA VERBAL";
                                 const verbo = a.tipoAdvertencia === "Suspensao" ? "SUSPENDER" : a.tipoAdvertencia === "JustaCausa" ? "COMUNICAR A RESCISÃO POR JUSTA CAUSA de" : "ADVERTIR";
@@ -4152,17 +4506,17 @@ export default function ControleDocumentos() {
                                   const escA = (s: any) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" } as any)[c]);
                                   const tipoAdvLbl = a.tipoAdvertencia === "Escrita" ? "POR ESCRITO" : a.tipoAdvertencia === "Suspensao" ? "— SUSPENSÃO DISCIPLINAR" : a.tipoAdvertencia === "JustaCausa" ? "— JUSTA CAUSA" : tipo.toUpperCase();
                                   const dadosA: Record<string, string> = {
-                                    empresaRazaoSocial: escA(nomeEmpresaCompleto), empresaCnpj: escA((selectedCompany as any)?.cnpj || ""),
+                                    empresaRazaoSocial: escA(advEmp.nome), empresaCnpj: escA(advEmp.empresa.cnpj),
                                     empNome: escA(a.nomeCompleto), empCpf: escA(formatCPF(a.cpf)), empFuncao: escA(a.funcao || "N/I"),
                                     tipoAdv: escA(tipoAdvLbl), ocorrenciaData: escA(formatDate(a.dataOcorrencia)),
                                     motivo: escA(a.motivo + (a.descricao ? " — " + a.descricao : "")), baseLegal: "Art. 482 da CLT",
                                   };
                                   const htmlVig = buildFcDocument({
-                                    empresa: { razaoSocial: nomeEmpresaCompleto, cnpj: (selectedCompany as any)?.cnpj || "", endereco: (selectedCompany as any)?.endereco, cidade: (selectedCompany as any)?.cidade, estado: (selectedCompany as any)?.estado, logoUrl: companyLogoUrl },
+                                    empresa: advEmp.empresa,
                                     titulo: tipoTitulo, numero: `${numAdv}ª MEDIDA`, dataEmissao,
                                     assunto: { label: "ASSUNTO:", valor: `${tipoTitulo} — ${a.nomeCompleto}` },
                                     corpoHtml: renderTemplate(advVigenteHtml, dadosA),
-                                    assinaturas: { partes: [{ nome: "Empregador / Representante Legal", subtitulo: nomeEmpresaCompleto }, { nome: a.nomeCompleto, subtitulo: "Colaborador(a)" }] },
+                                    assinaturas: { partes: [{ nome: "Empregador / Representante Legal", subtitulo: advEmp.nome }, { nome: a.nomeCompleto, subtitulo: "Colaborador(a)" }] },
                                     geradoPor: userName, pageTitle: tipoTitulo,
                                     margins: documentMargins,
                                   });
@@ -4197,12 +4551,12 @@ export default function ControleDocumentos() {
                                   .footer .lgpd { color: #dc2626; font-weight: 600; }
                                 </style></head><body>
                                 <div class="logo-bar">
-                                  <img src="${window.location.origin}/logo-fc-branco-amarelo.png?v=1712" alt="FC Engenharia" />
-                                  <div class="title"><h1>${tipoTitulo}</h1><p>${nomeEmpresaCompleto}</p></div>
+                                  <img src="${advEmp.logoBar.startsWith("/") ? window.location.origin + advEmp.logoBar : advEmp.logoBar}" alt="${advEmp.nome}" />
+                                  <div class="title"><h1>${tipoTitulo}</h1><p>${advEmp.nome}</p></div>
                                   <span class="num-badge">${numAdv}ª MEDIDA</span>
                                 </div>
                                 <div class="doc-body">
-                                  <p>Pelo presente instrumento, a empresa <strong>${nomeEmpresaCompleto}</strong>, vem por meio deste ${verbo} o(a) colaborador(a) <strong>${a.nomeCompleto}</strong>, portador(a) do CPF nº <strong>${formatCPF(a.cpf)}</strong>, ocupante do cargo de <strong>${a.funcao || "N/I"}</strong>, lotado(a) no setor <strong>${a.setor || "OBRA"}</strong>${a.tipoAdvertencia === "Suspensao" && a.diasSuspensao ? `, pelo período de <strong style="color: #dc2626; background: #fef2f2; padding: 2px 6px; border-radius: 3px;">${a.diasSuspensao} dia(s)</strong>, a contar de <strong style="color: #dc2626;">${a.dataInicio ? formatDate(a.dataInicio) : '___/___/______'}</strong> até <strong style="color: #dc2626;">${a.dataFim ? formatDate(a.dataFim) : '___/___/______'}</strong>,` : ""} pelo seguinte motivo:</p>
+                                  <p>Pelo presente instrumento, a empresa <strong>${advEmp.nome}</strong>, vem por meio deste ${verbo} o(a) colaborador(a) <strong>${a.nomeCompleto}</strong>, portador(a) do CPF nº <strong>${formatCPF(a.cpf)}</strong>, ocupante do cargo de <strong>${a.funcao || "N/I"}</strong>, lotado(a) no setor <strong>${a.setor || "OBRA"}</strong>${a.tipoAdvertencia === "Suspensao" && a.diasSuspensao ? `, pelo período de <strong style="color: #dc2626; background: #fef2f2; padding: 2px 6px; border-radius: 3px;">${a.diasSuspensao} dia(s)</strong>, a contar de <strong style="color: #dc2626;">${a.dataInicio ? formatDate(a.dataInicio) : '___/___/______'}</strong> até <strong style="color: #dc2626;">${a.dataFim ? formatDate(a.dataFim) : '___/___/______'}</strong>,` : ""} pelo seguinte motivo:</p>
                                   <div class="motivo-box">${a.motivo}${a.descricao ? "<br/><br/>" + a.descricao : ""}</div>
                                   <p>Ocorrido em <strong>${formatDate(a.dataOcorrencia)}</strong>.</p>
                                   <p style="text-indent:0; font-weight:bold; color:#1e3a6e;">Esta é a ${numAdv}ª medida disciplinar aplicada a este(a) colaborador(a).</p>
@@ -4267,11 +4621,6 @@ export default function ControleDocumentos() {
           {/* ===================== ABA INTEGRAÇÕES ===================== */}
           <TabsContent value="integracoes" className="mt-4">
             <IntegracoesPanel companyId={companyId} onClickEmployee={setFichaEmployeeId} />
-          </TabsContent>
-
-          {/* ===================== ABA TERMO DE RECEBIMENTO (Rev. 2146) ===================== */}
-          <TabsContent value="termos-responsabilidade" className="mt-4">
-            <TermosResponsabilidadePanel companyId={companyId} companyIds={companyIds} onClickEmployee={setFichaEmployeeId} />
           </TabsContent>
 
           {/* ===================== ABA DOSSIÊ ===================== */}
@@ -4445,7 +4794,7 @@ export default function ControleDocumentos() {
                   <Input type="file" accept=".pdf,.jpg,.jpeg,.png" className="border-0 shadow-none p-0" onChange={e => {
                     const file = e.target.files?.[0];
                     if (file) {
-                      if (file.size > 10 * 1024 * 1024) { toast.error("Arquivo muito grande (máx 10MB)"); return; }
+                      if (file.size > 15 * 1024 * 1024) { toast.error("Arquivo muito grande (máx 15MB)"); return; }
                       setAsoForm({ ...asoForm, _file: file });
                     }
                   }} />
@@ -4465,9 +4814,232 @@ export default function ControleDocumentos() {
         </div>
       </FullScreenDialog>
 
+      {/* ===================== DIALOG: AGENDAR RENOVAÇÃO DE ASO (Rev. 5044) ===================== */}
+      <Dialog open={!!agendandoAso} onOpenChange={(o) => { if (!o) setAgendandoAso(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><CalendarClock className="h-5 w-5 text-blue-600" /> Agendar renovação</DialogTitle>
+          </DialogHeader>
+          {agendandoAso && (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">Data agendada para a renovação do exame médico de <span className="font-medium text-foreground">{agendandoAso.nome}</span>. A informação aparece na Central de Alertas.</p>
+              <Input type="date" value={agendandoAso.data} onChange={(e) => setAgendandoAso({ ...agendandoAso, data: e.target.value })} />
+              <div className="flex justify-between gap-2 pt-1">
+                {agendandoAso.data && (
+                  <Button variant="outline" className="text-red-600" disabled={agendarRenovacaoMut.isPending}
+                    onClick={() => agendarRenovacaoMut.mutate({ id: agendandoAso.id, companyId: agendandoAso.companyId, data: null })}>
+                    Remover
+                  </Button>
+                )}
+                <div className="flex gap-2 ml-auto">
+                  <Button variant="outline" onClick={() => setAgendandoAso(null)}>Cancelar</Button>
+                  <Button disabled={!agendandoAso.data || agendarRenovacaoMut.isPending}
+                    onClick={() => agendarRenovacaoMut.mutate({ id: agendandoAso.id, companyId: agendandoAso.companyId, data: agendandoAso.data })}>
+                    {agendarRenovacaoMut.isPending ? "Salvando..." : "Salvar"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ===================== DIALOG: AGENDAR RECICLAGEM DE TREINAMENTO — TURMA (Rev. 5044) ===================== */}
+      <Dialog open={!!agendandoTrein} onOpenChange={(o) => { if (!o) setAgendandoTrein(null); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><CalendarClock className="h-5 w-5 text-blue-600" /> Agendar reciclagem (turma)</DialogTitle>
+          </DialogHeader>
+          {agendandoTrein && (() => {
+            const base = agendandoTrein.base;
+            // Turma: outros colaboradores com o MESMO treinamento vencido/a vencer (sem agendamento futuro próprio)
+            const candidatos = (treinList as any[]).filter((t: any) =>
+              t.id !== base.id && t.nome === base.nome &&
+              t.dataValidade && typeof t.diasRestantes === "number" && t.diasRestantes <= 60
+            );
+            const totalSel = 1 + agendandoTrein.extraIds.size;
+            return (
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  <span className="font-medium text-foreground">{base.nome}{base.norma ? ` (${base.norma})` : ""}</span> — {base.nomeCompleto}.
+                  Escolha a data da turma e, se quiser, inclua outros colaboradores com o mesmo treinamento vencendo/vencido.
+                </p>
+                <Input type="date" value={agendandoTrein.data} onChange={(e) => setAgendandoTrein({ ...agendandoTrein, data: e.target.value })} />
+                {candidatos.length > 0 && (
+                  <div className="border rounded-lg max-h-48 overflow-y-auto divide-y">
+                    <div className="px-3 py-1.5 text-[11px] font-semibold text-muted-foreground bg-muted/40 sticky top-0 flex items-center justify-between">
+                      <span>Incluir na mesma turma ({agendandoTrein.extraIds.size} de {candidatos.length})</span>
+                      <button type="button" className="text-blue-600 hover:underline" onClick={() => {
+                        const all = agendandoTrein.extraIds.size === candidatos.length;
+                        setAgendandoTrein({ ...agendandoTrein, extraIds: all ? new Set() : new Set(candidatos.map((c: any) => c.id)) });
+                      }}>{agendandoTrein.extraIds.size === candidatos.length ? "Desmarcar todos" : "Marcar todos"}</button>
+                    </div>
+                    {candidatos.map((c: any) => (
+                      <label key={c.id} className="flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer hover:bg-muted/30">
+                        <input type="checkbox" checked={agendandoTrein.extraIds.has(c.id)} onChange={(e) => {
+                          const s = new Set(agendandoTrein.extraIds);
+                          e.target.checked ? s.add(c.id) : s.delete(c.id);
+                          setAgendandoTrein({ ...agendandoTrein, extraIds: s });
+                        }} />
+                        <span className="truncate flex-1">{c.nomeCompleto}</span>
+                        <span className={`text-[11px] font-medium ${c.diasRestantes < 0 ? "text-red-600" : "text-yellow-600"}`}>
+                          {c.diasRestantes < 0 ? `vencido há ${Math.abs(c.diasRestantes)}d` : `vence em ${c.diasRestantes}d`}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+                <div className="flex justify-between gap-2 pt-1">
+                  {base.dataAgendamentoRenovacao && (
+                    <Button variant="outline" className="text-red-600" disabled={agendarTreinMut.isPending}
+                      onClick={() => agendarTreinMut.mutate({ ids: [base.id], companyId: base.companyId, data: null })}>
+                      Remover
+                    </Button>
+                  )}
+                  <div className="flex gap-2 ml-auto">
+                    <Button variant="outline" onClick={() => setAgendandoTrein(null)}>Cancelar</Button>
+                    <Button disabled={!agendandoTrein.data || agendarTreinMut.isPending}
+                      onClick={() => agendarTreinMut.mutate({ ids: [base.id, ...Array.from(agendandoTrein.extraIds)], companyId: base.companyId, data: agendandoTrein.data })}>
+                      {agendarTreinMut.isPending ? "Salvando..." : `Agendar turma (${totalSel})`}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
+
       {/* ===================== DIALOG: TREINAMENTO (Criar/Editar) ===================== */}
+      {/* Rev. 5028 — assinaturas digitais do certificado de treinamento */}
+      <Dialog open={!!certTreinRow} onOpenChange={(o) => { if (!o) setCertTreinRow(null); }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Award className="h-5 w-5 text-amber-600" /> Certificado — Assinaturas</DialogTitle>
+          </DialogHeader>
+          {certTreinRow && (
+            <div className="space-y-4">
+              <div className="text-sm text-gray-700">
+                <span className="font-semibold">{certTreinRow.nomeCompleto}</span> — {certTreinRow.nome}{certTreinRow.norma ? ` (${certTreinRow.norma})` : ""}
+              </div>
+              <div className="text-xs text-gray-500">
+                Assine abaixo (dedo, caneta ou mouse). As assinaturas ficam salvas no treinamento e saem impressas sobre as linhas do certificado. A identificação da empresa já sai padrão em todos os certificados.
+              </div>
+              {!certSigHydrated ? (
+                <div className="text-sm text-gray-400 py-6 text-center">
+                  {certAssinaturasQ.isError ? (certAssinaturasQ.error as any)?.message || "Erro ao carregar assinaturas." : "Carregando assinaturas salvas..."}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <SignaturePad
+                    label={`Colaborador — ${(certTreinRow.nomeCompleto || "").split(" ")[0]}`}
+                    value={certSigColaborador}
+                    onChange={setCertSigColaborador}
+                    height={220}
+                  />
+                  <SignaturePad
+                    label={`Instrutor${certTreinRow.instrutor ? ` — ${certTreinRow.instrutor}` : ""}`}
+                    value={certSigInstrutor}
+                    onChange={setCertSigInstrutor}
+                    height={220}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => { if (certTreinRow) gerarCertificadoTrein(certTreinRow, { colaborador: certSigColaborador, instrutor: certSigInstrutor }); }}>
+              Gerar sem salvar
+            </Button>
+            <Button
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+              disabled={salvarAssinaturasTrein.isPending || !certSigHydrated}
+              onClick={async () => {
+                if (!certTreinRow) return;
+                // Abre a janela DENTRO do clique (anti popup-blocker) — o await vem depois
+                const winRef = window.open("", "_blank");
+                try {
+                  await salvarAssinaturasTrein.mutateAsync({
+                    id: certTreinRow.id,
+                    companyId: certTreinRow.companyId ?? companyId,
+                    assinaturaColaborador: certSigColaborador,
+                    assinaturaInstrutor: certSigInstrutor,
+                  });
+                } catch (e: any) {
+                  try { winRef?.close(); } catch { /* noop */ }
+                  toast.error(e?.message || "Não foi possível salvar as assinaturas.");
+                  return;
+                }
+                toast.success("Assinaturas salvas!");
+                gerarCertificadoTrein(certTreinRow, { colaborador: certSigColaborador, instrutor: certSigInstrutor }, winRef);
+                setCertTreinRow(null);
+              }}
+            >
+              {salvarAssinaturasTrein.isPending ? "Salvando..." : "Salvar e gerar certificado"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rev. 5051 — histórico da cadeia de reciclagem */}
+      <Dialog open={!!historicoTrein} onOpenChange={(o) => { if (!o) setHistoricoTrein(null); }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><History className="h-5 w-5 text-slate-600" /> Histórico do Treinamento</DialogTitle>
+          </DialogHeader>
+          {historicoTrein && (
+            <div className="text-sm text-muted-foreground -mt-2">
+              {historicoTrein.nomeCompleto} — {historicoTrein.nome}{historicoTrein.norma ? ` (${historicoTrein.norma})` : ""}
+            </div>
+          )}
+          {historicoTreinQuery.isLoading ? (
+            <div className="py-6 text-center text-muted-foreground text-sm">Carregando histórico...</div>
+          ) : (
+            <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+              {(historicoTreinQuery.data || []).map((h: any, i: number) => (
+                <div key={h.id} className={`rounded-lg border p-3 flex items-center justify-between gap-3 ${i === 0 ? "border-emerald-300 bg-emerald-50/50" : "bg-muted/30"}`}>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium">{formatDate(h.dataRealizacao)}</span>
+                      {h.dataValidade && <span className="text-xs text-muted-foreground">válido até {formatDate(h.dataValidade)}</span>}
+                      {i === 0
+                        ? <span className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800">ATUAL</span>
+                        : <span className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-slate-200 text-slate-700">SUBSTITUÍDO</span>}
+                      {h.dataValidade && i === 0 && <StatusBadge status={h.statusCalculado} diasRestantes={h.diasRestantes} />}
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      {h.cargaHoraria ? `${h.cargaHoraria} · ` : ""}{h.instrutor || ""}{h.entidade ? ` — ${h.entidade}` : ""}
+                    </div>
+                  </div>
+                  {h.certificadoUrl ? (
+                    <Button size="sm" variant="outline" className="shrink-0" onClick={() => window.open(h.certificadoUrl, "_blank")}>
+                      <FileText className="h-3.5 w-3.5 mr-1" /> Certificado
+                    </Button>
+                  ) : (
+                    <span className="text-xs text-muted-foreground shrink-0">sem anexo</span>
+                  )}
+                </div>
+              ))}
+              {(historicoTreinQuery.data || []).length <= 1 && !historicoTreinQuery.isLoading && (
+                <div className="py-3 text-center text-muted-foreground text-sm">Nenhuma versão anterior encontrada.</div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       <FullScreenDialog open={showTreinDialog} onClose={() => { setShowTreinDialog(false); setEditingTreinId(null); }} title={editingTreinId ? "Editar Treinamento" : "Novo Treinamento"} icon={<GraduationCap className="h-5 w-5 text-white" />}>
         <div className="w-full max-w-3xl mx-auto space-y-5">
+
+          {/* Rev. 5051 — aviso de reciclagem: este cadastro substituirá o treinamento vencido */}
+          {treinForm.treinamentoAnteriorId && (
+            <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 flex items-start gap-2">
+              <RefreshCw className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+              <div className="text-sm text-amber-900">
+                <span className="font-semibold">Reciclagem:</span> este cadastro vai substituir o treinamento <span className="font-medium">{treinForm._reciclagemDe}</span>. O anterior sai da listagem e fica guardado no histórico.
+              </div>
+            </div>
+          )}
 
           <div className="rounded-xl border bg-gradient-to-r from-purple-50 to-fuchsia-50 p-4">
             <div className="flex items-center gap-2 mb-3">
@@ -4611,11 +5183,24 @@ export default function ControleDocumentos() {
               </div>
               <div>
                 <label className="text-xs font-medium text-gray-600">Instrutor</label>
-                <Input className="mt-1" value={treinForm.instrutor || ""} onChange={e => setTreinForm({ ...treinForm, instrutor: e.target.value })} />
+                {/* Rev. 5030 — sugestões com "x" para o master/RH excluir da lista */}
+                <SugestaoInput
+                  value={treinForm.instrutor || ""}
+                  onChange={(v) => setTreinForm({ ...treinForm, instrutor: v })}
+                  items={treinSugestoes?.instrutores || []}
+                  canDelete={authUser?.role === "admin" || authUser?.role === "admin_master"}
+                  onDelete={(v) => excluirSugestaoTrein.mutate({ companyId, companyIds, tipo: "instrutor", valor: v })}
+                />
               </div>
               <div className="col-span-2">
                 <label className="text-xs font-medium text-gray-600">Entidade/Empresa</label>
-                <Input className="mt-1" value={treinForm.entidade || ""} onChange={e => setTreinForm({ ...treinForm, entidade: e.target.value })} />
+                <SugestaoInput
+                  value={treinForm.entidade || ""}
+                  onChange={(v) => setTreinForm({ ...treinForm, entidade: v })}
+                  items={treinSugestoes?.entidades || []}
+                  canDelete={authUser?.role === "admin" || authUser?.role === "admin_master"}
+                  onDelete={(v) => excluirSugestaoTrein.mutate({ companyId, companyIds, tipo: "entidade", valor: v })}
+                />
               </div>
             </div>
           </div>
@@ -4664,7 +5249,7 @@ export default function ControleDocumentos() {
                   <Input type="file" accept=".pdf,.jpg,.jpeg,.png" className="border-0 shadow-none p-0" onChange={e => {
                     const file = e.target.files?.[0];
                     if (file) {
-                      if (file.size > 10 * 1024 * 1024) { toast.error("Arquivo muito grande (máx 10MB)"); return; }
+                      if (file.size > 15 * 1024 * 1024) { toast.error("Arquivo muito grande (máx 15MB)"); return; }
                       setTreinForm({ ...treinForm, _file: file });
                     }
                   }} />
@@ -4947,7 +5532,7 @@ export default function ControleDocumentos() {
                   <Input type="file" accept=".pdf,.jpg,.jpeg,.png" className="border-0 shadow-none p-0" onChange={e => {
                     const file = e.target.files?.[0];
                     if (file) {
-                      if (file.size > 10 * 1024 * 1024) { toast.error("Arquivo muito grande (máx 10MB)"); return; }
+                      if (file.size > 15 * 1024 * 1024) { toast.error("Arquivo muito grande (máx 15MB)"); return; }
                       setAtestForm({ ...atestForm, _file: file });
                     }
                   }} />
@@ -5113,6 +5698,7 @@ export default function ControleDocumentos() {
       {/* ===================== VISUALIZAÇÃO FULL SCREEN DO DOCUMENTO ===================== */}
       {showAdvPreview && previewAdvData && (() => {
         const a = previewAdvData;
+        const advEmp = advEmpresaDocs(a);
         const logoUrl = "https://files.manuscdn.com/user_upload_by_module/session_file/310419663028720190/supdCjdqVnpMeKVZ.png";
         const tipo = a.tipoAdvertencia === "Suspensao" ? "Suspensão" : a.tipoAdvertencia === "JustaCausa" ? "Justa Causa" : a.tipoAdvertencia;
         const tipoTitulo = a.tipoAdvertencia === "Suspensao" ? "SUSPENSÃO DISCIPLINAR" : a.tipoAdvertencia === "JustaCausa" ? "RESCISÃO POR JUSTA CAUSA" : a.tipoAdvertencia === "Escrita" ? "ADVERTÊNCIA POR ESCRITO" : "ADVERTÊNCIA VERBAL";
@@ -5163,17 +5749,17 @@ export default function ControleDocumentos() {
                     const escA = (s: any) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" } as any)[c]);
                     const tipoAdvLbl = a.tipoAdvertencia === "Escrita" ? "POR ESCRITO" : a.tipoAdvertencia === "Suspensao" ? "— SUSPENSÃO DISCIPLINAR" : a.tipoAdvertencia === "JustaCausa" ? "— JUSTA CAUSA" : tipo.toUpperCase();
                     const dadosA: Record<string, string> = {
-                      empresaRazaoSocial: escA(nomeEmpresaCompleto), empresaCnpj: escA((selectedCompany as any)?.cnpj || ""),
+                      empresaRazaoSocial: escA(advEmp.nome), empresaCnpj: escA(advEmp.empresa.cnpj),
                       empNome: escA(a.nomeCompleto), empCpf: escA(formatCPF(a.cpf)), empFuncao: escA(a.funcao || "N/I"),
                       tipoAdv: escA(tipoAdvLbl), ocorrenciaData: escA(formatDate(a.dataOcorrencia)),
                       motivo: escA(a.motivo + (a.descricao ? " — " + a.descricao : "")), baseLegal: "Art. 482 da CLT",
                     };
                     const htmlVig = buildFcDocument({
-                      empresa: { razaoSocial: nomeEmpresaCompleto, cnpj: (selectedCompany as any)?.cnpj || "", endereco: (selectedCompany as any)?.endereco, cidade: (selectedCompany as any)?.cidade, estado: (selectedCompany as any)?.estado, logoUrl: companyLogoUrl },
+                      empresa: advEmp.empresa,
                       titulo: tipoTitulo, numero: `${numAdv}ª MEDIDA`, dataEmissao,
                       assunto: { label: "ASSUNTO:", valor: `${tipoTitulo} — ${a.nomeCompleto}` },
                       corpoHtml: renderTemplate(advVigenteHtml, dadosA),
-                      assinaturas: { partes: [{ nome: "Empregador / Representante Legal", subtitulo: nomeEmpresaCompleto }, { nome: a.nomeCompleto, subtitulo: "Colaborador(a)" }] },
+                      assinaturas: { partes: [{ nome: "Empregador / Representante Legal", subtitulo: advEmp.nome }, { nome: a.nomeCompleto, subtitulo: "Colaborador(a)" }] },
                       geradoPor: userName, pageTitle: tipoTitulo,
                       margins: documentMargins,
                     });
@@ -5208,12 +5794,12 @@ export default function ControleDocumentos() {
                     .footer .lgpd { color: #dc2626; font-weight: 600; }
                   </style></head><body>
                   <div class="logo-bar">
-                    <img src="${window.location.origin}/logo-fc-branco-amarelo.png?v=1712" alt="FC Engenharia" />
-                    <div class="title"><h1>${tipoTitulo}</h1><p>${nomeEmpresaCompleto}</p></div>
+                    <img src="${advEmp.logoBar.startsWith("/") ? window.location.origin + advEmp.logoBar : advEmp.logoBar}" alt="${advEmp.nome}" />
+                    <div class="title"><h1>${tipoTitulo}</h1><p>${advEmp.nome}</p></div>
                     <span class="num-badge">${numAdv}ª MEDIDA</span>
                   </div>
                   <div class="doc-body">
-                    <p>Pelo presente instrumento, a empresa <strong>${nomeEmpresaCompleto}</strong>, vem por meio deste ${verbo} o(a) colaborador(a) <strong>${a.nomeCompleto}</strong>, portador(a) do CPF nº <strong>${formatCPF(a.cpf)}</strong>, ocupante do cargo de <strong>${a.funcao || "N/I"}</strong>, lotado(a) no setor <strong>${a.setor || "OBRA"}</strong>${a.tipoAdvertencia === "Suspensao" && a.diasSuspensao ? `, pelo período de <strong style="color: #dc2626; background: #fef2f2; padding: 2px 6px; border-radius: 3px;">${a.diasSuspensao} dia(s)</strong>, a contar de <strong style="color: #dc2626;">${a.dataInicio ? formatDate(a.dataInicio) : '___/___/______'}</strong> até <strong style="color: #dc2626;">${a.dataFim ? formatDate(a.dataFim) : '___/___/______'}</strong>,` : ""} pelo seguinte motivo:</p>
+                    <p>Pelo presente instrumento, a empresa <strong>${advEmp.nome}</strong>, vem por meio deste ${verbo} o(a) colaborador(a) <strong>${a.nomeCompleto}</strong>, portador(a) do CPF nº <strong>${formatCPF(a.cpf)}</strong>, ocupante do cargo de <strong>${a.funcao || "N/I"}</strong>, lotado(a) no setor <strong>${a.setor || "OBRA"}</strong>${a.tipoAdvertencia === "Suspensao" && a.diasSuspensao ? `, pelo período de <strong style="color: #dc2626; background: #fef2f2; padding: 2px 6px; border-radius: 3px;">${a.diasSuspensao} dia(s)</strong>, a contar de <strong style="color: #dc2626;">${a.dataInicio ? formatDate(a.dataInicio) : '___/___/______'}</strong> até <strong style="color: #dc2626;">${a.dataFim ? formatDate(a.dataFim) : '___/___/______'}</strong>,` : ""} pelo seguinte motivo:</p>
                     <div class="motivo-box">${a.motivo}${a.descricao ? "<br/><br/>" + a.descricao : ""}</div>
                     <p>Ocorrido em <strong>${formatDate(a.dataOcorrencia)}</strong>.</p>
                     <p style="text-indent:0; font-weight:bold; color:#1e3a6e;">Esta é a ${numAdv}ª medida disciplinar aplicada a este(a) colaborador(a).</p>
@@ -5260,17 +5846,17 @@ export default function ControleDocumentos() {
               <div className="max-w-[800px] mx-auto bg-white shadow-xl" style={{ fontFamily: "'Times New Roman', serif" }}>
                 {/* Logo bar */}
                 <div className="bg-[#1e3a6e] p-4 flex items-center gap-4">
-                  <img src="/logo-fc-branco-amarelo.png?v=1712" alt="FC Engenharia" className="h-14 object-contain" />
+                  <img src={advEmp.logoBar} alt={advEmp.nome} className="h-14 object-contain" />
                   <div className="text-white">
                     <h2 className="text-lg font-bold tracking-widest">{tipoTitulo}</h2>
-                    <p className="text-xs text-blue-200">{nomeEmpresaCompleto}</p>
+                    <p className="text-xs text-blue-200">{advEmp.nome}</p>
                   </div>
                   <span className="ml-auto bg-red-600 text-white text-xs font-bold px-3 py-1 rounded">{numAdv}ª MEDIDA</span>
                 </div>
 
                 {/* Corpo do documento */}
                 <div className="p-8 text-justify leading-relaxed text-sm space-y-4">
-                  <p className="indent-10">Pelo presente instrumento, a empresa <strong>{nomeEmpresaCompleto}</strong>, vem por meio deste {verbo} o(a) colaborador(a) <strong>{a.nomeCompleto}</strong>, portador(a) do CPF nº <strong>{formatCPF(a.cpf)}</strong>, ocupante do cargo de <strong>{a.funcao || "N/I"}</strong>, lotado(a) no setor <strong>{a.setor || "OBRA"}</strong>{a.tipoAdvertencia === "Suspensao" && a.diasSuspensao ? <>, pelo período de <strong className="text-red-600 bg-red-50 px-1.5 py-0.5 rounded">{a.diasSuspensao} dia(s)</strong>, a contar de <strong className="text-red-600">{a.dataInicio ? formatDate(a.dataInicio) : '___/___/______'}</strong> até <strong className="text-red-600">{a.dataFim ? formatDate(a.dataFim) : '___/___/______'}</strong>,</> : null} pelo seguinte motivo:</p>
+                  <p className="indent-10">Pelo presente instrumento, a empresa <strong>{advEmp.nome}</strong>, vem por meio deste {verbo} o(a) colaborador(a) <strong>{a.nomeCompleto}</strong>, portador(a) do CPF nº <strong>{formatCPF(a.cpf)}</strong>, ocupante do cargo de <strong>{a.funcao || "N/I"}</strong>, lotado(a) no setor <strong>{a.setor || "OBRA"}</strong>{a.tipoAdvertencia === "Suspensao" && a.diasSuspensao ? <>, pelo período de <strong className="text-red-600 bg-red-50 px-1.5 py-0.5 rounded">{a.diasSuspensao} dia(s)</strong>, a contar de <strong className="text-red-600">{a.dataInicio ? formatDate(a.dataInicio) : '___/___/______'}</strong> até <strong className="text-red-600">{a.dataFim ? formatDate(a.dataFim) : '___/___/______'}</strong>,</> : null} pelo seguinte motivo:</p>
                   
                   <div className="bg-gray-50 border-l-4 border-[#1e3a6e] p-4 italic">
                     <p className="font-semibold">{a.motivo}</p>

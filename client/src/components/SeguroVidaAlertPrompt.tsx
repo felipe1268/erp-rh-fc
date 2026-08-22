@@ -10,6 +10,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { ShieldAlert, ExternalLink, X } from "lucide-react";
 
 export default function SeguroVidaAlertPrompt() {
@@ -25,8 +26,10 @@ export default function SeguroVidaAlertPrompt() {
   );
   const count = Number((q.data as any)?.semSeguroCount || 0);
 
+  const { user } = useAuth();
   const hoje = new Date().toISOString().slice(0, 10);
-  const storageKey = `seguro-vida-alert:${companyId}:${hoje}`;
+  // Rev. 4977 — chave POR USUÁRIO: cada usuário de RH/master resolve o seu
+  const storageKey = `seguro-vida-alert:${user?.id ?? "anon"}:${companyId}:${hoje}`;
 
   useEffect(() => {
     if (count > 0 && !sessionStorage.getItem(storageKey)) {
@@ -43,7 +46,9 @@ export default function SeguroVidaAlertPrompt() {
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) dismiss(); }}>
-      <DialogContent className="max-w-md p-0 overflow-hidden [&>button]:hidden">
+      {/* Rev. 4977 — z-[80] acima do alerta de locações; só fecha nos botões */}
+      <DialogContent className="max-w-md p-0 overflow-hidden [&>button]:hidden z-[80]"
+        onInteractOutside={(e) => e.preventDefault()} onEscapeKeyDown={(e) => e.preventDefault()}>
         <div className="bg-gradient-to-r from-red-600 to-red-700 px-5 py-4 flex items-center gap-3">
           <div className="h-10 w-10 rounded-full bg-white/15 flex items-center justify-center shrink-0">
             <ShieldAlert className="h-5 w-5 text-white" />

@@ -121,6 +121,8 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
   const documentMargins = useDocumentMargins();
   // Rev. 2747 — geradores consomem o template Vigente quando existir (fallback HTML atual).
   const avisoTplQ = trpc.systemDocumentTemplates.getVigente.useQuery({ tipo: "aviso_previo" });
+  // Rev. 4986 — empregador documental "JF": aviso/comunicado sai com dados da Julio Ferraz
+  const jfEmpresaQ = trpc.companies.empregadorJf.useQuery(undefined, { staleTime: 5 * 60 * 1000 });
   const rescisaoTplQ = trpc.systemDocumentTemplates.getVigente.useQuery({ tipo: "termo_rescisao" });
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("em_andamento");
@@ -153,6 +155,42 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
   // Form state
   const [form, setForm] = useState<any>({});
   const [calculoPreview, setCalculoPreview] = useState<any>(null);
+
+  // Deep-link do Plano de Desligamento: fila de avisos em sessionStorage ("avisoPrevioQueue").
+  // Cada item {employeeId, nome?, data?, tipo?} abre o "Novo Aviso" já preenchido; ao criar, puxa o próximo.
+  const consumirFilaAviso = () => {
+    try {
+      const raw = sessionStorage.getItem("avisoPrevioQueue");
+      const fila = raw ? JSON.parse(raw) : [];
+      if (!Array.isArray(fila) || fila.length === 0) return false;
+      const next = fila.shift();
+      if (fila.length > 0) sessionStorage.setItem("avisoPrevioQueue", JSON.stringify(fila));
+      else sessionStorage.removeItem("avisoPrevioQueue");
+      if (!next?.employeeId) return false;
+      setForm({
+        employeeId: Number(next.employeeId),
+        tipo: next.tipo || "empregador_trabalhado",
+        ...(next.data ? { dataDesligamento: String(next.data) } : {}),
+      });
+      setCalculoPreview(null);
+      setEditingItem(null);
+      setShowDialog(true);
+      toast.info(fila.length > 0
+        ? `Aviso do plano: ${next.nome || "colaborador"} — confira e crie. Depois deste faltam ${fila.length}.`
+        : `Aviso do plano: ${next.nome || "colaborador"} — dados preenchidos, confira e crie.`);
+      return true;
+    } catch { return false; }
+  };
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const empId = Number(params.get("employeeId"));
+    if (Number.isFinite(empId) && empId > 0) {
+      sessionStorage.setItem("avisoPrevioQueue", JSON.stringify([{ employeeId: empId }]));
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+    consumirFilaAviso();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Queries
   // Query filtrada para a tabela
@@ -202,6 +240,8 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
       setShowDialog(false);
       setForm({});
       setCalculoPreview(null);
+      // Fila do Plano de Desligamento: abre o próximo automaticamente
+      setTimeout(() => consumirFilaAviso(), 400);
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -563,7 +603,8 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
   // `emp` mínimo (nomeCompleto, cpf, ctps, serieCtps, cargo/funcao, dataAdmissao),
   // o `tipo` do aviso e a `dataAvisoStr` (YYYY-MM-DD).
   const gerarDocumentoCore = (emp: any, tipo: string, dataAvisoStr: string, experiencia?: { iniciativa: 'empregador' | 'empregado'; antecipado: boolean } | null) => {
-    const empresa: any = selectedCompany || {};
+    // Rev. 4986 — empregador documental "JF" troca a empresa exibida no documento
+    const empresa: any = ((emp as any)?.empregadorDocumentos === "JF" && jfEmpresaQ.data) ? jfEmpresaQ.data : (selectedCompany || {});
     if (!emp) { toast.error("Colaborador não encontrado."); return; }
     if (!empresa?.razaoSocial && !empresa?.nomeFantasia) {
       toast.error("Empresa selecionada não tem dados cadastrais (razão social/CNPJ).");
@@ -943,6 +984,7 @@ ${isExperiencia ? (() => {
       cargo: item.employeeCargo || "",
       funcao: item.employeeCargo || "",
       dataAdmissao: item.employeeDataAdmissao || "",
+      empregadorDocumentos: item.employeeEmpregadorDocs || "FC",
     };
     // Rev. 4132 — detecta rescisão em Contrato de Experiência (flag isExperiencia
     // gravada em previsaoRescisao pelo endpoint desligarExperiencia) para gerar

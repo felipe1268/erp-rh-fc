@@ -11,7 +11,8 @@ export type AiModuleKey =
   | "planejamento"
   | "financeiro"
   | "oraculo"
-  | "assistente";
+  | "assistente"
+  | "plano_desligamento";
 
 export interface AiModuleDef {
   key: AiModuleKey;
@@ -49,6 +50,11 @@ export const AI_MODULES: AiModuleDef[] = [
     key: "financeiro",
     label: "Financeiro — Leitura de Comprovantes",
     descricao: "Leitura de comprovantes (PIX/boleto) por IA na Conciliação Bancária para identificar beneficiário, CNPJ/CPF e ID da transação.",
+  },
+  {
+    key: "plano_desligamento",
+    label: "RH / DP — Plano de Desligamento",
+    descricao: "Sugestão de cronograma de desligamentos considerando o fluxo de caixa da empresa.",
   },
   {
     key: "oraculo",

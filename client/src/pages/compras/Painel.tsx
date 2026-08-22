@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
+import { useCompany as useCompanyCtx } from "@/contexts/CompanyContext";
 import { useLocation } from "wouter";
 import DashboardLayout from "@/components/DashboardLayout";
 import { formatNumeroScDisplay } from "@shared/numeroSc";
@@ -102,34 +103,84 @@ function EmptyRow({ msg }: { msg: string }) {
 
 export default function PainelCompras() {
   const { getCompanyIds } = useCompany();
+  const { isLoading: companiesLoading } = useCompanyCtx();
   const companyIds = getCompanyIds();
   const [, navigate] = useLocation();
 
   const [abaAtiva, setAbaAtiva] = useState<"visao_geral" | "alertas" | "por_obra">("visao_geral");
   const [alertasExpanded, setAlertasExpanded] = useState<Record<string, boolean>>({});
 
-  const { data, isLoading, refetch, isFetching } = trpc.compras.getDashboardCompras.useQuery(
+  // Base dashboard — one light refresh every 5 minutes instead of the old 60s polling.
+  const { data, isLoading, isError, error, refetch, isFetching } = trpc.compras.getDashboardCompras.useQuery(
     { companyIds },
-    { enabled: companyIds.length > 0, refetchInterval: 60_000 }
+    {
+      enabled: companyIds.length > 0,
+      staleTime: 5 * 60_000,
+      refetchInterval: 5 * 60_000,
+      refetchOnWindowFocus: false,
+    }
   );
 
-  const { data: alertasData } = trpc.compras.getAlertasCompras.useQuery(
+  // Lightweight aggregate counters share the same cache/query key used by
+  // DashboardLayout, so this observer does not duplicate the global request.
+  const {
+    data: badgeCounts,
+    refetch: badgeCountsRefetch,
+  } = trpc.compras.getComprasBadgeCounts.useQuery(
     { companyIds },
-    { enabled: companyIds.length > 0, refetchInterval: 60_000 }
+    {
+      enabled: companyIds.length > 0,
+      staleTime: 30_000,
+      refetchOnWindowFocus: false,
+    }
   );
 
-  const { data: obraData } = trpc.compras.getDashboardPorObra.useQuery(
+  // Alertas — only fetched when the alertas tab is active.
+  const {
+    data: alertasData,
+    isLoading: alertasLoading,
+    isError: alertasIsError,
+    refetch: alertasRefetch,
+    isFetching: alertasFetching,
+  } = trpc.compras.getAlertasCompras.useQuery(
     { companyIds },
-    { enabled: companyIds.length > 0, refetchInterval: 60_000 }
+    {
+      enabled: companyIds.length > 0 && abaAtiva === "alertas",
+      staleTime: 5 * 60_000,
+      refetchInterval: abaAtiva === "alertas" ? 5 * 60_000 : false,
+      refetchOnWindowFocus: false,
+    }
+  );
+
+  // Por Obra — only fetched when the por_obra tab is active.
+  const {
+    data: obraData,
+    isLoading: obraLoading,
+    isError: obraIsError,
+    refetch: obraRefetch,
+    isFetching: obraFetching,
+  } = trpc.compras.getDashboardPorObra.useQuery(
+    { companyIds },
+    {
+      enabled: companyIds.length > 0 && abaAtiva === "por_obra",
+      staleTime: 5 * 60_000,
+      refetchInterval: abaAtiva === "por_obra" ? 5 * 60_000 : false,
+      refetchOnWindowFocus: false,
+    }
   );
 
   const totalAlertas = useMemo(() => {
-    if (!alertasData) return 0;
-    return (alertasData.pagamentos.vencidas.length) +
-      (alertasData.entregas.atrasadas) +
-      (alertasData.cobertura.totalSemCobertura) +
-      (alertasData.divergencias.total);
-  }, [alertasData]);
+    if (alertasData) {
+      return (alertasData.pagamentos.quantidadeVencidas) +
+        (alertasData.entregas.atrasadas) +
+        (alertasData.cobertura.totalSemCobertura) +
+        (alertasData.divergencias.total);
+    }
+    return (badgeCounts?.pagamentosVencidos ?? 0) +
+      (badgeCounts?.ocsAtrasadas ?? 0) +
+      (badgeCounts?.scsSemCobertura ?? 0) +
+      (badgeCounts?.divergencias ?? 0);
+  }, [alertasData, badgeCounts]);
 
   const fornMap = useMemo(() => {
     const m: Record<number, string> = {};
@@ -142,6 +193,31 @@ export default function PainelCompras() {
     [data]
   );
 
+  // While the company list itself is loading, show a brief spinner rather than
+  // jumping straight to an "empty" state (companyIds is [] during that window).
+  if (companiesLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64 text-gray-400 gap-2">
+          <RefreshCw className="w-5 h-5 animate-spin" /> Carregando empresas...
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  // Companies loaded but nothing selected / user has no company assigned.
+  if (companyIds.length === 0) {
+    return (
+      <DashboardLayout>
+        <div className="flex flex-col items-center justify-center h-64 text-gray-500 gap-3 p-6 text-center">
+          <Building2 className="w-10 h-10 text-gray-300" />
+          <p className="font-medium text-gray-600">Nenhuma empresa selecionada</p>
+          <p className="text-sm text-gray-400">Selecione uma empresa no seletor acima para visualizar o painel de compras.</p>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   if (isLoading) {
     return (
       <DashboardLayout>
@@ -152,9 +228,25 @@ export default function PainelCompras() {
     );
   }
 
+  if (isError) {
+    return (
+      <DashboardLayout>
+        <div className="flex flex-col items-center justify-center h-64 text-gray-500 gap-3 p-6 text-center">
+          <AlertTriangle className="w-10 h-10 text-red-400" />
+          <p className="font-medium text-gray-700">Erro ao carregar o painel de compras</p>
+          <p className="text-xs text-gray-400 max-w-sm">{(error as any)?.message ?? "Falha na comunicação com o servidor."}</p>
+          <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-2 text-xs mt-1">
+            <RefreshCw className="w-3.5 h-3.5" /> Tentar novamente
+          </Button>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   const {
     kpis = {} as any,
     alertasOC = [],
+    alertasOCTotal = 0,
     scsPendentesAprov = [],
     cotsPendentes = [],
     ocsRecentes = [],
@@ -201,7 +293,7 @@ export default function PainelCompras() {
               <p className={`text-xs mt-0.5 ${urgentes.length > 0 ? "text-red-600" : "text-amber-600"}`}>
                 {totalPendAprov} solicitação{totalPendAprov > 1 ? "ões" : ""} aguardando aprovação
                 {urgentes.length > 0 && ` (${urgentes.length} emergencial${urgentes.length > 1 ? "is" : ""})`}
-                {alertasOC.length > 0 && ` · ${alertasOC.length} OC${alertasOC.length > 1 ? "s" : ""} com entrega atrasada`}
+                {alertasOCTotal > 0 && ` · ${alertasOCTotal} OC${alertasOCTotal > 1 ? "s" : ""} com entrega atrasada`}
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -214,7 +306,7 @@ export default function PainelCompras() {
           </div>
         )}
 
-        {alertasOC.length > 0 && (
+        {alertasOCTotal > 0 && (
           <div
             className="rounded-xl border-2 bg-orange-50 border-orange-300 p-4 flex items-center gap-4 cursor-pointer transition-all hover:bg-orange-100"
             onClick={() => setAbaAtiva("alertas")}
@@ -224,7 +316,7 @@ export default function PainelCompras() {
             </div>
             <div className="flex-1">
               <h3 className="font-bold text-sm text-orange-800">
-                {alertasOC.length} Entrega{alertasOC.length > 1 ? "s" : ""} Atrasada{alertasOC.length > 1 ? "s" : ""}
+                {alertasOCTotal} Entrega{alertasOCTotal > 1 ? "s" : ""} Atrasada{alertasOCTotal > 1 ? "s" : ""}
               </h3>
               <p className="text-xs text-orange-600">Clique para ver detalhes na aba Alertas</p>
             </div>
@@ -237,8 +329,19 @@ export default function PainelCompras() {
             <h1 className="text-xl font-bold text-gray-900">Painel de Compras</h1>
             <p className="text-sm text-gray-500">Visão geral em tempo real do módulo de Compras</p>
           </div>
-          <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching} className="gap-2 text-xs">
-            <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? "animate-spin" : ""}`} />
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={isFetching || alertasFetching || obraFetching}
+            onClick={() => {
+              refetch();
+              badgeCountsRefetch();
+              if (abaAtiva === "alertas") alertasRefetch();
+              if (abaAtiva === "por_obra") obraRefetch();
+            }}
+            className="gap-2 text-xs"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${(isFetching || alertasFetching || obraFetching) ? "animate-spin" : ""}`} />
             Atualizar
           </Button>
         </div>
@@ -588,23 +691,39 @@ export default function PainelCompras() {
         </div>
         </>)}
 
-        {abaAtiva === "alertas" && alertasData && (
+        {abaAtiva === "alertas" && alertasLoading && (
+          <div className="flex items-center justify-center h-40 text-gray-400 gap-2">
+            <RefreshCw className="w-5 h-5 animate-spin" /> Carregando alertas...
+          </div>
+        )}
+
+        {abaAtiva === "alertas" && alertasIsError && !alertasLoading && (
+          <div className="flex flex-col items-center justify-center h-40 text-gray-500 gap-3 text-center">
+            <AlertTriangle className="w-8 h-8 text-red-400" />
+            <p className="text-sm font-medium text-gray-700">Erro ao carregar alertas</p>
+            <Button variant="outline" size="sm" onClick={() => alertasRefetch()} className="gap-2 text-xs">
+              <RefreshCw className="w-3.5 h-3.5" /> Tentar novamente
+            </Button>
+          </div>
+        )}
+
+        {abaAtiva === "alertas" && alertasData && !alertasLoading && (
           <div className="space-y-4">
             <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-              <div className={`rounded-xl border p-4 ${alertasData.pagamentos.vencidas.length > 0 ? "border-red-200 bg-red-50" : "border-gray-200 bg-white"}`}>
+              <div className={`rounded-xl border p-4 ${alertasData.pagamentos.quantidadeVencidas > 0 ? "border-red-200 bg-red-50" : "border-gray-200 bg-white"}`}>
                 <div className="flex items-center gap-2 mb-1">
-                  <CreditCard className={`w-4 h-4 ${alertasData.pagamentos.vencidas.length > 0 ? "text-red-500" : "text-gray-400"}`} />
+                  <CreditCard className={`w-4 h-4 ${alertasData.pagamentos.quantidadeVencidas > 0 ? "text-red-500" : "text-gray-400"}`} />
                   <span className="text-xs font-medium text-gray-600">Pagamentos Vencidos</span>
                 </div>
-                <p className="text-2xl font-bold text-gray-900">{alertasData.pagamentos.vencidas.length}</p>
+                <p className="text-2xl font-bold text-gray-900">{alertasData.pagamentos.quantidadeVencidas}</p>
                 <p className="text-xs text-gray-500">{BRL(alertasData.pagamentos.totalVencido)}</p>
               </div>
-              <div className={`rounded-xl border p-4 ${alertasData.pagamentos.proximas.length > 0 ? "border-amber-200 bg-amber-50" : "border-gray-200 bg-white"}`}>
+              <div className={`rounded-xl border p-4 ${alertasData.pagamentos.quantidadeProximas > 0 ? "border-amber-200 bg-amber-50" : "border-gray-200 bg-white"}`}>
                 <div className="flex items-center gap-2 mb-1">
-                  <Clock className={`w-4 h-4 ${alertasData.pagamentos.proximas.length > 0 ? "text-amber-500" : "text-gray-400"}`} />
+                  <Clock className={`w-4 h-4 ${alertasData.pagamentos.quantidadeProximas > 0 ? "text-amber-500" : "text-gray-400"}`} />
                   <span className="text-xs font-medium text-gray-600">Vencem em 7 dias</span>
                 </div>
-                <p className="text-2xl font-bold text-gray-900">{alertasData.pagamentos.proximas.length}</p>
+                <p className="text-2xl font-bold text-gray-900">{alertasData.pagamentos.quantidadeProximas}</p>
                 <p className="text-xs text-gray-500">{BRL(alertasData.pagamentos.totalProximo)}</p>
               </div>
               <div className={`rounded-xl border p-4 ${alertasData.entregas.atrasadas > 0 ? "border-red-200 bg-red-50" : "border-gray-200 bg-white"}`}>
@@ -659,7 +778,7 @@ export default function PainelCompras() {
                 <div className="bg-white rounded-xl border border-red-200 shadow-sm p-4">
                   <button className="flex items-center justify-between w-full mb-2"
                     onClick={() => setAlertasExpanded(p => ({ ...p, pagVencidas: !p.pagVencidas }))}>
-                    <SectionHeader icon={CreditCard} title="Pagamentos Vencidos" count={alertasData.pagamentos.vencidas.length} color="text-red-500" />
+                    <SectionHeader icon={CreditCard} title="Pagamentos Vencidos" count={alertasData.pagamentos.quantidadeVencidas} color="text-red-500" />
                     {alertasExpanded.pagVencidas ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
                   </button>
                   {(alertasExpanded.pagVencidas !== false) && (
@@ -685,7 +804,7 @@ export default function PainelCompras() {
                 <div className="bg-white rounded-xl border border-amber-200 shadow-sm p-4">
                   <button className="flex items-center justify-between w-full mb-2"
                     onClick={() => setAlertasExpanded(p => ({ ...p, pagProx: !p.pagProx }))}>
-                    <SectionHeader icon={Clock} title="Vencem em 7 Dias" count={alertasData.pagamentos.proximas.length} color="text-amber-500" />
+                    <SectionHeader icon={Clock} title="Vencem em 7 Dias" count={alertasData.pagamentos.quantidadeProximas} color="text-amber-500" />
                     {alertasExpanded.pagProx ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
                   </button>
                   {(alertasExpanded.pagProx !== false) && (
@@ -748,10 +867,10 @@ export default function PainelCompras() {
               )}
             </div>
 
-            {alertasData.pagamentos.bloqueadas.length > 0 && (
+            {(alertasData.pagamentos.quantidadeBloqueadas ?? alertasData.pagamentos.bloqueadas.length) > 0 && (
               <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
                 <SectionHeader icon={Package} title="Pagamentos Bloqueados (Aguardando Recebimento)"
-                  count={alertasData.pagamentos.bloqueadas.length} color="text-gray-500" />
+                  count={alertasData.pagamentos.quantidadeBloqueadas ?? alertasData.pagamentos.bloqueadas.length} color="text-gray-500" />
                 <p className="text-xs text-gray-500 mb-2">
                   Total bloqueado: <span className="font-bold text-gray-700">{BRL(alertasData.pagamentos.totalBloqueado)}</span>
                 </p>
@@ -776,7 +895,23 @@ export default function PainelCompras() {
           </div>
         )}
 
-        {abaAtiva === "por_obra" && obraData && (
+        {abaAtiva === "por_obra" && obraLoading && (
+          <div className="flex items-center justify-center h-40 text-gray-400 gap-2">
+            <RefreshCw className="w-5 h-5 animate-spin" /> Carregando dados por obra...
+          </div>
+        )}
+
+        {abaAtiva === "por_obra" && obraIsError && !obraLoading && (
+          <div className="flex flex-col items-center justify-center h-40 text-gray-500 gap-3 text-center">
+            <AlertTriangle className="w-8 h-8 text-red-400" />
+            <p className="text-sm font-medium text-gray-700">Erro ao carregar dados por obra</p>
+            <Button variant="outline" size="sm" onClick={() => obraRefetch()} className="gap-2 text-xs">
+              <RefreshCw className="w-3.5 h-3.5" /> Tentar novamente
+            </Button>
+          </div>
+        )}
+
+        {abaAtiva === "por_obra" && obraData && !obraLoading && (
           <div className="space-y-4">
             {obraData.obras.length === 0 ? (
               <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-8 text-center">

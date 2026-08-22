@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb, userCanSeeAvisoStatus, userCanAccessEmployeeDossier, getCompaniesForUser } from "../db";
+import { assertRaioXAccess, getRaioXAccessStatus, deriveAllowedCompanyIds } from "../raioXGuard";
 import { TRPCError } from "@trpc/server";
 import { asos, atestados, trainings, warnings, employees, timeRecords, payroll, epiDeliveries, epis, vrBenefits, advances, obraHorasRateio, obras, documentTemplates, extraPayments, employeeHistory, accidents, processosTrabalhistas, processosAndamentos, jobFunctions, terminationNotices, vacationPeriods, cipaMeetings, cipaMembers, cipaElections, pjContracts, pjPayments, epiDiscountAlerts, customExams, obraFuncionarios, employeeSiteHistory, warehouseLoans, almoxarifadoDescontoFolha, almoxarifadoSaidasInsumo, heSolicitacaoConfirmacoes, heSolicitacoes, heSolicitacaoFuncionarios, pontoDescontos, notificationLogs, notificationRecipients, lancamentosParceiros, parceirosConveniados, ddsSessoes, ddsSessaoFuncionarios, signatureSessions, signatureSigners, equipamentoLocadoEventos, equipamentosLocados, users, clienteAvaliacoes, clienteAvaliacaoDetalhes, employeeIntegrations, employeeDocuments, payrollPayments, bancoHorasSaldo, bancoHorasLancamentos } from "../../drizzle/schema";
 import { eq, and, desc, sql, ne, isNull, inArray, gte, lte, or, ilike } from "drizzle-orm";
@@ -12,6 +13,7 @@ import { asoExtracaoIa } from "../../drizzle/schema";
 import { verificarAssinaturaMemorial } from "../services/assinaturaMemorial";
 import { logStatusChange } from "../lib/employeeStatusHelper";
 import { RESTRICOES_OPERACIONAIS_KEYS } from "../../shared/restricoesOperacionais";
+import { BANCO_HORAS_DATA_INICIO } from "../utils/bancoHorasVigencia";
 
 // Rev. 4622 — só keys do dicionário canônico entram no banco (deny-by-default).
 function sanitizeRestricoesOperacionais(arr: string[] | undefined): string | null {
@@ -549,6 +551,8 @@ async function handleAfastamentoStatus(
       id: employees.id,
       nomeCompleto: employees.nomeCompleto,
       status: employees.status,
+      fotoUrl: employees.fotoUrl,
+      funcao: employees.funcao,
     }).from(employees).where(eq(employees.id, employeeId));
 
     if (!emp || emp.status === "Desligado" || emp.status === "Lista_Negra") return;
@@ -592,25 +596,96 @@ async function handleAfastamentoStatus(
     ));
 
     if (recipients.length > 0) {
+      // Data no padrão brasileiro (dd/mm/aaaa) para o e-mail
+      const dataRetornoBR = /^\d{4}-\d{2}-\d{2}/.test(String(dataRetorno))
+        ? String(dataRetorno).slice(0, 10).split("-").reverse().join("/")
+        : String(dataRetorno);
       const titulo = isINSS
-        ? `INSS — ${emp.nomeCompleto} afastado(a) por ${diasAfastamento} dias (retorno: ${dataRetorno})`
-        : `Atestado — ${emp.nomeCompleto} afastado(a) por ${diasAfastamento} dia(s) (retorno: ${dataRetorno})`;
+        ? `INSS — ${emp.nomeCompleto} afastado(a) por ${diasAfastamento} dias (retorno: ${dataRetornoBR})`
+        : `Atestado — ${emp.nomeCompleto} afastado(a) por ${diasAfastamento} dia(s) (retorno: ${dataRetornoBR})`;
+
+      // Rev. 4993 — obra atual do funcionário (alocação ativa) no corpo do e-mail
+      let obraNome: string | null = null;
+      try {
+        const obraRes: any = await db.execute(sql`
+          SELECT ob.nome FROM obra_funcionarios of2
+          JOIN obras ob ON ob.id = of2."obraId"
+          WHERE of2."employeeId" = ${employeeId} AND of2."isActive" = 1
+          ORDER BY of2."dataInicio" DESC NULLS LAST, of2.id DESC LIMIT 1
+        `);
+        obraNome = (obraRes?.rows ?? obraRes)?.[0]?.nome ?? null;
+      } catch (e) {
+        console.error("[AtestadoStatus] Erro ao buscar obra do funcionário:", e);
+      }
+
+      // Rev. 4993 — foto do funcionário inline (CID) no e-mail
+      let fotoAttachment: { filename: string; content: Buffer; contentType: string; cid: string } | null = null;
+      try {
+        if (emp.fotoUrl && String(emp.fotoUrl).startsWith("/uploads/")) {
+          const path = await import("path");
+          const fs = await import("fs/promises");
+          const key = String(emp.fotoUrl).replace(/^\/uploads\//, "").split("?")[0];
+          const uploadsRoot = path.resolve(process.cwd(), "server/uploads");
+          const filePath = path.resolve(uploadsRoot, key);
+          if (!filePath.startsWith(uploadsRoot + path.sep)) throw new Error("caminho inválido");
+          const ext = (key.split(".").pop() || "").toLowerCase();
+          const mime = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
+          let buf: Buffer | null = null;
+          try { buf = await fs.readFile(filePath); } catch { buf = null; }
+          if (!buf) {
+            // fallback: arquivo fora do disco → bytes em uploaded_files
+            const dbRes: any = await db.execute(sql`SELECT data_base64 FROM uploaded_files WHERE file_key = ${key} LIMIT 1`);
+            const row = (dbRes?.rows ?? dbRes)?.[0];
+            if (row?.data_base64) buf = Buffer.from(String(row.data_base64), "base64");
+          }
+          if (buf && buf.length > 0 && buf.length < 8 * 1024 * 1024) {
+            fotoAttachment = { filename: `foto.${ext || "jpg"}`, content: buf, contentType: mime, cid: "fotofuncionario" };
+          }
+        }
+      } catch (e) {
+        console.error("[AtestadoStatus] Erro ao anexar foto do funcionário:", e);
+      }
 
       const corpo = [
         `Funcionário: ${emp.nomeCompleto}`,
+        emp.funcao ? `Função: ${emp.funcao}` : "",
+        obraNome ? `Obra: ${obraNome}` : `Obra: — (sem alocação ativa)`,
         `Tipo: ${tipoAfastamento}`,
         `Dias de afastamento: ${diasAfastamento}`,
-        `Data de retorno prevista: ${dataRetorno}`,
+        `Data de retorno prevista: ${dataRetornoBR}`,
         isINSS ? `\nATENÇÃO: Afastamento superior a 15 dias — a partir do 16º dia, o pagamento é responsabilidade do INSS (Lei 8.213/91, Art. 59 e Art. 60).` : "",
         isINSS ? `O RH deve providenciar o encaminhamento ao INSS para perícia médica.` : "",
       ].filter(Boolean).join("\n");
 
-      const corpoHtml = `<p>${corpo.replace(/\n/g, "<br>")}</p>`;
+      const esc = (s: string) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      const fotoHttp = !fotoAttachment && emp.fotoUrl && /^https:\/\//i.test(String(emp.fotoUrl)) ? String(emp.fotoUrl) : null;
+      const fotoHtml = fotoAttachment
+        ? `<img src="cid:fotofuncionario" alt="Foto do funcionário" width="96" height="96" style="width:96px;height:96px;border-radius:50%;object-fit:cover;border:3px solid #1B2A4A;display:block;" />`
+        : fotoHttp
+        ? `<img src="${fotoHttp.replace(/"/g, "")}" alt="Foto do funcionário" width="96" height="96" style="width:96px;height:96px;border-radius:50%;object-fit:cover;border:3px solid #1B2A4A;display:block;" />`
+        : `<div style="width:96px;height:96px;border-radius:50%;background:#1B2A4A;color:#fff;font:bold 32px Arial;line-height:96px;text-align:center;">${esc(emp.nomeCompleto.trim().split(/\s+/).map((p: string) => p[0]).filter(Boolean).slice(0, 2).join("").toUpperCase())}</div>`;
+      const corpoHtml = `
+        <table cellpadding="0" cellspacing="0" style="font-family:Arial,sans-serif;color:#1f2937;">
+          <tr>
+            <td style="padding-right:16px;vertical-align:top;">${fotoHtml}</td>
+            <td style="vertical-align:top;">
+              <p style="margin:0 0 4px;font-size:16px;font-weight:bold;">${esc(emp.nomeCompleto)}</p>
+              ${emp.funcao ? `<p style="margin:0 0 2px;font-size:13px;color:#4b5563;">Função: ${esc(emp.funcao)}</p>` : ""}
+              <p style="margin:0 0 10px;font-size:13px;color:#4b5563;">🏗 Obra: <b>${esc(obraNome || "— (sem alocação ativa)")}</b></p>
+              <p style="margin:0;font-size:14px;">
+                Tipo: ${esc(tipoAfastamento)}<br>
+                Dias de afastamento: ${diasAfastamento}<br>
+                Data de retorno prevista: ${esc(dataRetornoBR)}
+              </p>
+              ${isINSS ? `<p style="margin:10px 0 0;font-size:13px;color:#b45309;"><b>ATENÇÃO:</b> Afastamento superior a 15 dias — a partir do 16º dia, o pagamento é responsabilidade do INSS (Lei 8.213/91, Art. 59 e Art. 60).<br>O RH deve providenciar o encaminhamento ao INSS para perícia médica.</p>` : ""}
+            </td>
+          </tr>
+        </table>`;
       for (const r of recipients) {
         let statusEnvio: "enviado" | "erro" = "erro";
         let erroMsg: string | null = "Falha desconhecida";
         try {
-          const res = await sendEmail({ to: r.email, subject: titulo, html: corpoHtml, text: corpo });
+          const res = await sendEmail({ to: r.email, subject: titulo, html: corpoHtml, text: corpo, attachments: fotoAttachment ? [fotoAttachment] : undefined });
           if (res.success) { statusEnvio = "enviado"; erroMsg = null; }
           else { erroMsg = res.error || "Falha SMTP"; }
         } catch (e: any) {
@@ -677,6 +752,7 @@ export const controleDocumentosRouter = router({
             clinica: asos.clinica,
             observacoes: asos.observacoes,
             documentoUrl: asos.documentoUrl,
+            dataAgendamentoRenovacao: asos.dataAgendamentoRenovacao,
             restricoesOperacionais: (asos as any).restricoesOperacionais,
             createdAt: asos.createdAt,
           })
@@ -832,6 +908,23 @@ export const controleDocumentosRouter = router({
       .mutation(async ({ input, ctx }) => {
         const db = (await getDb())!;
         await db.update(asos).set({ deletedAt: sql`NOW()`, deletedBy: ctx.user.name ?? 'Sistema', deletedByUserId: ctx.user.id } as any).where(eq(asos.id, input.id));
+        return { success: true };
+      }),
+
+    // Rev. 5044 — agenda (ou desagenda, data=null) a RENOVAÇÃO do exame médico.
+    // Informativo: aparece na listagem de ASOs e na Central de Alertas.
+    agendarRenovacao: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        companyId: z.number(),
+        data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        const result = await db.update(asos)
+          .set({ dataAgendamentoRenovacao: input.data, updatedAt: sql`NOW()` } as any)
+          .where(and(eq(asos.id, input.id), eq(asos.companyId, input.companyId), isNull(asos.deletedAt)));
+        console.log(`[ASO] Agendamento de renovação aso#${input.id} → ${input.data ?? '(removido)'} por ${ctx.user?.name ?? 'Sistema'}`);
         return { success: true };
       }),
     uploadDoc: protectedProcedure
@@ -1454,6 +1547,14 @@ export const controleDocumentosRouter = router({
             certificadoUrl: trainings.certificadoUrl,
             statusTreinamento: trainings.statusTreinamento,
             observacoes: trainings.observacoes,
+            dataAgendamentoRenovacao: trainings.dataAgendamentoRenovacao,
+            // Rev. 5051 — cadeia de reciclagem
+            treinamentoAnteriorId: (trainings as any).treinamentoAnteriorId,
+            // Rev. 5027 — empregador documental (FC/JF) p/ certificado gerado
+            empregadorDocumentos: (employees as any).empregadorDocumentos,
+            // Rev. 5048 — flags leves de assinatura (dataURLs pesados ficam fora do list)
+            temAssinaturaInstrutor: sql<boolean>`(${(trainings as any).assinaturaInstrutor} IS NOT NULL AND ${(trainings as any).assinaturaInstrutor} <> '')`,
+            temAssinaturaColaborador: sql<boolean>`(${(trainings as any).assinaturaColaborador} IS NOT NULL AND ${(trainings as any).assinaturaColaborador} <> '')`,
           })
           .from(trainings)
           .innerJoin(employees, eq(trainings.employeeId, employees.id))
@@ -1464,14 +1565,74 @@ export const controleDocumentosRouter = router({
         const { getCipaStatusByEmployeeIds, projectCipaFields } = await import("../_core/cipaStatus");
         const cipaMap = await getCipaStatusByEmployeeIds(db, input, rows.map((r: any) => r.employeeId));
 
+        // Rev. 5051 — cadeia de reciclagem: registros referenciados como "anterior" por
+        // outro registro vivo ficam marcados como substituídos (saem da lista principal
+        // no client; permanecem no banco e aparecem no histórico).
+        const substituidos = new Set<number>();
+        const anteriorCount = new Map<number, number>(); // id → qtde de elos ATRÁS dele na cadeia
+        const byId = new Map<number, any>(rows.map((r: any) => [r.id, r]));
+        for (const r of rows as any[]) {
+          if (r.treinamentoAnteriorId) substituidos.add(r.treinamentoAnteriorId);
+        }
+        for (const r of rows as any[]) {
+          if (substituidos.has(r.id)) continue;
+          // conta o comprimento da cadeia atrás do registro atual (com guarda anti-ciclo)
+          let n = 0; let cur = r; const seen = new Set<number>([r.id]);
+          while (cur?.treinamentoAnteriorId && !seen.has(cur.treinamentoAnteriorId) && n < 50) {
+            seen.add(cur.treinamentoAnteriorId);
+            cur = byId.get(cur.treinamentoAnteriorId);
+            if (cur) n++;
+            else { n++; break; } // anterior fora do filtro atual (ex.: outra empresa do grupo) — ainda conta
+          }
+          r.__historicoCount = n;
+        }
+
         return rows.map((r: any) => {
           const cipaFlat = projectCipaFields(cipaMap, r.employeeId);
+          const extra = { substituido: substituidos.has(r.id), historicoCount: r.__historicoCount || 0 };
+          delete r.__historicoCount;
           if (r.dataValidade) {
             const { status, diasRestantes } = calcularStatusASO(r.dataValidade);
-            return { ...r, ...cipaFlat, statusCalculado: status, diasRestantes };
+            return { ...r, ...cipaFlat, ...extra, statusCalculado: status, diasRestantes };
           }
-          return { ...r, ...cipaFlat, statusCalculado: "SEM VALIDADE", diasRestantes: 0 };
+          return { ...r, ...cipaFlat, ...extra, statusCalculado: "SEM VALIDADE", diasRestantes: 0 };
         });
+      }),
+
+    // Rev. 5051 — histórico completo da cadeia de reciclagem de um treinamento.
+    historico: protectedProcedure
+      .input(z.object({ id: z.number(), companyId: z.number(), companyIds: z.array(z.number()).optional() }))
+      .query(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        const idsPermitidos = await resolveCompanyIdsGuard(ctx, input);
+        const out: any[] = [];
+        let curId: number | null = input.id;
+        const seen = new Set<number>();
+        while (curId && !seen.has(curId) && out.length < 50) {
+          seen.add(curId);
+          const [row] = await db
+            .select({
+              id: trainings.id,
+              nome: trainings.nome,
+              norma: trainings.norma,
+              cargaHoraria: trainings.cargaHoraria,
+              dataRealizacao: trainings.dataRealizacao,
+              dataValidade: trainings.dataValidade,
+              instrutor: trainings.instrutor,
+              entidade: trainings.entidade,
+              certificadoUrl: trainings.certificadoUrl,
+              observacoes: trainings.observacoes,
+              treinamentoAnteriorId: (trainings as any).treinamentoAnteriorId,
+              createdAt: trainings.createdAt,
+            })
+            .from(trainings)
+            .where(and(eq(trainings.id, curId), inArray(trainings.companyId, idsPermitidos), isNull(trainings.deletedAt)));
+          if (!row) break;
+          const st = row.dataValidade ? calcularStatusASO(row.dataValidade) : { status: "SEM VALIDADE", diasRestantes: 0 };
+          out.push({ ...row, statusCalculado: st.status, diasRestantes: st.diasRestantes });
+          curId = (row as any).treinamentoAnteriorId ?? null;
+        }
+        return out; // [0] = mais atual da consulta, seguintes = anteriores
       }),
 
     create: protectedProcedure
@@ -1487,10 +1648,21 @@ export const controleDocumentosRouter = router({
           instrutor: z.string().optional(),
           entidade: z.string().optional(),
           observacoes: z.string().optional(),
+          // Rev. 5051 — reciclagem: id do treinamento vencido que este substitui
+          treinamentoAnteriorId: z.number().optional(),
         })
       )
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
         const db = (await getDb())!;
+        // Rev. 5051 — tenancy: o companyId de destino precisa estar entre as empresas do usuário
+        const idsPermitidos = await resolveCompanyIdsGuard(ctx, { companyId: input.companyId });
+        if (!idsPermitidos.includes(input.companyId)) throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+        // ... e o colaborador precisa pertencer a essa empresa
+        const [emp] = await db.select({ id: employees.id })
+          .from(employees)
+          .where(and(eq(employees.id, input.employeeId), eq(employees.companyId, input.companyId), isNull(employees.deletedAt)));
+        if (!emp) throw new TRPCError({ code: "BAD_REQUEST", message: "Colaborador não pertence a esta empresa." });
+
         let statusTreinamento: "Valido" | "Vencido" | "A_Vencer" = "Valido";
         if (input.dataValidade) {
           const { diasRestantes } = calcularStatusASO(input.dataValidade);
@@ -1498,19 +1670,46 @@ export const controleDocumentosRouter = router({
           else if (diasRestantes <= 30) statusTreinamento = "A_Vencer";
         }
 
-        const [insertResult] = await db.insert(trainings).values({
-          companyId: input.companyId,
-          employeeId: input.employeeId,
-          nome: input.nome,
-          norma: input.norma || null,
-          cargaHoraria: input.cargaHoraria || null,
-          dataRealizacao: input.dataRealizacao,
-          dataValidade: input.dataValidade || null,
-          instrutor: input.instrutor || null,
-          entidade: input.entidade || null,
-          statusTreinamento,
-          observacoes: input.observacoes || null,
-        }).returning();
+        // Rev. 5051 — valida o anterior: mesma empresa e mesmo colaborador, vivo.
+        let anteriorId: number | null = null;
+        if (input.treinamentoAnteriorId) {
+          const [ant] = await db.select({ id: trainings.id, employeeId: trainings.employeeId })
+            .from(trainings)
+            .where(and(eq(trainings.id, input.treinamentoAnteriorId), eq(trainings.companyId, input.companyId), isNull(trainings.deletedAt)));
+          if (!ant) throw new TRPCError({ code: "NOT_FOUND", message: "Treinamento anterior não encontrado nesta empresa." });
+          if (ant.employeeId !== input.employeeId) throw new TRPCError({ code: "BAD_REQUEST", message: "O treinamento anterior pertence a outro colaborador." });
+          anteriorId = ant.id;
+        }
+
+        const insertResult = await db.transaction(async (tx) => {
+          const [novo] = await tx.insert(trainings).values({
+            companyId: input.companyId,
+            employeeId: input.employeeId,
+            nome: input.nome,
+            norma: input.norma || null,
+            cargaHoraria: input.cargaHoraria || null,
+            dataRealizacao: input.dataRealizacao,
+            dataValidade: input.dataValidade || null,
+            instrutor: input.instrutor || null,
+            entidade: input.entidade || null,
+            statusTreinamento,
+            observacoes: input.observacoes || null,
+            treinamentoAnteriorId: anteriorId,
+          } as any).returning();
+          if (anteriorId) {
+            // reciclagem concluída: limpa o agendamento do antigo (sai da lista de reciclagem)
+            await tx.update(trainings)
+              .set({ dataAgendamentoRenovacao: null, updatedAt: sql`NOW()` } as any)
+              .where(eq(trainings.id, anteriorId));
+          }
+          return novo;
+        }).catch((e: any) => {
+          // índice único parcial uniq_trainings_sucessor: já existe reciclagem viva deste anterior
+          if (String(e?.message || e).includes("uniq_trainings_sucessor") || e?.cause?.code === "23505" || String(e?.cause?.message || "").includes("uniq_trainings_sucessor")) {
+            throw new TRPCError({ code: "CONFLICT", message: "Este treinamento já foi reciclado — atualize a lista." });
+          }
+          throw e;
+        });
         return { success: true, id: insertResult.id };
       }),
 
@@ -1561,6 +1760,24 @@ export const controleDocumentosRouter = router({
         return { success: true };
       }),
 
+    // Rev. 5044 — agenda (ou desagenda, data=null) a RECICLAGEM do treinamento.
+    // Aceita vários ids de uma vez: o TST marca uma TURMA única com N colaboradores.
+    agendarRenovacao: protectedProcedure
+      .input(z.object({
+        ids: z.array(z.number()).min(1).max(500),
+        companyId: z.number(),
+        data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        const result: any = await db.update(trainings)
+          .set({ dataAgendamentoRenovacao: input.data, updatedAt: sql`NOW()` } as any)
+          .where(and(inArray(trainings.id, input.ids), eq(trainings.companyId, input.companyId), isNull(trainings.deletedAt)))
+          .returning({ id: trainings.id });
+        console.log(`[Treinamentos] Turma de reciclagem ${input.data ?? '(removida)'} — ${result.length} treinamento(s) por ${ctx.user?.name ?? 'Sistema'}`);
+        return { success: true, agendados: result.length };
+      }),
+
     uploadDoc: protectedProcedure
       .input(z.object({ id: z.number(), fileBase64: z.string(), fileName: z.string() }))
       .mutation(async ({ input }) => {
@@ -1571,6 +1788,173 @@ export const controleDocumentosRouter = router({
         const { url } = await storagePut(key, buffer, ext === "pdf" ? "application/pdf" : "application/octet-stream");
         await db.update(trainings).set({ certificadoUrl: url }).where(eq(trainings.id, input.id));
         return { url };
+      }),
+
+    // Rev. 5028 — assinaturas digitais do certificado (instrutor + colaborador).
+    // Ficam FORA do list (dataURLs pesados) — carregadas sob demanda no dialog.
+    getAssinaturas: protectedProcedure
+      .input(z.object({ id: z.number(), companyId: z.number() }))
+      .query(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        // Anti-IDOR: só empresas às quais o usuário tem acesso
+        const ids = await resolveCompanyIdsGuard(ctx, input);
+        const [row] = await db.select({
+          assinaturaInstrutor: (trainings as any).assinaturaInstrutor,
+          assinaturaColaborador: (trainings as any).assinaturaColaborador,
+        }).from(trainings)
+          .where(and(eq(trainings.id, input.id), inArray(trainings.companyId, ids), isNull(trainings.deletedAt)));
+        if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Treinamento não encontrado." });
+        return row;
+      }),
+
+    // Rev. 5032 — conteúdo programático puxado do template ISO (Central de Documentos, categoria SST).
+    // Match por norma (ex. "NR-35") ou nome do treinamento contra o título/HTML do template vigente.
+    getConteudoProgramatico: protectedProcedure
+      .input(z.object({ id: z.number(), companyId: z.number() }))
+      .query(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        // Anti-IDOR: dados do treinamento derivados no server, escopados às empresas do usuário
+        const ids = await resolveCompanyIdsGuard(ctx, input);
+        const [trein] = await db.select({ nome: trainings.nome, norma: trainings.norma })
+          .from(trainings)
+          .where(and(eq(trainings.id, input.id), inArray(trainings.companyId, ids), isNull(trainings.deletedAt)));
+        if (!trein) throw new TRPCError({ code: "NOT_FOUND", message: "Treinamento não encontrado." });
+        const { systemDocumentTemplates } = await import("../../drizzle/schema");
+        const norm = (s: string) => (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+        // Número da NR extraído com fronteira (evita NR-1 casar com NR-10/NR-11)
+        const nrNumOf = (s: string): string | null => {
+          const m = /(?:^|[^a-z0-9])nr\s*[-.\s]?\s*(\d{1,2})(?!\d)/i.exec((s || "").toLowerCase());
+          return m ? String(parseInt(m[1], 10)) : null;
+        };
+        const normaNum = nrNumOf(trein.norma || "") || nrNumOf(trein.nome || "");
+        const nomeKey = norm(trein.nome || "");
+        const templates = (await db.select({
+          id: systemDocumentTemplates.id,
+          codigo: systemDocumentTemplates.codigo,
+          titulo: systemDocumentTemplates.titulo,
+          conteudoHtml: systemDocumentTemplates.conteudoHtml,
+        }).from(systemDocumentTemplates)
+          .where(and(
+            eq(systemDocumentTemplates.status, "vigente"),
+            isNull(systemDocumentTemplates.deletedAt),
+            sql`${systemDocumentTemplates.codigo} ILIKE 'FC-SST%'`,
+          ))).sort((a: any, b: any) => String(a.codigo).localeCompare(String(b.codigo))); // determinístico
+        // 1º: número da NR no título; 2º: nome do treinamento ≡ título; 3º: número da NR no HTML
+        const byTituloNorma = normaNum ? templates.find((t: any) => nrNumOf(t.titulo) === normaNum) : undefined;
+        const byTituloNome = !byTituloNorma && nomeKey ? templates.find((t: any) => norm(t.titulo) === nomeKey) : undefined;
+        const byHtml = !byTituloNorma && !byTituloNome && normaNum ? templates.find((t: any) => nrNumOf(String(t.conteudoHtml || "").replace(/<[^>]+>/g, " ")) === normaNum) : undefined;
+        const match: any = byTituloNorma || byTituloNome || byHtml;
+        if (!match?.conteudoHtml) return null;
+        // Extrai a seção "Conteúdo Programático": pega os <li> após o marcador.
+        // Rev. 5044 — fallback: templates sem o marcador literal usam TODAS as
+        // listas do documento (o template SST inteiro É o programa do treinamento).
+        const html = String(match.conteudoHtml);
+        const idx = html.search(/conte[uú]do\s+program[aá]tico/i);
+        let secao: string;
+        if (idx >= 0) {
+          // Rev. 5047 — a lista pode ser ANINHADA (<ol> de seções com sub-<ul>
+          // de itens). Cortar no primeiro </ul> perdia tudo após a 1ª seção.
+          // Varre com contagem de profundidade até fechar a lista de nível 0.
+          const resto = html.slice(idx);
+          const tagRe = /<(\/?)(ul|ol)\b[^>]*>/gi;
+          let depth = 0, started = false, fim = -1;
+          let tg: RegExpExecArray | null;
+          while ((tg = tagRe.exec(resto)) !== null) {
+            if (tg[1] === "/") {
+              depth--;
+              if (started && depth <= 0) { fim = tg.index + tg[0].length; break; }
+            } else { depth++; started = true; }
+          }
+          secao = fim >= 0 ? resto.slice(0, fim) : resto;
+        } else {
+          secao = html;
+        }
+        // Cada abertura de <li> vira um item: o texto vai até a próxima tag
+        // estrutural de lista (<li>, </li>, <ul>, <ol>...). Assim um <li> "pai"
+        // (seção) contribui só com seu título, e cada sub-item sai na ordem
+        // do documento — sem perder o 1º sub-item de cada seção (regex lazy
+        // <li>…</li> engolia ele junto com o pai).
+        const itens: string[] = [];
+        const partes = secao.split(/<li[^>]*>/i).slice(1);
+        for (const parte of partes) {
+          const stop = parte.search(/<\/?(li|ul|ol)\b/i);
+          const own = stop >= 0 ? parte.slice(0, stop) : parte;
+          const txt = own.replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/\s+/g, " ").trim();
+          if (txt) itens.push(txt);
+        }
+        if (itens.length === 0) return null;
+        return { templateCodigo: match.codigo, templateTitulo: match.titulo, itens };
+      }),
+
+    salvarAssinaturas: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        companyId: z.number(),
+        // dataURL PNG (canvas.toDataURL) ou null (limpar). Cap de ~300KB por assinatura.
+        assinaturaInstrutor: z.string().regex(/^data:image\/png;base64,[A-Za-z0-9+/]+=*$/).max(400_000).nullable().optional(),
+        assinaturaColaborador: z.string().regex(/^data:image\/png;base64,[A-Za-z0-9+/]+=*$/).max(400_000).nullable().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        const ids = await resolveCompanyIdsGuard(ctx, input);
+        const set: any = {};
+        if (input.assinaturaInstrutor !== undefined) set.assinaturaInstrutor = input.assinaturaInstrutor;
+        if (input.assinaturaColaborador !== undefined) set.assinaturaColaborador = input.assinaturaColaborador;
+        if (Object.keys(set).length === 0) return { success: true };
+        const updated = await db.update(trainings).set(set)
+          .where(and(eq(trainings.id, input.id), inArray(trainings.companyId, ids), isNull(trainings.deletedAt)))
+          .returning({ id: trainings.id });
+        if (!updated.length) throw new TRPCError({ code: "NOT_FOUND", message: "Treinamento não encontrado." });
+        return { success: true };
+      }),
+
+    // Rev. 5028 — instrutores e entidades já usados, para sugestão nos formulários.
+    sugestoes: protectedProcedure
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
+      .query(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        const ids = await resolveCompanyIdsGuard(ctx, input);
+        const rows = await db.select({ instrutor: trainings.instrutor, entidade: trainings.entidade })
+          .from(trainings)
+          .where(and(inArray(trainings.companyId, ids), isNull(trainings.deletedAt)));
+        // Rev. 5030 — sugestões suprimidas pelo RH/master ficam fora da lista
+        const { trainingSugestaoExclusoes } = await import("../../drizzle/schema");
+        const excl = await db.select({ tipo: trainingSugestaoExclusoes.tipo, valor: trainingSugestaoExclusoes.valor })
+          .from(trainingSugestaoExclusoes)
+          .where(inArray(trainingSugestaoExclusoes.companyId, ids));
+        const exSet = new Set(excl.map(e => `${e.tipo}|${(e.valor || "").trim().toLowerCase()}`));
+        const instrutores = [...new Set(rows.map(r => (r.instrutor || "").trim()).filter(Boolean))]
+          .filter(v => !exSet.has(`instrutor|${v.toLowerCase()}`))
+          .sort((a, b) => a.localeCompare(b, "pt-BR"));
+        const entidades = [...new Set(rows.map(r => (r.entidade || "").trim()).filter(Boolean))]
+          .filter(v => !exSet.has(`entidade|${v.toLowerCase()}`))
+          .sort((a, b) => a.localeCompare(b, "pt-BR"));
+        return { instrutores, entidades };
+      }),
+
+    // Rev. 5030 — master/RH (admin) exclui uma sugestão repetida/errada da lista
+    excluirSugestao: protectedProcedure
+      .input(z.object({
+        companyId: z.number(),
+        companyIds: z.array(z.number()).optional(),
+        tipo: z.enum(["instrutor", "entidade"]),
+        valor: z.string().trim().min(1).max(255),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        if (ctx.user.role !== "admin" && ctx.user.role !== "admin_master") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Apenas administradores podem excluir sugestões." });
+        }
+        const db = (await getDb())!;
+        const ids = await resolveCompanyIdsGuard(ctx, input);
+        const { trainingSugestaoExclusoes } = await import("../../drizzle/schema");
+        for (const cid of ids) {
+          await db.execute(sql`
+            INSERT INTO training_sugestao_exclusoes (company_id, tipo, valor, created_by)
+            VALUES (${cid}, ${input.tipo}, ${input.valor}, ${ctx.user.id})
+            ON CONFLICT (company_id, tipo, lower(valor)) DO NOTHING
+          `);
+        }
+        return { success: true };
       }),
   }),
 
@@ -1590,6 +1974,8 @@ export const controleDocumentosRouter = router({
             funcao: employees.funcao,
             setor: employees.setor,
             fotoUrl: employees.fotoUrl,
+            // Rev. 4986 — empregador documental (FC/JF): advertência sai com os dados da empresa correta
+            empregadorDocumentos: (employees as any).empregadorDocumentos,
             tipoAdvertencia: warnings.tipoAdvertencia,
             dataOcorrencia: warnings.dataOcorrencia,
             motivo: warnings.motivo,
@@ -1996,24 +2382,46 @@ export const controleDocumentosRouter = router({
     }),
 
   // ===================== RAIO-X DO FUNCIONÁRIO =====================
+  // Rev. 5194 — accessStatus: informa o nível de acesso do usuário ao Raio-X.
+  // Input is intentionally empty — company scope is derived server-side only.
+  // Frontend must fail closed on mode === "none".
+  raioXAccessStatus: protectedProcedure
+    .input(z.object({}).optional())
+    .query(async ({ ctx }) => {
+      // Company scope derived entirely server-side; client supplies nothing.
+      return getRaioXAccessStatus(ctx as any);
+    }),
+
   raioX: protectedProcedure
     .input(z.object({ employeeId: z.number() }))
     .query(async ({ input, ctx }) => {
-      // Rev. 2539 — LGPD: engenheiro de campo (e demais não-RH/Admin) só acessa o
-      // dossiê de colaboradores alocados nas obras a que tem acesso. Fecha o vetor
-      // de acesso por ID (rota /raio-x/:id) que burlava o filtro client-side da
-      // lista do Raio-X. RH (admin de rh-dp) e Admin/Master seguem com acesso total.
-      if (!(await userCanAccessEmployeeDossier(ctx.user.id, ctx.user.role, input.employeeId))) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Acesso negado: este colaborador não está alocado em uma obra sob sua gestão." });
-      }
+      // Rev. 5194 — LGPD: central guard enforces strict access control.
+      // Full access: admin_master OR rh-dp module admin only.
+      // All others: own employee record only (company scope server-derived).
+      // Rev. 5195 — guard enforces company scope even for rh-dp full users;
+      // admin_master is the only truly global caller. An out-of-scope target
+      // never reaches this point.
+      await assertRaioXAccess(ctx as any, input.employeeId);
       // Rev. 2208 — sigilo Aviso Prévio no Raio-X: para usuários sem o flag
       // verStatusAviso (e não Master), o array `avisosPrevios` é zerado e
       // mascaramos `emp.status = 'Ativo'` se for 'Aviso'. Cobre banner vermelho
       // "EM AVISO PRÉVIO" e a seção "Avisos Prévios" no detalhe do Raio-X.
       const canSeeAviso = await userCanSeeAvisoStatus(ctx.user.id, ctx.user.role);
       const db = (await getDb())!;
-      // Dados do funcionário
-      const [emp] = await db.select().from(employees).where(eq(employees.id, input.employeeId));
+      // Dados do funcionário — lookup company-scoped defensively for non-master.
+      // admin_master: global. rh-dp full & self: scope to authorized companies
+      // (guard already vetted the target, this is defense-in-depth).
+      let empQuery: any;
+      if (ctx.user.role !== "admin_master") {
+        const allowedCids = await deriveAllowedCompanyIds(ctx.user.id, ctx.user.role);
+        empQuery = allowedCids.length > 0
+          ? db.select().from(employees).where(and(eq(employees.id, input.employeeId), inArray(employees.companyId, allowedCids)))
+          : null;
+      } else {
+        empQuery = db.select().from(employees).where(eq(employees.id, input.employeeId));
+      }
+      if (!empQuery) return null;
+      const [emp] = await empQuery;
       if (!emp) return null;
       // Rev. 2208 — mascara status real "Aviso" → "Ativo" no Raio-X.
       if (!canSeeAviso && (emp as any).status === 'Aviso') (emp as any).status = 'Ativo';
@@ -2285,7 +2693,11 @@ export const controleDocumentosRouter = router({
       const [bhSaldo] = await db.select().from(bancoHorasSaldo)
         .where(and(eq(bancoHorasSaldo.employeeId, input.employeeId), eq(bancoHorasSaldo.companyId, emp.companyId)));
       const bhLancamentos = await db.select().from(bancoHorasLancamentos)
-        .where(and(eq(bancoHorasLancamentos.employeeId, input.employeeId), eq(bancoHorasLancamentos.companyId, emp.companyId)))
+        .where(and(
+          eq(bancoHorasLancamentos.employeeId, input.employeeId),
+          eq(bancoHorasLancamentos.companyId, emp.companyId),
+          gte(bancoHorasLancamentos.data, BANCO_HORAS_DATA_INICIO),
+        ))
         .orderBy(desc(bancoHorasLancamentos.data), desc(bancoHorasLancamentos.id))
         .limit(100);
       const bancoHoras = {
@@ -2353,6 +2765,20 @@ export const controleDocumentosRouter = router({
         const corMap: Record<string, string> = { Promocao: "green", Mudanca_Salario: "blue", Mudanca_Funcao: "purple", Transferencia: "indigo", Afastamento: "amber", Retorno: "teal", Ferias: "cyan", Desligamento: "red" };
         timeline.push({ data: h.dataEvento, tipo: tipoLabel[h.tipo] || h.tipo, descricao: desc, cor: corMap[h.tipo] || "gray", icone: "history", refTipo: "historico", refId: h.id, meta: h });
       });
+      // Rev. 5107 — Termo de Adesão ao Prêmio de Compras (assinado via IntegraSign)
+      try {
+        const termosAdesao = await db.select({
+          id: employeeDocuments.id, nome: employeeDocuments.nome, descricao: employeeDocuments.descricao,
+          fileUrl: employeeDocuments.fileUrl, createdAt: employeeDocuments.createdAt,
+        }).from(employeeDocuments).where(and(
+          eq(employeeDocuments.employeeId, emp.id),
+          eq(employeeDocuments.tipo, "termo_adesao_premio"),
+          isNull(employeeDocuments.deletedAt),
+        ));
+        termosAdesao.forEach((d: any) => {
+          timeline.push({ data: String(d.createdAt).slice(0, 10), tipo: "Termo de Adesão", descricao: `${d.nome} — assinado eletronicamente`, cor: "yellow", icone: "award", refTipo: "documento", refId: d.id, meta: { nome: d.nome, descricao: d.descricao, fileUrl: d.fileUrl } });
+        });
+      } catch (_) { /* tabela pode não existir em ambientes antigos */ }
       // Histórico de obras (alocação / transferência / saída) — MUDANÇA DE OBRA na timeline.
       // Dedup: a transferência grava DUAS linhas no mesmo dia (uma 'saida' da obra de origem
       // + uma 'transferencia' p/ a obra destino). Mostramos só o lado de chegada; a 'saida'
@@ -3308,6 +3734,7 @@ export const controleDocumentosRouter = router({
           dataValidade: asos.dataValidade,
           resultado: asos.resultado,
           documentoUrl: asos.documentoUrl,
+          dataAgendamentoRenovacao: asos.dataAgendamentoRenovacao,
         })
         .from(asos)
         .innerJoin(employees, eq(asos.employeeId, employees.id))
@@ -3328,6 +3755,7 @@ export const controleDocumentosRouter = router({
           dataRealizacao: trainings.dataRealizacao,
           dataValidade: trainings.dataValidade,
           certificadoUrl: trainings.certificadoUrl,
+          dataAgendamentoRenovacao: trainings.dataAgendamentoRenovacao,
         })
         .from(trainings)
         .innerJoin(employees, eq(trainings.employeeId, employees.id))

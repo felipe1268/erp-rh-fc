@@ -15,6 +15,7 @@ import { getDb, getEffectiveAllowedObraIds, getUserCompanyLinks } from "../db";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter, companyInput } from "../companyHelper";
 import { getCompaniesForUser } from "../db";
+import { resolverDestinoRecebimentoLocacao } from "../utils/recebimentoLocacao";
 import {
   equipamentosProprios,
   equipamentosLocados,
@@ -408,8 +409,8 @@ export const equipamentosRouter = router({
       custoSeguroMedioMes: z.number().optional(),
       fotos: fotoSchema,
       observacoes: z.string().optional(),
-      // Rev. 2552 — status + obra atual já no CADASTRO (antes só na edição).
-      // Quando status="em_obra" exige obra; senão força almoxarifado/null.
+      // Status e localização são independentes. "Em obra" exige uma obra,
+      // mas os demais estados não são convertidos automaticamente em almoxarifado.
       status: z.enum(["disponivel", "em_obra", "manutencao", "baixado"]).optional(),
       localizacaoAtualObraId: z.number().nullable().optional(),
       // Rev. 3314 — cadastro em LOTE: registra N itens idênticos de uma vez
@@ -436,13 +437,15 @@ export const equipamentosRouter = router({
       if (!upperBR(input.descricao)) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Descrição não pode estar vazia." });
       }
-      // Rev. 2552 — coerência status×obra no SERVIDOR (não confiar só no client).
-      // Quando status="em_obra": obra é obrigatória e DEVE pertencer à mesma
-      // empresa (fecha vetor cross-tenant pelo novo campo de obra no cadastro).
+      // Status e localização são dimensões distintas: um equipamento em
+      // manutenção pode continuar localizado na obra onde foi danificado.
+      // Toda obra informada deve pertencer à mesma empresa.
       if (input.status === "em_obra") {
         if (!input.localizacaoAtualObraId) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Selecione a obra onde o equipamento está." });
         }
+      }
+      if (input.localizacaoAtualObraId) {
         const obraRes: any = await db.execute(sql`
           SELECT id FROM obras
           WHERE id = ${input.localizacaoAtualObraId} AND "companyId" = ${input.companyId}
@@ -451,6 +454,10 @@ export const equipamentosRouter = router({
         const obraRow = (obraRes?.rows ?? obraRes ?? [])[0];
         if (!obraRow) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Obra inválida ou de outra empresa." });
+        }
+        const allowedObras = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+        if (allowedObras !== null && !allowedObras.includes(input.localizacaoAtualObraId)) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso à obra selecionada." });
         }
       }
       // Rev. 2513 — INSERT com auto-gen + retry de UNIQUE violation.
@@ -473,11 +480,9 @@ export const equipamentosRouter = router({
         custoSeguroMedioMes: input.custoSeguroMedioMes != null ? String(input.custoSeguroMedioMes) : "0",
         fotosJson: input.fotos ?? null,
         observacoes: upperBR(input.observacoes) ?? null,
-        // Rev. 2552 — status/obra opcionais no cadastro. Coerência: só "em_obra"
-        // grava obra; demais status forçam almoxarifado/null (sem órfão visual).
         status: input.status ?? "disponivel",
-        localizacaoAtualTipo: input.status === "em_obra" ? ("obra" as const) : ("almoxarifado" as const),
-        localizacaoAtualObraId: input.status === "em_obra" ? (input.localizacaoAtualObraId ?? null) : null,
+        localizacaoAtualTipo: input.localizacaoAtualObraId ? ("obra" as const) : ("nao_informada" as const),
+        localizacaoAtualObraId: input.localizacaoAtualObraId ?? null,
         // Rev. 2514 — rastreabilidade: quem cadastrou (snapshot do nome
         // pra histórico estável + user_id pro link forte).
         criadoPorUserId: ctx.user.id,
@@ -489,51 +494,71 @@ export const equipamentosRouter = router({
       // propósito: `proximoCodigoPatrimonio` relê o MAX a cada item, então
       // os números saem encadeados (EQP-0114, EQP-0115, …).
       const quantidade = Math.min(Math.max(input.quantidade ?? 1, 1), 100);
-      const codigos: string[] = [];
-      let primeiroId: number | null = null;
-      for (let i = 0; i < quantidade; i++) {
-        let lastErr: any = null;
-        let inserido = false;
-        for (let attempt = 0; attempt < 8; attempt++) {
-          const cod = await proximoCodigoPatrimonio(db, input.companyId);
-          try {
-            const [created] = await db.insert(equipamentosProprios).values({
-              ...baseVals,
-              codigoPatrimonio: cod,
-            }).returning({ id: equipamentosProprios.id, codigoPatrimonio: equipamentosProprios.codigoPatrimonio });
-            if (primeiroId == null) primeiroId = created.id;
-            codigos.push(created.codigoPatrimonio);
-            inserido = true;
-            break;
-          } catch (e: any) {
-            // 23505 = unique_violation (Postgres). Outro device pegou o N. — retry.
-            // Rev. 2561 — lê código/mensagem do erro pg DENTRO do wrapper Drizzle
-            // (`e.cause`), pois `e.code`/`e.message` do Drizzle não trazem o code
-            // real e a `message` é o dump "Failed query… params:" (com base64).
-            const { code, message } = pgInfo(e);
-            const isUnique = code === "23505" || /uq_equip_proprio_company_patrimonio|duplicate key/i.test(message);
-            // Erro NÃO-unique: traduz pra mensagem limpa (nunca vaza base64/params).
-            if (!isUnique) throw cleanDbError(e, "cadastrar o equipamento");
-            lastErr = e;
+      const { ensureAlmoxItemForEquipamento } = await import("../lib/almoxEquipamentoSync");
+      return db.transaction(async (tx: any) => {
+        // Serializa a numeração do lote e mantém equipamentos + espelhos no
+        // mesmo commit. ON CONFLICT evita abortar a transação durante o retry.
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${input.companyId}::int, 2257::int)`);
+        const codigos: string[] = [];
+        let primeiroId: number | null = null;
+        for (let i = 0; i < quantidade; i++) {
+          let lastErr: any = null;
+          let inserido = false;
+          for (let attempt = 0; attempt < 8; attempt++) {
+            const cod = await proximoCodigoPatrimonio(tx, input.companyId);
+            try {
+              const [created] = await tx.insert(equipamentosProprios).values({
+                ...baseVals,
+                codigoPatrimonio: cod,
+              })
+                .onConflictDoNothing()
+                .returning({ id: equipamentosProprios.id, codigoPatrimonio: equipamentosProprios.codigoPatrimonio });
+              if (!created) {
+                lastErr = new Error(`Patrimônio ${cod} já utilizado.`);
+                continue;
+              }
+              if (input.localizacaoAtualObraId && !["manutencao", "baixado"].includes(input.status ?? "disponivel")) {
+                await ensureAlmoxItemForEquipamento(tx, {
+                  companyId: input.companyId,
+                  tipo: "proprio",
+                  equipamentoId: created.id,
+                  obraId: input.localizacaoAtualObraId,
+                  nome: baseVals.descricao,
+                  categoria: baseVals.categoria,
+                  fotoUrl: input.fotos?.[0]?.url ?? null,
+                  valorUnitario: input.valorAquisicao ?? null,
+                  userId: ctx.user.id,
+                  userName: ctx.user.name || null,
+                  failOnError: true,
+                  connectionIsTransaction: true,
+                });
+              }
+              if (primeiroId == null) primeiroId = created.id;
+              codigos.push(created.codigoPatrimonio);
+              inserido = true;
+              break;
+            } catch (e: any) {
+              const { code, message } = pgInfo(e);
+              const isUnique = code === "23505" || /uq_equip_proprio_company_patrimonio|duplicate key/i.test(message);
+              if (!isUnique) throw cleanDbError(e, "cadastrar o equipamento");
+              lastErr = e;
+            }
+          }
+          if (!inserido) {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: "Não foi possível gerar um patrimônio único após 8 tentativas. Nenhum equipamento deste lote foi cadastrado; tente novamente.",
+              cause: lastErr,
+            });
           }
         }
-        if (!inserido) {
-          // Falhou um item do lote. Os anteriores JÁ foram gravados — informa
-          // quantos entraram pra o usuário não recadastrar tudo.
-          const parcial = codigos.length > 0 ? ` ${codigos.length} de ${quantidade} já foram cadastrados.` : "";
-          throw new TRPCError({
-            code: "CONFLICT",
-            message: `Não foi possível gerar um patrimônio único após 8 tentativas.${parcial} Tente novamente.`,
-            cause: lastErr,
-          });
-        }
-      }
-      return {
-        id: primeiroId!,
-        codigoPatrimonio: codigos[0],
-        quantidadeCriada: codigos.length,
-        codigos,
-      };
+        return {
+          id: primeiroId!,
+          codigoPatrimonio: codigos[0],
+          quantidadeCriada: codigos.length,
+          codigos,
+        };
+      });
     }),
 
   proprioAtualizar: protectedProcedure
@@ -549,16 +574,55 @@ export const equipamentosRouter = router({
       custoManutencaoMedioMes: z.number().nullable().optional(),
       custoSeguroMedioMes: z.number().nullable().optional(),
       status: z.enum(["disponivel", "em_obra", "manutencao", "baixado"]).optional(),
-      localizacaoAtualTipo: z.enum(["almoxarifado", "obra"]).optional(),
+      localizacaoAtualTipo: z.enum(["almoxarifado", "obra", "nao_informada"]).optional(),
       localizacaoAtualObraId: z.number().nullable().optional(),
       observacoes: z.string().nullable().optional(),
       fotos: fotoSchema,
       // Rev. 4563 — regime de uso: rotativo | fixo.
       regimeUso: z.enum(["rotativo", "fixo"]).optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!(allowedCompanies as any[]).some(c => c.id === input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+      const [atual] = await db.select({
+        status: equipamentosProprios.status,
+        localizacaoAtualTipo: equipamentosProprios.localizacaoAtualTipo,
+        localizacaoAtualObraId: equipamentosProprios.localizacaoAtualObraId,
+        descricao: equipamentosProprios.descricao,
+        categoria: equipamentosProprios.categoria,
+        fotosJson: equipamentosProprios.fotosJson,
+        valorAquisicao: equipamentosProprios.valorAquisicao,
+      }).from(equipamentosProprios).where(and(
+        eq(equipamentosProprios.id, input.id),
+        eq(equipamentosProprios.companyId, input.companyId),
+      )).limit(1);
+      if (!atual) throw new TRPCError({ code: "NOT_FOUND" });
+
+      const statusFinal = input.status ?? atual.status;
+      let obraFinal = input.localizacaoAtualObraId === undefined
+        ? atual.localizacaoAtualObraId
+        : input.localizacaoAtualObraId;
+      if (statusFinal === "em_obra" && !obraFinal) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Selecione a obra onde o equipamento está." });
+      }
+      if (obraFinal) {
+        const obraRes: any = await db.execute(sql`
+          SELECT id FROM obras
+          WHERE id = ${obraFinal} AND "companyId" = ${input.companyId}
+          LIMIT 1
+        `);
+        if (!(obraRes?.rows ?? obraRes ?? [])[0]) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Obra inválida ou de outra empresa." });
+        }
+        const allowedObras = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+        if (allowedObras !== null && !allowedObras.includes(obraFinal)) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso à obra selecionada." });
+        }
+      }
       const update: any = { updatedAt: sql`now()` };
       const map = (k: string, v: any) => { if (v !== undefined) update[k] = v; };
       // Rev. 2513 — normaliza textos pra MAIÚSCULA (descricao/categoria/marca/modelo/observacoes).
@@ -575,8 +639,12 @@ export const equipamentosRouter = router({
       if (input.custoManutencaoMedioMes !== undefined) update.custoManutencaoMedioMes = input.custoManutencaoMedioMes != null ? String(input.custoManutencaoMedioMes) : null;
       if (input.custoSeguroMedioMes !== undefined) update.custoSeguroMedioMes = input.custoSeguroMedioMes != null ? String(input.custoSeguroMedioMes) : null;
       map("status", input.status);
-      map("localizacaoAtualTipo", input.localizacaoAtualTipo);
-      map("localizacaoAtualObraId", input.localizacaoAtualObraId);
+      update.localizacaoAtualTipo = obraFinal
+        ? "obra"
+        : input.localizacaoAtualTipo === "almoxarifado"
+          ? "almoxarifado"
+          : "nao_informada";
+      update.localizacaoAtualObraId = obraFinal;
       map("regimeUso", input.regimeUso);
       mapUpper("observacoes", input.observacoes);
       if (input.fotos !== undefined) update.fotosJson = input.fotos ?? null;
@@ -584,10 +652,44 @@ export const equipamentosRouter = router({
       // SQL/params/base64 no toast do cliente).
       let r;
       try {
-        r = await db.update(equipamentosProprios).set(update)
-          .where(and(eq(equipamentosProprios.id, input.id), eq(equipamentosProprios.companyId, input.companyId)))
-          .returning({ id: equipamentosProprios.id });
+        r = await db.transaction(async (tx: any) => {
+          const updated = await tx.update(equipamentosProprios).set(update)
+            .where(and(eq(equipamentosProprios.id, input.id), eq(equipamentosProprios.companyId, input.companyId)))
+            .returning({ id: equipamentosProprios.id });
+          if (updated.length === 0) throw new TRPCError({ code: "NOT_FOUND" });
+
+          const {
+            disableAlmoxItemForEquipamento,
+            ensureAlmoxItemForEquipamento,
+          } = await import("../lib/almoxEquipamentoSync");
+          if (obraFinal && statusFinal !== "manutencao" && statusFinal !== "baixado") {
+            const fotosFinais = update.fotosJson ?? atual.fotosJson;
+            await ensureAlmoxItemForEquipamento(tx, {
+              companyId: input.companyId,
+              tipo: "proprio",
+              equipamentoId: input.id,
+              obraId: obraFinal,
+              nome: update.descricao ?? atual.descricao,
+              categoria: update.categoria ?? atual.categoria ?? null,
+              fotoUrl: Array.isArray(fotosFinais) ? fotosFinais[0]?.url ?? null : null,
+              valorUnitario: update.valorAquisicao ?? atual.valorAquisicao ?? null,
+              userId: ctx.user.id,
+              userName: ctx.user.name ?? null,
+              failOnError: true,
+              connectionIsTransaction: true,
+            });
+          } else {
+            await disableAlmoxItemForEquipamento(tx, {
+              companyId: input.companyId,
+              tipo: "proprio",
+              equipamentoId: input.id,
+              failOnError: true,
+            });
+          }
+          return updated;
+        });
       } catch (e: any) {
+        if (e instanceof TRPCError) throw e;
         throw cleanDbError(e, "atualizar o equipamento");
       }
       if (r.length === 0) throw new TRPCError({ code: "NOT_FOUND" });
@@ -950,7 +1052,10 @@ Gere o JSON conforme o esquema. Não omita nenhum item.`;
         .from(comprasOrdens)
         .where(and(
           companyFilter(comprasOrdens.companyId, input),
-          eq(comprasOrdens.isLocacao, true),
+          // Compatibilidade com OCs antigas: antes o formulário salvava o
+          // tipo="locacao" sem preencher isLocacao. Não se altera a OC aqui;
+          // apenas ela volta a ser elegível para o recebimento físico.
+          sql`(${comprasOrdens.isLocacao} = true OR ${comprasOrdens.tipo} = 'locacao')`,
           sql`${comprasOrdens.status} IN ('pendente', 'aprovada', 'parcial')`,
           sql`NOT EXISTS (SELECT 1 FROM equipamentos_locados el WHERE el.ordem_compra_id = ${comprasOrdens.id})`,
           ...obraConds,
@@ -1032,9 +1137,52 @@ Gere o JSON conforme o esquema. Não omita nenhum item.`;
       if (!input.fotosRecebimento || input.fotosRecebimento.length === 0) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Foto de recebimento é obrigatória." });
       }
+      // Uma locação recebida por OC deve sempre ficar na obra de destino da
+      // própria OC. Isso impede que o operador escolha acidentalmente outra
+      // obra no modal e também mantém OCs sem obra como "Sem obra" até uma
+      // atribuição explícita e auditável.
+      let obraIdFinal = input.obraId ?? null;
+      if (input.ordemCompraId) {
+        const [oc] = await db.select({
+          id: comprasOrdens.id,
+          obraId: comprasOrdens.obraId,
+          tipo: comprasOrdens.tipo,
+          isLocacao: comprasOrdens.isLocacao,
+        })
+          .from(comprasOrdens)
+          .where(and(
+            eq(comprasOrdens.id, input.ordemCompraId),
+            eq(comprasOrdens.companyId, input.companyId),
+          ))
+          .limit(1);
+        if (!oc) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Ordem de compra não encontrada nesta empresa." });
+        }
+        const destinoLocacao = resolverDestinoRecebimentoLocacao(input.obraId, oc);
+        if (destinoLocacao.status === "oc-nao-e-locacao") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "A OC informada não é uma locação." });
+        }
+        if (destinoLocacao.status === "obra-conflitante") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "O recebimento deve usar a obra de destino da OC." });
+        }
+        // A OC é soberana inclusive quando não tem obra: nesse caso o
+        // equipamento permanece sem obra, e não herda uma sugestão do cliente.
+        obraIdFinal = destinoLocacao.obraId;
+        // Auto-reparo controlado do dado legado após o operador confirmar o
+        // recebimento. A classificação original (tipo) é preservada.
+        if (destinoLocacao.deveNormalizarFlagLocacao) {
+          await db.update(comprasOrdens)
+            .set({ isLocacao: true } as any)
+            .where(and(eq(comprasOrdens.id, oc.id), eq(comprasOrdens.companyId, input.companyId)));
+        }
+      }
+      const allowedObras = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+      if (obraIdFinal != null && allowedObras !== null && !allowedObras.includes(obraIdFinal)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso à obra de destino da locação." });
+      }
       const [created] = await db.insert(equipamentosLocados).values({
         companyId: input.companyId,
-        obraId: input.obraId ?? null,
+        obraId: obraIdFinal,
         fornecedorId: input.fornecedorId ?? null,
         fornecedorNome: input.fornecedorNome ?? null,
         ordemCompraId: input.ordemCompraId ?? null,
@@ -1070,7 +1218,7 @@ Gere o JSON conforme o esquema. Não omita nenhum item.`;
         companyId: input.companyId,
         equipamentoLocadoId: created.id,
         tipo: "RECEBIMENTO",
-        obraId: input.obraId ?? null,
+        obraId: obraIdFinal,
         fotosJson: input.fotosRecebimento,
         observacao: input.observacoes ?? null,
         funcionarioId: input.funcionarioResponsavelId ?? null,
@@ -1086,7 +1234,7 @@ Gere o JSON conforme o esquema. Não omita nenhum item.`;
       }).returning({ id: equipamentoLocadoEventos.id });
 
       // Rev. 2405 — Sync com almoxarifado da obra (idempotente).
-      if (input.obraId) {
+      if (obraIdFinal) {
         const { ensureAlmoxItemForEquipamento } = await import("../lib/almoxEquipamentoSync");
         const firstFoto = Array.isArray(input.fotosRecebimento) && input.fotosRecebimento.length > 0
           ? (input.fotosRecebimento[0] as any)?.url
@@ -1095,7 +1243,7 @@ Gere o JSON conforme o esquema. Não omita nenhum item.`;
           companyId: input.companyId,
           tipo: "locado",
           equipamentoId: created.id,
-          obraId: input.obraId,
+          obraId: obraIdFinal,
           nome: input.descricao,
           categoria: input.categoria ?? null,
           fotoUrl: firstFoto,
@@ -4342,6 +4490,7 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
           el.quantidade,
           wl.funcionario_nome           AS quem_saiu,
           wl.funcionario_id             AS funcionario_id,
+          o.nome                        AS obra_nome,
           wl.almoxarife_nome            AS registrado_por,
           (wl.data_emprestimo || 'T' || COALESCE(wl.hora_emprestimo,'00:00') || ':00')::timestamp AS saiu_em,
           CASE WHEN wl.data_devolucao IS NOT NULL
@@ -4366,6 +4515,7 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
         JOIN equipamentos_locados el
           ON el.id         = ai.equipamento_vinculado_id
          AND el.company_id = ${cid}
+        LEFT JOIN obras o ON o.id = wl.obra_id
         WHERE wl.company_id = ${cid}
           ${periodFilter}
         ORDER BY saiu_em DESC
@@ -4543,12 +4693,34 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
         for (const f of fotosRows) fotoMap.set(Number(f.id), f.foto_url ?? null);
       }
 
-      const topQuemPegou = quemSorted.map(([nome, v]) => ({
-        nome,
-        count:         v.count,
-        funcionarioId: v.funcionarioId,
-        fotoUrl:       v.funcionarioId != null ? (fotoMap.get(v.funcionarioId) ?? null) : null,
-      }));
+      // Rev. 5062 — nomes sem vínculo com employees podem ser TERCEIROS:
+      // match por nome completo (único) em funcionarios_terceiros → foto + empresa.
+      const terceiroMap = new Map<string, { fotoUrl: string | null; empresa: string | null } | null>();
+      if (quemSorted.some(([, v]) => v.funcionarioId == null)) {
+        const tRows = (await db.execute(sql`
+          SELECT UPPER(TRIM(ft.nome)) AS nome_up, ft.foto_url, et.nome_fantasia
+          FROM funcionarios_terceiros ft
+          LEFT JOIN empresas_terceiras et ON et.id = ft."empresaTerceiraId"
+          WHERE ft."companyId" = ${cid} AND ft.deleted_at IS NULL
+        `)).rows as any[];
+        for (const t of tRows) {
+          const k = String(t.nome_up || "");
+          if (!k) continue;
+          // nome duplicado entre terceiros = ambíguo → não atribui
+          terceiroMap.set(k, terceiroMap.has(k) ? null : { fotoUrl: t.foto_url ?? null, empresa: t.nome_fantasia ?? null });
+        }
+      }
+
+      const topQuemPegou = quemSorted.map(([nome, v]) => {
+        const t = v.funcionarioId == null ? (terceiroMap.get(nome.trim().toUpperCase()) ?? null) : null;
+        return {
+          nome,
+          count:           v.count,
+          funcionarioId:   v.funcionarioId,
+          fotoUrl:         v.funcionarioId != null ? (fotoMap.get(v.funcionarioId) ?? null) : (t?.fotoUrl ?? null),
+          empresaTerceira: t?.empresa ?? null,
+        };
+      });
 
       // Ranking: equipamentos mais movimentados
       const equipMap = new Map<string, number>();
@@ -4571,6 +4743,14 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
           fotoUrl:        r.foto_url    as string | null,
           quantidade:     Number(r.quantidade) || 1,
           quemSaiu:       r.quem_saiu   as string | null,
+          // Rev. 5064 — foto de quem retirou também nos ciclos (employee ou terceiro por nome)
+          fotoFuncionario: r.funcionario_id != null
+            ? (fotoMap.get(Number(r.funcionario_id)) ?? null)
+            : (terceiroMap.get(String(r.quem_saiu || "").trim().toUpperCase())?.fotoUrl ?? null),
+          empresaTerceira: r.funcionario_id == null
+            ? (terceiroMap.get(String(r.quem_saiu || "").trim().toUpperCase())?.empresa ?? null)
+            : null,
+          obraNome:       r.obra_nome   as string | null ?? null,
           registradoPor:  r.registrado_por as string | null,
           saiuEm:         r.saiu_em     as string,
           devolvidoEm:    r.devolvido_em as string | null ?? null,
@@ -4658,6 +4838,7 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
           (ep.fotos_json->0->>'url')                AS foto_url,
           wl.funcionario_nome                       AS quem_saiu,
           wl.funcionario_id,
+          o.nome                                    AS obra_nome,
           wl.almoxarife_nome                        AS registrado_por,
           (wl.data_emprestimo || 'T' || COALESCE(wl.hora_emprestimo,'00:00') || ':00')::timestamp AS saiu_em,
           CASE WHEN wl.data_devolucao IS NOT NULL
@@ -4681,6 +4862,7 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
         JOIN equipamentos_proprios ep
           ON ep.id         = ai.equipamento_vinculado_id
          AND ep.company_id = ${cid}
+        LEFT JOIN obras o ON o.id = wl.obra_id
         WHERE wl.company_id = ${cid}
           ${periodFilter}
         ORDER BY saiu_em DESC
@@ -4884,10 +5066,29 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
         `)).rows as { id: number; foto_url: string | null }[];
         for (const f of fotosRows) fotoMap.set(Number(f.id), f.foto_url ?? null);
       }
-      const topQuemPegou = quemSorted.map(([nome, v]) => ({
-        nome, count: v.count, funcionarioId: v.funcionarioId,
-        fotoUrl: v.funcionarioId != null ? (fotoMap.get(v.funcionarioId) ?? null) : null,
-      }));
+      // Rev. 5062 — nomes sem vínculo com employees podem ser TERCEIROS.
+      const terceiroMap = new Map<string, { fotoUrl: string | null; empresa: string | null } | null>();
+      if (quemSorted.some(([, v]) => v.funcionarioId == null)) {
+        const tRows = (await db.execute(sql`
+          SELECT UPPER(TRIM(ft.nome)) AS nome_up, ft.foto_url, et.nome_fantasia
+          FROM funcionarios_terceiros ft
+          LEFT JOIN empresas_terceiras et ON et.id = ft."empresaTerceiraId"
+          WHERE ft."companyId" = ${cid} AND ft.deleted_at IS NULL
+        `)).rows as any[];
+        for (const t of tRows) {
+          const k = String(t.nome_up || "");
+          if (!k) continue;
+          terceiroMap.set(k, terceiroMap.has(k) ? null : { fotoUrl: t.foto_url ?? null, empresa: t.nome_fantasia ?? null });
+        }
+      }
+      const topQuemPegou = quemSorted.map(([nome, v]) => {
+        const t = v.funcionarioId == null ? (terceiroMap.get(nome.trim().toUpperCase()) ?? null) : null;
+        return {
+          nome, count: v.count, funcionarioId: v.funcionarioId,
+          fotoUrl: v.funcionarioId != null ? (fotoMap.get(v.funcionarioId) ?? null) : (t?.fotoUrl ?? null),
+          empresaTerceira: t?.empresa ?? null,
+        };
+      });
 
       // Ranking: equipamentos mais movimentados
       const equipMap = new Map<string, number>();
@@ -4908,8 +5109,15 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
           codigoPatrimonio: r.codigo_patrimonio as string | null,
           fotoUrl:          r.foto_url         as string | null,
           quemSaiu:         r.quem_saiu        as string | null,
+          obraNome:         r.obra_nome        as string | null ?? null,
           funcionarioId:    r.funcionario_id   != null ? Number(r.funcionario_id) : null,
-          fotoFuncionario:  r.funcionario_id   != null ? (fotoMap.get(Number(r.funcionario_id)) ?? null) : null,
+          // Rev. 5064 — fallback: terceiro cadastrado por nome também mostra foto
+          fotoFuncionario:  r.funcionario_id   != null
+            ? (fotoMap.get(Number(r.funcionario_id)) ?? null)
+            : (terceiroMap.get(String(r.quem_saiu || "").trim().toUpperCase())?.fotoUrl ?? null),
+          empresaTerceira:  r.funcionario_id == null
+            ? (terceiroMap.get(String(r.quem_saiu || "").trim().toUpperCase())?.empresa ?? null)
+            : null,
           registradoPor:    r.registrado_por   as string | null,
           saiuEm:           r.saiu_em          as string,
           devolvidoEm:      r.devolvido_em     as string | null ?? null,

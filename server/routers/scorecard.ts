@@ -1,8 +1,27 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../_core/trpc";
-import { getDb } from "../db";
+import { getDb, getUserCompanyLinks } from "../db";
+
+// Rev. 4867 — guard de empresa (mesma regra do assertCompanyAccess dos routers
+// encargosSociais/compras): admin/admin_master liberam; user com vínculos
+// enforça membership; user sem vínculos (controle por grupo/módulo) libera.
+async function assertCompanyAccess(ctxUser: any, companyId: number) {
+  if (!ctxUser?.id) throw new TRPCError({ code: "UNAUTHORIZED", message: "Sessão inválida." });
+  if (ctxUser.role === "admin" || ctxUser.role === "admin_master") return;
+  const links = await getUserCompanyLinks(ctxUser.id);
+  const allowedIds = (links as any[]).map((l: any) => l.companyId).filter((v: any) => typeof v === "number");
+  if (allowedIds.length === 0) return;
+  if (!allowedIds.includes(companyId)) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: `Sem acesso a esta empresa. (user=${ctxUser.id} req=${companyId})`,
+    });
+  }
+}
 import { sql, eq, and, isNull, desc } from "drizzle-orm";
 import { accidents, orcamentos } from "../../drizzle/schema";
+import { BANCO_HORAS_DATA_INICIO } from "../utils/bancoHorasVigencia";
 
 function clamp(v: number, lo = 0, hi = 100): number {
   return Math.max(lo, Math.min(hi, v));
@@ -944,7 +963,7 @@ export const scorecardRouter = router({
               -- Salário efetivo: payroll_payments do mês, senão salarioBase do cadastro
               COALESCE(pp.salario_bruto,
                 CASE WHEN e."salarioBase" LIKE '%,%'
-                  THEN REPLACE(REPLACE(COALESCE(e."salarioBase",'0'),'.',''),',','.')::numeric
+                  THEN fc_money(e."salarioBase")
                   ELSE COALESCE(NULLIF(TRIM(e."salarioBase"),''),'0')::numeric
                 END
               ) AS salario_base,
@@ -958,7 +977,7 @@ export const scorecardRouter = router({
               ROUND(
                 COALESCE(pp.salario_bruto,
                   CASE WHEN e."salarioBase" LIKE '%,%'
-                    THEN REPLACE(REPLACE(COALESCE(e."salarioBase",'0'),'.',''),',','.')::numeric
+                    THEN fc_money(e."salarioBase")
                     ELSE COALESCE(NULLIF(TRIM(e."salarioBase"),''),'0')::numeric
                   END)
                 / NULLIF(EXTRACT(DAY FROM (
@@ -970,7 +989,7 @@ export const scorecardRouter = router({
               ROUND(
                 COALESCE(pp.salario_bruto,
                   CASE WHEN e."salarioBase" LIKE '%,%'
-                    THEN REPLACE(REPLACE(COALESCE(e."salarioBase",'0'),'.',''),',','.')::numeric
+                    THEN fc_money(e."salarioBase")
                     ELSE COALESCE(NULLIF(TRIM(e."salarioBase"),''),'0')::numeric
                   END)
                 * 0.33
@@ -992,7 +1011,7 @@ export const scorecardRouter = router({
               ROUND(
                 (COALESCE(pp.salario_bruto,
                   CASE WHEN e."salarioBase" LIKE '%,%'
-                    THEN REPLACE(REPLACE(COALESCE(e."salarioBase",'0'),'.',''),',','.')::numeric
+                    THEN fc_money(e."salarioBase")
                     ELSE COALESCE(NULLIF(TRIM(e."salarioBase"),''),'0')::numeric
                   END) * 1.33
                  + COALESCE(vr.beneficio_total, 0))
@@ -1006,7 +1025,7 @@ export const scorecardRouter = router({
               ROUND(
                 (COALESCE(pp.salario_bruto,
                   CASE WHEN e."salarioBase" LIKE '%,%'
-                    THEN REPLACE(REPLACE(COALESCE(e."salarioBase",'0'),'.',''),',','.')::numeric
+                    THEN fc_money(e."salarioBase")
                     ELSE COALESCE(NULLIF(TRIM(e."salarioBase"),''),'0')::numeric
                   END) * 1.33
                  + COALESCE(vr.beneficio_total, 0))
@@ -1021,7 +1040,7 @@ export const scorecardRouter = router({
             -- Salário bruto do mês via folha (payroll_payments), se disponível
             LEFT JOIN LATERAL (
               SELECT CASE WHEN pp2."salarioBrutoMes" LIKE '%,%'
-                THEN REPLACE(REPLACE(COALESCE(pp2."salarioBrutoMes",'0'),'.',''),',','.')::numeric
+                THEN fc_money(pp2."salarioBrutoMes")
                 ELSE COALESCE(NULLIF(TRIM(pp2."salarioBrutoMes"),''),'0')::numeric
               END AS salario_bruto
               FROM payroll_payments pp2
@@ -1032,7 +1051,7 @@ export const scorecardRouter = router({
             ) pp ON true
             -- Benefícios VA/VR totais do mês
             LEFT JOIN LATERAL (
-              SELECT REPLACE(REPLACE(COALESCE(vr2."valorTotal",'0'),'.',''),',','.')::numeric AS beneficio_total
+              SELECT fc_money(vr2."valorTotal") AS beneficio_total
               FROM vr_benefits vr2
               WHERE vr2."employeeId"   = a."employeeId"
                 AND vr2."mesReferencia" = TO_CHAR(a."dataEmissao"::date, 'YYYY-MM')
@@ -1069,7 +1088,7 @@ export const scorecardRouter = router({
                        (
                          COALESCE(
                            (SELECT CASE WHEN pp."salarioBrutoMes" LIKE '%,%'
-                             THEN REPLACE(REPLACE(COALESCE(pp."salarioBrutoMes",'0'),'.',''),',','.')::numeric
+                             THEN fc_money(pp."salarioBrutoMes")
                              ELSE COALESCE(NULLIF(TRIM(pp."salarioBrutoMes"),''),'0')::numeric
                              END
                             FROM payroll_payments pp
@@ -1078,12 +1097,12 @@ export const scorecardRouter = router({
                               AND pp."companyId"     = ${input.companyId}
                             ORDER BY pp.id DESC LIMIT 1),
                            CASE WHEN e."salarioBase" LIKE '%,%'
-                             THEN REPLACE(REPLACE(COALESCE(e."salarioBase",'0'),'.',''),',','.')::numeric
+                             THEN fc_money(e."salarioBase")
                              ELSE COALESCE(NULLIF(TRIM(e."salarioBase"),''),'0')::numeric
                            END
                          ) * 1.33
                          + COALESCE(
-                           (SELECT REPLACE(REPLACE(COALESCE(vr."valorTotal",'0'),'.',''),',','.')::numeric
+                           (SELECT fc_money(vr."valorTotal")
                             FROM vr_benefits vr
                             WHERE vr."employeeId"    = a."employeeId"
                               AND vr."mesReferencia" = TO_CHAR(a."dataEmissao"::date, 'YYYY-MM')
@@ -1672,7 +1691,8 @@ export const scorecardRouter = router({
       mesInicio: z.string().optional(),
       mesFim:    z.string().optional(),
     }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
+      await assertCompanyAccess(ctx.user, input.companyId); // Rev. 4867
       const db = await getDb();
       if (!db) return null;
 
@@ -1694,7 +1714,7 @@ export const scorecardRouter = router({
 
       const relevantEmpSql = sql`
         SELECT DISTINCT esh."employeeId" FROM employee_site_history esh
-        WHERE esh."obraId" = ${input.obraId} AND esh."companyId" = ${input.companyId}
+        WHERE esh."obraId" = ${input.obraId} AND esh."companyId" = ${input.companyId} AND esh.tipo <> 'gestor_obra'
         UNION
         SELECT "employeeId" FROM obra_funcionarios
         WHERE "obraId" = ${input.obraId} AND "companyId" = ${input.companyId}
@@ -1722,6 +1742,7 @@ export const scorecardRouter = router({
             FROM employee_site_history esh_b
             WHERE esh_b."obraId"    = ${input.obraId}
               AND esh_b."companyId" = ${input.companyId}
+              AND esh_b.tipo <> 'gestor_obra'
               -- Apenas consulta de mês único
               AND ${mesFeriasIni} = ${mesFeriasFim}
               -- Registro fechado ANTES do mês alvo (dentro de 6 meses)
@@ -1734,6 +1755,7 @@ export const scorecardRouter = router({
                 WHERE esh_cov."employeeId" = esh_b."employeeId"
                   AND esh_cov."obraId"    = ${input.obraId}
                   AND esh_cov."companyId" = ${input.companyId}
+                  AND esh_cov.tipo <> 'gestor_obra'
                   AND COALESCE(esh_cov."dataFim"::date, CURRENT_DATE)
                         >= (${mesFeriasIni} || '-01')::date
                   AND esh_cov."dataInicio"::date
@@ -1746,6 +1768,7 @@ export const scorecardRouter = router({
                   WHERE esh_ret."employeeId" = esh_b."employeeId"
                     AND esh_ret."obraId"    = ${input.obraId}
                     AND esh_ret."companyId" = ${input.companyId}
+                    AND esh_ret.tipo <> 'gestor_obra'
                     AND esh_ret."dataInicio"::date > esh_b."dataFim"::date
                 )
                 OR EXISTS (
@@ -1769,6 +1792,7 @@ export const scorecardRouter = router({
                 WHERE esh_gap."employeeId" = esh_b."employeeId"
                   AND esh_gap."obraId"    <> ${input.obraId}
                   AND esh_gap."companyId"  = ${input.companyId}
+                  AND esh_gap.tipo <> 'gestor_obra'
                   AND esh_gap."dataInicio"::date >  esh_b."dataFim"::date
                   AND esh_gap."dataInicio"::date <= (${mesFeriasFim} || '-28')::date
               )
@@ -1840,6 +1864,7 @@ export const scorecardRouter = router({
             FROM employee_site_history esh
             WHERE esh."obraId"    = ${input.obraId}
               AND esh."companyId" = ${input.companyId}
+              AND esh.tipo <> 'gestor_obra'
             GROUP BY esh."employeeId"
 
             UNION ALL
@@ -1886,6 +1911,7 @@ export const scorecardRouter = router({
                   WHERE esh2."employeeId" = of2."employeeId"
                     AND esh2."obraId"     = ${input.obraId}
                     AND esh2."companyId"  = ${input.companyId}
+                    AND esh2.tipo <> 'gestor_obra'
                 )
               GROUP BY of2."employeeId"
             ) AS of_grp
@@ -1917,6 +1943,7 @@ export const scorecardRouter = router({
                   WHERE esh_g."employeeId" = tr."employeeId"
                     AND esh_g."obraId"     = ${input.obraId}
                     AND esh_g."companyId"  = ${input.companyId}
+                    AND esh_g.tipo <> 'gestor_obra'
                 )
                 OR EXISTS (
                   SELECT 1 FROM obra_funcionarios of_g
@@ -1988,6 +2015,7 @@ export const scorecardRouter = router({
                   SELECT 1 FROM employee_site_history esh_g2
                   WHERE esh_g2."employeeId" = tr."employeeId"
                     AND esh_g2."obraId"     = ${input.obraId}
+                    AND esh_g2.tipo <> 'gestor_obra'
                     AND esh_g2."companyId"  = ${input.companyId}
                 )
                 OR EXISTS (
@@ -2014,14 +2042,14 @@ export const scorecardRouter = router({
                 ((pp."mesReferencia" || '-01')::date + INTERVAL '1 month' - INTERVAL '1 day')::date,
                 '1 day'::interval
               ) d WHERE EXTRACT(DOW FROM d) BETWEEN 1 AND 5)       AS dias_no_mes,
-              COALESCE(CASE WHEN pp."salarioBrutoMes"  ~ '^-?[0-9]' THEN REPLACE(REPLACE(pp."salarioBrutoMes",  '.', ''), ',', '.')::numeric ELSE NULL END, 0) AS salario_bruto,
-              COALESCE(CASE WHEN pp."horasExtrasValor" ~ '^-?[0-9]' THEN REPLACE(REPLACE(pp."horasExtrasValor", '.', ''), ',', '.')::numeric ELSE NULL END, 0) AS he_valor,
-              COALESCE(CASE WHEN pp."adicionaisValor"  ~ '^-?[0-9]' THEN REPLACE(REPLACE(pp."adicionaisValor",  '.', ''), ',', '.')::numeric ELSE NULL END, 0) AS adicionais,
-              COALESCE(CASE WHEN pp."descontoInss"     ~ '^-?[0-9]' THEN REPLACE(REPLACE(pp."descontoInss",     '.', ''), ',', '.')::numeric ELSE NULL END, 0) AS inss_valor,
-              COALESCE(CASE WHEN pp."descontoFgts"     ~ '^-?[0-9]' THEN REPLACE(REPLACE(pp."descontoFgts",     '.', ''), ',', '.')::numeric ELSE NULL END, 0) AS fgts_valor,
-              COALESCE(CASE WHEN pp."totalProventos"   ~ '^-?[0-9]' THEN REPLACE(REPLACE(pp."totalProventos",   '.', ''), ',', '.')::numeric ELSE NULL END, 0) AS total_proventos,
-              COALESCE(CASE WHEN pp."totalDescontos"   ~ '^-?[0-9]' THEN REPLACE(REPLACE(pp."totalDescontos",   '.', ''), ',', '.')::numeric ELSE NULL END, 0) AS total_descontos,
-              COALESCE(CASE WHEN pp."salarioLiquido"   ~ '^-?[0-9]' THEN REPLACE(REPLACE(pp."salarioLiquido",   '.', ''), ',', '.')::numeric ELSE NULL END, 0) AS liquido,
+              fc_money(pp."salarioBrutoMes") AS salario_bruto,
+              fc_money(pp."horasExtrasValor") AS he_valor,
+              fc_money(pp."adicionaisValor") AS adicionais,
+              fc_money(pp."descontoInss") AS inss_valor,
+              fc_money(pp."descontoFgts") AS fgts_valor,
+              fc_money(pp."totalProventos") AS total_proventos,
+              fc_money(pp."totalDescontos") AS total_descontos,
+              fc_money(pp."salarioLiquido") AS liquido,
               GREATEST(
                 -- Dias úteis (Seg-Sex) pela alocação (site_periods)
                 (
@@ -2064,7 +2092,7 @@ export const scorecardRouter = router({
             SELECT
               vr."employeeId" AS employee_id,
               vr."mesReferencia" AS mes_referencia,
-              COALESCE(CASE WHEN vr."valorTotal" ~ '^-?[0-9]' THEN REPLACE(REPLACE(vr."valorTotal", '.', ''), ',', '.')::numeric ELSE NULL END, 0) AS va_total
+              fc_money(vr."valorTotal") AS va_total
             FROM vr_benefits vr
             -- Rev. 4303: usa empresa real do funcionário (não da obra)
             JOIN employees emp_vr ON emp_vr.id = vr."employeeId"
@@ -2142,7 +2170,7 @@ export const scorecardRouter = router({
           SELECT
             vp."employeeId"                                                         AS employee_id,
             TO_CHAR(COALESCE(vp."dataPagamento"::date, vp."dataInicio"::date), 'YYYY-MM') AS mes_ref,
-            COALESCE(CASE WHEN vp."valorTotal" ~ '^-?[0-9]' THEN REPLACE(REPLACE(vp."valorTotal", '.', ''), ',', '.')::numeric ELSE NULL END, 0) AS valor_total
+            fc_money(vp."valorTotal") AS valor_total
           FROM vacation_periods vp
           -- Rev. 4303: usa empresa real do funcionário (não da obra)
           JOIN employees emp_fer ON emp_fer.id = vp."employeeId"
@@ -2159,8 +2187,8 @@ export const scorecardRouter = router({
           SELECT
             svc.employee_id,
             -- Custo/Mês = VG + APC (prêmios mensais da apólice)
-            COALESCE(CASE WHEN svc.premio_vg  ~ '^-?[0-9]' THEN REPLACE(REPLACE(svc.premio_vg,  '.', ''), ',', '.')::numeric ELSE 0 END, 0)
-            + COALESCE(CASE WHEN svc.premio_apc ~ '^-?[0-9]' THEN REPLACE(REPLACE(svc.premio_apc, '.', ''), ',', '.')::numeric ELSE 0 END, 0) AS custo_mensal
+            fc_money(svc.premio_vg)
+            + fc_money(svc.premio_apc) AS custo_mensal
           FROM seguro_vida_coberturas svc
           -- Rev. 4303: usa empresa real do funcionário (não da obra)
           JOIN employees emp_seg ON emp_seg.id = svc.employee_id
@@ -2190,17 +2218,26 @@ export const scorecardRouter = router({
             SELECT DISTINCT ON (of2."employeeId")
               of2."employeeId" AS employee_id,
               GREATEST(
-                of2."createdAt"::date,
+                COALESCE(of2."dataInicio", of2."createdAt"::date),
                 (SELECT data_inicio FROM obra_ini_pj)
               ) AS periodo_inicio,
+              -- Fim do período nesta obra, em ordem de confiabilidade:
+              -- 1) dataFim gravada na alocação (realocação registra a saída);
+              -- 2) primeira alocação posterior em OUTRA obra;
+              -- 3) alocação desativada sem dataFim e sem linha posterior → encerra no próprio início
+              --    (nunca CURRENT_DATE, senão o PJ continua sendo cobrado nesta obra p/ sempre);
+              -- 4) alocação ativa → hoje.
               COALESCE(
+                of2."dataFim"::date,
                 (SELECT MIN(of3."createdAt"::date)
                  FROM obra_funcionarios of3
                  WHERE of3."employeeId" = of2."employeeId"
                    AND of3."companyId"  = of2."companyId"
                    AND of3."obraId"    <> of2."obraId"
                    AND of3."createdAt"  > of2."createdAt"),
-                CURRENT_DATE
+                CASE WHEN of2."isActive" = 0
+                  THEN GREATEST(COALESCE(of2."dataInicio", of2."createdAt"::date), (SELECT data_inicio FROM obra_ini_pj))
+                  ELSE CURRENT_DATE END
               ) AS periodo_fim
             FROM obra_funcionarios of2
             WHERE of2."obraId"    = ${input.obraId}
@@ -2213,7 +2250,7 @@ export const scorecardRouter = router({
           pj_best AS (
             SELECT DISTINCT ON (pc."employeeId")
               pc."employeeId"                                                              AS employee_id,
-              REPLACE(REPLACE(COALESCE(pc."valorMensal",'0'), '.', ''), ',', '.')::numeric AS valor_mensal,
+              fc_money(pc."valorMensal") AS valor_mensal,
               pc."numeroContrato"                                                          AS numero_contrato,
               pc."razaoSocialPrestador"                                                    AS razao_social,
               pc."dataInicio"                                                              AS data_inicio,
@@ -2369,9 +2406,7 @@ export const scorecardRouter = router({
         db.execute(sql`
           SELECT DISTINCT ON (vr."employeeId")
             vr."employeeId" AS employee_id,
-            COALESCE(CASE WHEN vr."valorDiario" ~ '^-?[0-9]'
-              THEN REPLACE(REPLACE(vr."valorDiario", '.', ''), ',', '.')::numeric
-              ELSE NULL END, 0) AS vr_diario
+            fc_money(vr."valorDiario") AS vr_diario
           FROM vr_benefits vr
           JOIN employees emp_vr ON emp_vr.id = vr."employeeId"
             AND vr."companyId" = emp_vr."companyId"
@@ -2837,7 +2872,45 @@ export const scorecardRouter = router({
         }
       }
       const mesesComDados: number[] = Array.from(mesesComDadosSet).sort((a, b) => a - b);
-      return { resumo, mensal, funcionarios: funcs, mesesComDados };
+
+      // Rev. 4867 — LGPD: sanitização por papel FEITA NO SERVIDOR (nunca só na UI).
+      // admin_master → dados individuais completos.
+      // demais papéis → depende do toggle companies.scorecard_custos_so_total:
+      //   0 (default): linhas anonimizadas (sem nome/foto/matrícula) p/ agregação por função
+      //   1: apenas resumo/mensal agregados — nenhuma linha individual sai do servidor
+      if (ctx.user?.role !== 'admin_master') {
+        let soTotal = false;
+        try {
+          const rc = await db.execute(sql`
+            SELECT scorecard_custos_so_total FROM companies WHERE id = ${input.companyId} LIMIT 1
+          `);
+          soTotal = !!((rc.rows as any[])[0]?.scorecard_custos_so_total);
+        } catch { /* coluna ausente = default 0 */ }
+        if (soTotal) {
+          // Payload mínimo: só efetivo + custo total (nenhum componente salarial sai do servidor)
+          return {
+            resumo: {
+              totalFuncionarios: resumo.totalFuncionarios,
+              custoTotalEmpresa: resumo.custoTotalEmpresa,
+            } as any,
+            mensal: mensal.map((m: any) => ({
+              mes: m.mes, qtdFuncionarios: m.qtdFuncionarios,
+              custoTotal: m.custoTotal, statusMes: m.statusMes,
+            })) as any,
+            funcionarios: [],
+            mesesComDados,
+            modo: 'total' as const,
+          };
+        }
+        const funcsAnon = funcs.map((f: any) => ({
+          ...f,
+          nome: null, foto_url: null, foto: null, cpf: null,
+          matricula: null, numero_interno: null,
+          employee_id: null, historico_mensal: [],
+        }));
+        return { resumo, mensal, funcionarios: funcsAnon, mesesComDados, modo: 'funcao' as const };
+      }
+      return { resumo, mensal, funcionarios: funcs, mesesComDados, modo: 'individual' as const };
     }),
 
   ferramentasList: protectedProcedure
@@ -3138,7 +3211,7 @@ export const scorecardRouter = router({
               ELSE MAX(esh."dataFim"::date)
             END                                                            AS periodo_fim
           FROM employee_site_history esh
-          WHERE esh."obraId" = ${obraId} AND esh."companyId" = ${companyId}
+          WHERE esh."obraId" = ${obraId} AND esh."companyId" = ${companyId} AND esh.tipo <> 'gestor_obra'
           GROUP BY esh."employeeId"
 
           UNION ALL
@@ -3168,6 +3241,7 @@ export const scorecardRouter = router({
               WHERE esh2."employeeId" = of2."employeeId"
                 AND esh2."obraId"     = ${obraId}
                 AND esh2."companyId"  = ${companyId}
+                AND esh2.tipo <> 'gestor_obra'
             )
         )
       `;
@@ -3189,6 +3263,7 @@ export const scorecardRouter = router({
               MAX(bhl."criadoEm") AS "ultimoLancamento"
             FROM banco_horas_lancamentos bhl
             WHERE bhl."employeeId" IN (SELECT "employeeId" FROM emp_obra)
+              AND bhl.data >= ${BANCO_HORAS_DATA_INICIO}::date
               AND bhl.data >= ${dataIni}::date
               AND bhl.data <= ${dataFim}::date
             GROUP BY bhl."employeeId"
@@ -3222,6 +3297,7 @@ export const scorecardRouter = router({
           SELECT EXTRACT(MONTH FROM bhl.data)::int AS mes
           FROM banco_horas_lancamentos bhl
           WHERE bhl."employeeId" IN (SELECT "employeeId" FROM emp_obra_ativos)
+            AND bhl.data >= ${BANCO_HORAS_DATA_INICIO}::date
             AND EXTRACT(YEAR FROM bhl.data) = ${ano}::int
           GROUP BY EXTRACT(MONTH FROM bhl.data)
         `)),
@@ -3263,6 +3339,35 @@ export const scorecardRouter = router({
         SELECT scorecard_beta_ativo FROM companies WHERE id = ${input.companyId} LIMIT 1
       `).catch(() => ({ rows: [] as any[] }));
       return { ativo: !!((r.rows as any[])[0]?.scorecard_beta_ativo) };
+    }),
+
+  // ── Rev. 4867 — LGPD: Custos RH "só total" p/ não-Admin Master ──────────
+  getCustosSoTotal: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      await assertCompanyAccess(ctx.user, input.companyId);
+      const db = await getDb();
+      if (!db) return { ativo: false };
+      const r = await db.execute(sql`
+        SELECT scorecard_custos_so_total FROM companies WHERE id = ${input.companyId} LIMIT 1
+      `).catch(() => ({ rows: [] as any[] }));
+      return { ativo: !!((r.rows as any[])[0]?.scorecard_custos_so_total) };
+    }),
+
+  setCustosSoTotal: protectedProcedure
+    .input(z.object({ companyId: z.number(), ativo: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== "admin_master") {
+        throw new Error("Apenas Admin Master pode alterar esta configuração.");
+      }
+      await assertCompanyAccess(ctx.user, input.companyId);
+      const db = await getDb();
+      if (!db) throw new Error("DB indisponível");
+      await db.execute(sql`
+        UPDATE companies SET scorecard_custos_so_total = ${input.ativo ? 1 : 0}
+        WHERE id = ${input.companyId}
+      `);
+      return { ok: true };
     }),
 
   setScorecardBetaAtivo: protectedProcedure

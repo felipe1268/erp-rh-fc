@@ -7,10 +7,11 @@ import { trpc } from "@/lib/trpc";
  * assim que "Cartão de Crédito" for selecionado como forma de pagamento em
  * Cotação/OC, pra ajudar a escolher o melhor cartão sem sair da tela de compra.
  *
- * Rev. 4019 — passa a considerar SÓ cartões escopo "FC" (nunca "local") e
- * destaca o cartão RECOMENDADO (melhor data de compra pro ciclo de fechamento/
- * vencimento + limite suficiente pro valor da compra, quando informado). A
- * escolha final é sempre do usuário — a recomendação é só uma sugestão.
+ * Mostra todos os cartões ativos cadastrados na empresa, inclusive os de
+ * escopo local, e destaca o cartão RECOMENDADO (melhor data de compra pro
+ * ciclo de fechamento/vencimento + limite suficiente pro valor da compra,
+ * quando informado). A escolha final é sempre do usuário — a recomendação
+ * é só uma sugestão.
  *
  * Rev. 4020 — layout modernizado pra combinar com o resto do modal de
  * Condições de Pagamento (cards com ring/hover, badges arredondados, ícones
@@ -49,7 +50,7 @@ export function CartaoDisponivelCard({
         <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center flex-shrink-0">
           <AlertTriangle className="h-4 w-4" />
         </div>
-        Nenhum cartão habilitado para Compras (finalidade "Compras Recorrentes" ou "Geral", escopo FC). Cadastre/ajuste em Financeiro &gt; Cartões.
+        Nenhum cartão ativo habilitado para Compras. Cadastre/ajuste em Financeiro &gt; Cartões.
       </div>
     );
   }

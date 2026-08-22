@@ -17,6 +17,7 @@ import { useState, useMemo, useEffect } from "react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
 import { removeAccents } from "@/lib/searchUtils";
+import { maskCpfInput } from "@/lib/formatters";
 import {
   MODULE_PAGE_CONFIG, normalizeModulePerm, defaultPagesForLevel,
   type ModulePerm, type ModuleLevel, type PageAction, type PagePerms,
@@ -26,23 +27,41 @@ import {
 // Constantes
 // ─────────────────────────────────────────────────
 const ALL_MODULES = [
-  { id: "rh-dp",        label: "RH / DP",        dot: "bg-blue-500",    tag: "bg-blue-100 text-blue-700 border-blue-200" },
-  { id: "sst",          label: "SST",             dot: "bg-green-500",   tag: "bg-green-100 text-green-700 border-green-200" },
-  { id: "juridico",     label: "Jurídico",         dot: "bg-amber-500",   tag: "bg-amber-100 text-amber-700 border-amber-200" },
-  { id: "avaliacao",    label: "Avaliação",        dot: "bg-purple-500",  tag: "bg-purple-100 text-purple-700 border-purple-200" },
-  { id: "terceiros",    label: "Terceiros",        dot: "bg-orange-500",  tag: "bg-orange-100 text-orange-700 border-orange-200" },
-  { id: "parceiros",    label: "Parceiros",        dot: "bg-teal-500",    tag: "bg-teal-100 text-teal-700 border-teal-200" },
-  { id: "orcamento",    label: "Orçamento",        dot: "bg-indigo-500",  tag: "bg-indigo-100 text-indigo-700 border-indigo-200" },
-  { id: "planejamento", label: "Planejamento",     dot: "bg-violet-500",  tag: "bg-violet-100 text-violet-700 border-violet-200" },
-  { id: "cadastro",     label: "Cadastro",         dot: "bg-slate-500",   tag: "bg-slate-100 text-slate-700 border-slate-200" },
-  { id: "compras",      label: "Compras",          dot: "bg-rose-500",    tag: "bg-rose-100 text-rose-700 border-rose-200" },
-  { id: "almoxarifado", label: "Almoxarifado",     dot: "bg-lime-600",    tag: "bg-lime-100 text-lime-700 border-lime-200" },
-  { id: "financeiro",   label: "Financeiro",       dot: "bg-emerald-500", tag: "bg-emerald-100 text-emerald-700 border-emerald-200" },
-  { id: "operacional",  label: "Operacional",      dot: "bg-cyan-500",    tag: "bg-cyan-100 text-cyan-700 border-cyan-200" },
-  { id: "gestao-documentos", label: "Proj./Doc. Técnicos", dot: "bg-sky-500", tag: "bg-sky-100 text-sky-700 border-sky-200" },
-  { id: "frotas",          label: "Frotas",            dot: "bg-cyan-600",   tag: "bg-cyan-100 text-cyan-700 border-cyan-200" },
-  { id: "medicao",        label: "Medição",           dot: "bg-teal-500",   tag: "bg-teal-100 text-teal-700 border-teal-200" },
-  { id: "portal-cliente", label: "Portal do Cliente", dot: "bg-blue-600",   tag: "bg-blue-100 text-blue-700 border-blue-200" },
+  // ── RH & Pessoas ──────────────────────────────────────────────────
+  { id: "rh-dp",             label: "RH / DP",                 dot: "bg-blue-500",    tag: "bg-blue-100 text-blue-700 border-blue-200" },
+  { id: "sst",               label: "SST",                     dot: "bg-green-500",   tag: "bg-green-100 text-green-700 border-green-200" },
+  { id: "avaliacao",         label: "Avaliação",               dot: "bg-purple-500",  tag: "bg-purple-100 text-purple-700 border-purple-200" },
+  { id: "comunicados-internos", label: "Comunicados Internos", dot: "bg-blue-400",    tag: "bg-blue-50 text-blue-600 border-blue-200" },
+  { id: "curriculos",        label: "Banco de Currículos",     dot: "bg-yellow-500",  tag: "bg-yellow-100 text-yellow-700 border-yellow-200" },
+  // ── Jurídico ──────────────────────────────────────────────────────
+  { id: "juridico",          label: "Jurídico",                dot: "bg-amber-500",   tag: "bg-amber-100 text-amber-700 border-amber-200" },
+  { id: "juridico-trabalhista", label: "Jurídico Trabalhista", dot: "bg-amber-400",   tag: "bg-amber-50 text-amber-700 border-amber-200" },
+  { id: "juridico-tributario",  label: "Jurídico Tributário",  dot: "bg-amber-400",   tag: "bg-amber-50 text-amber-700 border-amber-200" },
+  { id: "juridico-civil",       label: "Jurídico Cível",       dot: "bg-amber-400",   tag: "bg-amber-50 text-amber-700 border-amber-200" },
+  // ── Obra & Campo ──────────────────────────────────────────────────
+  { id: "orcamento",         label: "Orçamento",               dot: "bg-indigo-500",  tag: "bg-indigo-100 text-indigo-700 border-indigo-200" },
+  { id: "planejamento",      label: "Planejamento",            dot: "bg-violet-500",  tag: "bg-violet-100 text-violet-700 border-violet-200" },
+  { id: "medicao",           label: "Medição (Cliente)",       dot: "bg-teal-500",    tag: "bg-teal-100 text-teal-700 border-teal-200" },
+  { id: "apontamento",       label: "Apontamento de Campo",    dot: "bg-lime-500",    tag: "bg-lime-100 text-lime-700 border-lime-200" },
+  { id: "gestao-documentos", label: "Proj./Doc. Técnicos",     dot: "bg-sky-500",     tag: "bg-sky-100 text-sky-700 border-sky-200" },
+  { id: "operacional",       label: "Operacional",             dot: "bg-cyan-500",    tag: "bg-cyan-100 text-cyan-700 border-cyan-200" },
+  // ── Suprimentos ───────────────────────────────────────────────────
+  { id: "compras",           label: "Compras",                 dot: "bg-rose-500",    tag: "bg-rose-100 text-rose-700 border-rose-200" },
+  { id: "almoxarifado",      label: "Almoxarifado",            dot: "bg-lime-600",    tag: "bg-lime-100 text-lime-700 border-lime-200" },
+  // ── Terceiros ─────────────────────────────────────────────────────
+  { id: "terceiros",         label: "Terceiros",               dot: "bg-orange-500",  tag: "bg-orange-100 text-orange-700 border-orange-200" },
+  { id: "medicao-terceiros", label: "Medição de Terceiros",    dot: "bg-orange-400",  tag: "bg-orange-50 text-orange-700 border-orange-200" },
+  { id: "parceiros",         label: "Parceiros",               dot: "bg-teal-500",    tag: "bg-teal-100 text-teal-700 border-teal-200" },
+  // ── Financeiro & Admin ────────────────────────────────────────────
+  { id: "financeiro",        label: "Financeiro",              dot: "bg-emerald-500", tag: "bg-emerald-100 text-emerald-700 border-emerald-200" },
+  { id: "cadastro",          label: "Cadastro",                dot: "bg-slate-500",   tag: "bg-slate-100 text-slate-700 border-slate-200" },
+  { id: "frotas",            label: "Frotas",                  dot: "bg-cyan-600",    tag: "bg-cyan-100 text-cyan-700 border-cyan-200" },
+  { id: "reembolso",         label: "Reembolso",               dot: "bg-orange-400",  tag: "bg-orange-100 text-orange-700 border-orange-200" },
+  { id: "gestao-interna",    label: "Gestão Interna",          dot: "bg-amber-500",   tag: "bg-amber-100 text-amber-700 border-amber-200" },
+  // ── Outros ────────────────────────────────────────────────────────
+  { id: "portal-cliente",    label: "Portal do Cliente",       dot: "bg-blue-600",    tag: "bg-blue-100 text-blue-700 border-blue-200" },
+  { id: "fcsign",            label: "FCSign",                  dot: "bg-teal-400",    tag: "bg-teal-100 text-teal-700 border-teal-200" },
+  { id: "patrimonio",        label: "Patrimônio Imobiliário",  dot: "bg-sky-500",     tag: "bg-sky-100 text-sky-700 border-sky-200" },
 ];
 
 const GROUP_COLORS = [
@@ -351,6 +370,7 @@ export default function Usuarios() {
   const [editEmail, setEditEmail]     = useState("");
   const [editUser, setEditUser]       = useState("");
   const [editPwd, setEditPwd]         = useState("");
+  const [editCpf, setEditCpf]         = useState(""); // Rev. 5047 — CPF p/ assinatura FCSign
   const [showPwd, setShowPwd]         = useState(false);
   const [editRole, setEditRole]       = useState("user");
   const [editCos, setEditCos]         = useState<number[]>([]);
@@ -448,6 +468,7 @@ export default function Usuarios() {
     setEditEmail(u.email || "");
     setEditUser(u.username || "");
     setEditPwd("");
+    setEditCpf(u.cpf || "");
     setEditRole(u.role || "user");
     setEditCos(u.companyIds || []);
     setEditObras(u.allowedObraIds || []);
@@ -458,7 +479,7 @@ export default function Usuarios() {
 
   const handleSaveUser = async () => {
     if (!selectedUser) return;
-    await updateUserMut.mutateAsync({ userId: selectedUser.id, name: editName, email: editEmail||undefined, username: editUser, role: (isAdmCliente ? "user" : editRole) as any, password: editPwd||undefined });
+    await updateUserMut.mutateAsync({ userId: selectedUser.id, name: editName, email: editEmail||undefined, username: editUser, cpf: editCpf, role: (isAdmCliente ? "user" : editRole) as any, password: editPwd||undefined });
     await setCosMut.mutateAsync({ userId: selectedUser.id, companyIds: editCos });
     // Rev. 4041 — Adm Cliente não gerencia grupos de permissão (escopo de acesso amplo demais).
     if (!isAdmCliente) {
@@ -738,7 +759,7 @@ export default function Usuarios() {
                       {/* Passo 0: Colaborador (obrigatório) */}
                       <div className="rounded-xl border-2 p-4 space-y-2 border-violet-300 bg-violet-50/30">
                         <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
-                          <UserCheck className="h-3.5 w-3.5 text-violet-500" /> Colaborador (CLT ou PJ)
+                          <UserCheck className="h-3.5 w-3.5 text-violet-500" /> Colaborador (CLT, PJ ou Sócio)
                           <span className="ml-1 text-[10px] text-red-500 font-semibold normal-case">* obrigatório</span>
                         </h3>
                         {newUserEmp ? (
@@ -771,7 +792,10 @@ export default function Usuarios() {
                             <div className="max-h-44 overflow-y-auto space-y-1">
                               {empForNewUserQ.isLoading && <p className="text-xs text-muted-foreground text-center py-3">Carregando...</p>}
                               {(empForNewUserQ.data ?? [])
-                                .filter((e: any) => ["CLT","PJ"].includes(e.tipoContrato))
+                                .filter((e: any) => ["CLT","PJ","SOCIO"].includes(String(e.tipoContrato || "").toUpperCase()))
+                                // Rev. 4991 — vínculo com usuário EXCLUÍDO (lixeira) não bloqueia:
+                                // trata o colaborador como livre para criar um novo acesso.
+                                .map((e: any) => (e.userId && !(usersQuery.data ?? []).some((u: any) => u.id === e.userId)) ? { ...e, userId: null } : e)
                                 .filter((e: any) => !e.userId)
                                 .filter((e: any) => e.status !== "Desligado" && e.status !== "Inativo" && e.status !== "Lista_Negra")
                                 .filter((e: any) => !newUserEmpSearch || e.nomeCompleto?.toLowerCase().includes(newUserEmpSearch.toLowerCase()))
@@ -794,10 +818,10 @@ export default function Usuarios() {
                                       <p className="text-xs font-semibold truncate">{e.nomeCompleto}</p>
                                       <p className="text-[10px] text-muted-foreground">{e.cargo||e.funcao||"—"}</p>
                                     </div>
-                                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 ${e.tipoContrato==="PJ"?"bg-blue-100 text-blue-700":"bg-green-100 text-green-700"}`}>{e.tipoContrato}</span>
+                                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 ${e.tipoContrato==="PJ"?"bg-blue-100 text-blue-700":String(e.tipoContrato||"").toUpperCase()==="SOCIO"?"bg-violet-100 text-violet-700":"bg-green-100 text-green-700"}`}>{String(e.tipoContrato||"").toUpperCase()==="SOCIO"?"Sócio":e.tipoContrato}</span>
                                   </button>
                                 ))}
-                              {!empForNewUserQ.isLoading && (empForNewUserQ.data ?? []).filter((e: any) => ["CLT","PJ"].includes(e.tipoContrato) && !e.userId && e.status !== "Desligado" && e.status !== "Inativo" && e.status !== "Lista_Negra" && (!newUserEmpSearch || e.nomeCompleto?.toLowerCase().includes(newUserEmpSearch.toLowerCase()))).length === 0 && (
+                              {!empForNewUserQ.isLoading && (empForNewUserQ.data ?? []).filter((e: any) => ["CLT","PJ","SOCIO"].includes(String(e.tipoContrato || "").toUpperCase()) && (!e.userId || !(usersQuery.data ?? []).some((u: any) => u.id === e.userId)) && e.status !== "Desligado" && e.status !== "Inativo" && e.status !== "Lista_Negra" && (!newUserEmpSearch || e.nomeCompleto?.toLowerCase().includes(newUserEmpSearch.toLowerCase()))).length === 0 && (
                                 <p className="text-xs text-muted-foreground text-center py-3">Nenhum colaborador disponível.</p>
                               )}
                             </div>
@@ -872,7 +896,7 @@ export default function Usuarios() {
                       </div>
                       <div className="flex gap-3">
                         <Button onClick={() => {
-                          if (!newUserEmp) { toast.error("Selecione um colaborador cadastrado no ERP (CLT ou PJ)"); return; }
+                          if (!newUserEmp) { toast.error("Selecione um colaborador cadastrado no ERP (CLT, PJ ou Sócio)"); return; }
                           if (!newUser.username||!newUser.name) { toast.error("Preencha usuário e nome"); return; }
                           createUserMut.mutate({ username:newUser.username, name:newUser.name, email:newUser.email||undefined, role:newUser.role, password:newUser.password||undefined, companyIds:newUser.companyIds.length>0?newUser.companyIds:undefined });
                         }} disabled={createUserMut.isPending} className="gap-1.5 bg-green-600 hover:bg-green-700">
@@ -1049,6 +1073,7 @@ export default function Usuarios() {
                           <div><label className="text-xs text-muted-foreground">Nome</label><Input value={editName} onChange={e=>setEditName(e.target.value)} className="h-9 mt-1" /></div>
                           <div><label className="text-xs text-muted-foreground">E-mail</label><Input value={editEmail} onChange={e=>setEditEmail(e.target.value)} className="h-9 mt-1" type="email" /></div>
                           <div><label className="text-xs text-muted-foreground">Username</label><Input value={editUser} onChange={e=>setEditUser(e.target.value)} className="h-9 mt-1" /></div>
+                          <div><label className="text-xs text-muted-foreground">CPF <span className="normal-case">(p/ assinatura digital)</span></label><Input value={editCpf} onChange={e=>setEditCpf(maskCpfInput(e.target.value))} placeholder="000.000.000-00" inputMode="numeric" className="h-9 mt-1" /></div>
                           {isAdmin && selectedUser.id !== user?.id && (
                             <div><label className="text-xs text-muted-foreground">Perfil</label>
                               <Select value={editRole} onValueChange={setEditRole}>

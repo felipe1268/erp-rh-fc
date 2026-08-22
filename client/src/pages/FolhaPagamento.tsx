@@ -687,6 +687,11 @@ export default function FolhaPagamento() {
     { companyId, companyIds },
     { enabled: companyId > 0 || companyIds.length > 0 }
   );
+  // Rev. 5130 — total do Vale Complementar no card "Calcular Vale" (etapa 1)
+  const folhaComplTag = trpc.payrollEngine.folhaComplementarGet.useQuery(
+    { companyId, mesReferencia: mesAno },
+    { enabled: companyId > 0 && !!mesAno }
+  );
   const infoFuncsMap = useMemo(() => {
     const m = new Map<number, { fotoUrl: string | null; status: string | null; obraNome: string | null }>();
     (infoFuncsFolha.data || []).forEach((r: any) => m.set(Number(r.employeeId), r));
@@ -852,6 +857,118 @@ export default function FolhaPagamento() {
     setTimeout(() => { try { w.print(); } catch { /* usuário pode imprimir manualmente */ } }, 300);
   };
 
+  // Rev. 5144 — Impressão individual por banco (aba "Por Banco" da Folha).
+  // HTML self-contained via window.open (padrão aprovado: cabeçalho logo + faixa,
+  // thead escuro, zebra, rodapé LGPD obrigatório).
+  const imprimirPorBanco = (args: {
+    titulo: string; bancoLabel: string; subtitle?: string | null;
+    meta: any; funcs: any[];
+    cols: { bruto: string; desc: string };
+    brutoDe: (f: any) => number; descDe: (f: any) => number; liqDe: (f: any) => number;
+    pixDe: (f: any) => string; cpfDe: (f: any) => string;
+  }) => {
+    const { titulo, bancoLabel, subtitle, meta, funcs, cols, brutoDe, descDe, liqDe, pixDe, cpfDe } = args;
+    const logo = `${window.location.origin}/logo-fc.jpg`;
+    const emissaoBR = new Date().toLocaleString('pt-BR');
+    const emissor = user?.name || '—';
+    const ordenados = [...funcs].sort((a: any, b: any) => (a.nome || '').localeCompare(b.nome || ''));
+    const totalBruto = ordenados.reduce((s, f) => s + brutoDe(f), 0);
+    const totalDesc = ordenados.reduce((s, f) => s + descDe(f), 0);
+    const totalLiq = ordenados.reduce((s, f) => s + liqDe(f), 0);
+    const esc = (v: any) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const rowsHtml = ordenados.map((f: any, i: number) => `
+      <tr>
+        <td>${i + 1}</td>
+        <td style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600">${esc(f.nome)}</td>
+        <td style="font-family:monospace;font-size:9px">${esc(cpfDe(f) || '—')}</td>
+        <td style="font-family:monospace;font-size:9px">${esc(f._cb?.agencia || meta?.agencia || '—')}</td>
+        <td style="font-family:monospace;font-size:9px">${esc(f._cb?.conta || meta?.conta || '—')}</td>
+        <td>${esc((f._cb?.agencia || f._cb?.conta) ? (f._cb?.banco || '—') : (meta?.tipo || '—'))}</td>
+        <td style="font-size:9px;max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(pixDe(f))}</td>
+        <td style="text-align:right;color:#15803d">${formatBRL(brutoDe(f))}</td>
+        <td style="text-align:right;color:#b91c1c">${descDe(f) > 0 ? formatBRL(descDe(f)) : '—'}</td>
+        <td style="text-align:right;font-weight:700;color:#1B2A4A">${formatBRL(liqDe(f))}</td>
+      </tr>`).join('');
+    const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8" />
+      <title>${esc(titulo)} — ${esc(bancoLabel)} — ${esc(mesAno)}</title>
+      <style>
+        * { box-sizing: border-box; }
+        body { font-family: Arial, Helvetica, sans-serif; color: #1e293b; margin: 24px; font-size: 11px; }
+        .hdr { display:flex; align-items:center; justify-content:space-between; border-bottom:2px solid #0f172a; padding-bottom:8px; margin-bottom:10px; }
+        .hdr img { height: 52px; object-fit: contain; }
+        .hdr .tit h1 { font-size: 15px; margin: 0 0 2px; letter-spacing: .5px; }
+        .hdr .tit .sub { font-size: 10px; color:#64748b; }
+        .hdr .emi { font-size: 9px; color:#64748b; text-align:right; }
+        .faixa { background:#1B2A4A; color:#fff; padding:8px 14px; margin:10px 0; border-radius:4px;
+                 font-size:12px; font-weight:700; letter-spacing:1px; text-transform:uppercase; text-align:center;
+                 -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .cards { display:flex; gap:8px; margin: 8px 0 12px; }
+        .card { flex:1; border:1px solid #cbd5e1; border-radius:6px; padding:8px; text-align:center; }
+        .card .v { font-size:14px; font-weight:700; }
+        .card .l { font-size:8px; color:#64748b; text-transform:uppercase; margin-top:2px; }
+        .green { color:#15803d; } .red { color:#b91c1c; } .blue { color:#1B2A4A; }
+        table { width:100%; border-collapse: collapse; table-layout: fixed; }
+        th, td { border:1px solid #cbd5e1; padding:5px 6px; }
+        thead th { background:#0f172a; color:#fff; font-size:9px; text-transform:uppercase; letter-spacing:.3px;
+                   -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        tbody tr:nth-child(even) td { background:#f8fafc; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        tfoot td { background:#e2e8f0; font-weight:700; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .lgpd { margin-top:14px; border:1px solid #cbd5e1; border-radius:6px; padding:8px 10px; font-size:8.5px; color:#475569; background:#f8fafc;
+                -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        @page { size: A4 landscape; margin: 12mm; }
+        @media print { body { margin: 0; } }
+      </style></head>
+      <body>
+        <div class="hdr">
+          <div style="display:flex;align-items:center;gap:12px">
+            <img src="${logo}" alt="FC Engenharia" />
+            <div class="tit">
+              <h1>FC ENGENHARIA</h1>
+              <div class="sub">${esc(titulo)} — Relação por Banco</div>
+            </div>
+          </div>
+          <div class="emi">Emitido em ${esc(emissaoBR)}<br/>por ${esc(emissor)}</div>
+        </div>
+        <div class="faixa">${esc(bancoLabel)}${subtitle ? ` — ${esc(subtitle)}` : ''} — Competência ${esc(mesAno)}</div>
+        <div class="cards">
+          <div class="card"><div class="v blue">${ordenados.length}</div><div class="l">Funcionários</div></div>
+          <div class="card"><div class="v green">${formatBRL(totalBruto)}</div><div class="l">${esc(cols.bruto)}</div></div>
+          <div class="card"><div class="v red">${formatBRL(totalDesc)}</div><div class="l">${esc(cols.desc)}</div></div>
+          <div class="card"><div class="v blue">${formatBRL(totalLiq)}</div><div class="l">Total Líquido</div></div>
+        </div>
+        <table>
+          <colgroup>
+            <col style="width:24px" /><col /><col style="width:100px" /><col style="width:56px" />
+            <col style="width:96px" /><col style="width:60px" /><col style="width:150px" />
+            <col style="width:82px" /><col style="width:82px" /><col style="width:90px" />
+          </colgroup>
+          <thead><tr>
+            <th>#</th><th style="text-align:left">Funcionário</th><th>CPF</th><th>Agência</th><th>Conta</th><th>Tipo</th><th>Pix</th>
+            <th>${esc(cols.bruto)}</th><th>${esc(cols.desc)}</th><th>Líquido</th>
+          </tr></thead>
+          <tbody>${rowsHtml}</tbody>
+          <tfoot><tr>
+            <td colspan="7">SUBTOTAL — ${ordenados.length} funcionário${ordenados.length !== 1 ? 's' : ''}</td>
+            <td style="text-align:right;color:#15803d">${formatBRL(totalBruto)}</td>
+            <td style="text-align:right;color:#b91c1c">${totalDesc > 0 ? formatBRL(totalDesc) : '—'}</td>
+            <td style="text-align:right;color:#1B2A4A">${formatBRL(totalLiq)}</td>
+          </tr></tfoot>
+        </table>
+        <div class="lgpd">🔒 <strong>LGPD — Lei nº 13.709/2018:</strong> este documento contém dados pessoais e bancários de colaboradores e destina-se exclusivamente ao uso interno autorizado.
+          Emissão registrada e rastreável — emitido por <strong>${esc(emissor)}</strong> em ${esc(emissaoBR)}.</div>
+      </body></html>`;
+    const w = window.open('', '_blank');
+    if (!w) {
+      toast.error('Não foi possível abrir a janela de impressão. Habilite pop-ups para este site e tente novamente.');
+      return;
+    }
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    setTimeout(() => { try { w.print(); } catch { /* usuário pode imprimir manualmente */ } }, 300);
+  };
+
   const arredondarMut = trpc.payrollEngine.arredondarLote.useMutation({
     onSuccess: (data: any) => {
       toast.success(data?.message || "Arredondamento aplicado.");
@@ -950,6 +1067,14 @@ export default function FolhaPagamento() {
   }, []);
 
   const [editadosConfirm, setEditadosConfirm] = useState<{ show: boolean; nomes: string[]; count: number } | null>(null);
+
+  // Rev. 5128 — escolha do escopo do cálculo: todos ou só colaboradores selecionados
+  const [escopoDialog, setEscopoDialog] = useState<{ tipo: 'vale' | 'he' | 'afericao' | 'pagamento'; step: 'escolha' | 'selecao' } | null>(null);
+  const [escopoSelIds, setEscopoSelIds] = useState<number[]>([]);
+  const [escopoBusca, setEscopoBusca] = useState('');
+  // Guarda a última seleção despachada por tipo, p/ os fluxos de confirmação
+  // subsequentes (editados do vale, overrides do pagamento) repassarem o mesmo escopo.
+  const escopoIdsRef = useRef<Record<string, number[] | undefined>>({});
 
   const gerarValeMut = trpc.payrollEngine.gerarVale.useMutation({
     onMutate: () => startProgress('vale'),
@@ -1398,6 +1523,124 @@ export default function FolhaPagamento() {
     },
     onError: (err) => toast.error(`Erro ao calcular HE: ${err.message}`),
   });
+
+  // Rev. 5128 — despacha o cálculo escolhido no dialog de escopo (todos ou selecionados)
+  const dispararCalculoEscopo = useCallback((tipo: 'vale' | 'he' | 'afericao' | 'pagamento', ids?: number[]) => {
+    const employeeIds = ids && ids.length > 0 ? ids : undefined;
+    escopoIdsRef.current[tipo] = employeeIds;
+    setEscopoDialog(null);
+    if (tipo === 'vale') {
+      setCalcType('vale');
+      gerarValeMut.mutate({ companyId, companyIds, mesReferencia: mesAno, employeeIds });
+    } else if (tipo === 'he') {
+      heCalcularMut.mutate({ companyId, companyIds, mesReferencia: mesAno, dataInicio: heDataInicio, dataFim: heDataFim, employeeIds });
+    } else if (tipo === 'afericao') {
+      afericaoMut.mutate({ companyId, companyIds, mesReferencia: mesAno, employeeIds });
+    } else {
+      // Pagamento: detecta overrides ANTES de disparar (mesma lógica do botão original)
+      const editados = ((pagamentoResult as any)?.funcionarios || []).filter(
+        (f: any) => f && ((f.descontosManuais && Object.keys(f.descontosManuais).length > 0)
+          || f.liquidoEditadoManualmente
+          || String(f.observacoes || '').includes('LÍQUIDO EDITADO'))
+          // Ressimulação parcial: só pergunta sobre editados DENTRO da seleção
+          && (!employeeIds || employeeIds.includes(Number(f.employeeId)))
+      );
+      if (editados.length > 0) {
+        const lista = editados.map((f: any) => ({
+          id: Number(f.employeeId),
+          nome: String(f.nome || f.nomeCompleto || f.employeeNome || `Funcionário ${f.employeeId}`),
+          campos: [
+            ...Object.keys(f.descontosManuais || {}),
+            ...((f.liquidoEditadoManualmente || String(f.observacoes || '').includes('LÍQUIDO EDITADO')) ? ['líquido'] : []),
+          ],
+        }));
+        setOverridesPrompt({ open: true, count: lista.length, lista, manterIds: lista.map((f: any) => f.id) });
+        return;
+      }
+      setCalcType('pagamento');
+      simularPagamentoMut.mutate({ companyId, companyIds, mesReferencia: mesAno, pontoInicioManual: periodoInicio, pontoFimManual: periodoFim, forcarRecalculoPonto: true, employeeIds });
+    }
+  }, [companyId, companyIds, mesAno, heDataInicio, heDataFim, periodoInicio, periodoFim, pagamentoResult, gerarValeMut, heCalcularMut, afericaoMut, simularPagamentoMut]);
+
+  // Rev. 5128 — Dialog de escopo do cálculo (todos ou só selecionados).
+  // Definido como elemento reutilizável porque a página tem vários "early returns"
+  // por viewMode — precisa ser montado na tela principal E no módulo de HE.
+  const escopoDialogEl = (
+    <Dialog open={!!escopoDialog} onOpenChange={(open) => { if (!open) setEscopoDialog(null); }}>
+      <DialogContent className="max-w-md" resizable={false}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base">
+            <Zap className="h-4 w-4 text-orange-600" />
+            {escopoDialog?.tipo === 'vale' ? 'Calcular Vale' : escopoDialog?.tipo === 'he' ? 'Calcular Horas Extras' : escopoDialog?.tipo === 'afericao' ? 'Aferir Escuro' : 'Simular Pagamento'}
+          </DialogTitle>
+          <DialogDescription>
+            {escopoDialog?.step === 'escolha'
+              ? 'Quer calcular para todos os colaboradores ou escolher quais recalcular?'
+              : 'Marque os colaboradores que devem ser recalculados. Os resultados dos demais serão preservados.'}
+          </DialogDescription>
+        </DialogHeader>
+        {escopoDialog?.step === 'escolha' ? (
+          <div className="flex flex-col gap-2">
+            <Button className="w-full justify-start bg-orange-600 hover:bg-orange-700"
+              onClick={() => escopoDialog && dispararCalculoEscopo(escopoDialog.tipo)}>
+              <Users className="h-4 w-4 mr-2" /> Calcular todos
+            </Button>
+            <Button variant="outline" className="w-full justify-start"
+              onClick={() => setEscopoDialog(d => d ? { ...d, step: 'selecao' } : d)}>
+              <CheckCircle className="h-4 w-4 mr-2" /> Selecionar colaboradores…
+            </Button>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2 min-h-0">
+            <div className="relative">
+              <Search className="h-4 w-4 absolute left-2.5 top-2.5 text-muted-foreground" />
+              <input
+                className="w-full border rounded-md pl-8 pr-2 py-2 text-sm"
+                placeholder="Buscar colaborador…"
+                value={escopoBusca}
+                onChange={(e) => setEscopoBusca(e.target.value)}
+              />
+            </div>
+            <div className="border rounded-md overflow-y-auto max-h-[45vh] divide-y">
+              {(() => {
+                const termo = escopoBusca.trim().toLowerCase();
+                const lista = ((infoFuncsFolha.data as any[]) || [])
+                  .filter((f: any) => f.status !== 'Lista_Negra')
+                  .filter((f: any) => !termo || String(f.nomeCompleto || '').toLowerCase().includes(termo))
+                  .sort((a: any, b: any) => String(a.nomeCompleto || '').localeCompare(String(b.nomeCompleto || ''), 'pt-BR', { sensitivity: 'base' }));
+                if (lista.length === 0) return <div className="p-3 text-sm text-muted-foreground">Nenhum colaborador encontrado.</div>;
+                return lista.map((f: any) => {
+                  const id = Number(f.employeeId);
+                  const checked = escopoSelIds.includes(id);
+                  return (
+                    <label key={id} className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-muted/50">
+                      <input type="checkbox" className="h-4 w-4 accent-orange-600" checked={checked}
+                        onChange={() => setEscopoSelIds(prev => checked ? prev.filter(x => x !== id) : [...prev, id])} />
+                      <span className="flex-1 min-w-0">
+                        <span className="block truncate">{f.nomeCompleto || `Funcionário ${id}`}</span>
+                        <span className="block text-[11px] text-muted-foreground truncate">{[f.funcao, f.status].filter(Boolean).join(' · ')}</span>
+                      </span>
+                    </label>
+                  );
+                });
+              })()}
+            </div>
+            <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+              <span>{escopoSelIds.length} selecionado(s)</span>
+              <button type="button" className="underline" onClick={() => setEscopoSelIds([])}>Limpar seleção</button>
+            </div>
+            <DialogFooter className="gap-2 sm:gap-2">
+              <Button variant="outline" onClick={() => setEscopoDialog(d => d ? { ...d, step: 'escolha' } : d)}>Voltar</Button>
+              <Button className="bg-orange-600 hover:bg-orange-700" disabled={escopoSelIds.length === 0}
+                onClick={() => escopoDialog && dispararCalculoEscopo(escopoDialog.tipo, escopoSelIds)}>
+                Recalcular {escopoSelIds.length > 0 ? `(${escopoSelIds.length})` : ''}
+              </Button>
+            </DialogFooter>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
   const heAprovarMut = trpc.horasExtras.aprovar.useMutation({
     onSuccess: () => { toast.success("Período de HE aprovado!"); hePeriods.refetch(); heDetalhe.refetch(); },
     onError: (err) => toast.error(`Erro: ${err.message}`),
@@ -1612,7 +1855,7 @@ export default function FolhaPagamento() {
   // mesma mutation gerarRemessaCnab (que já agrupa por conta-empresa), disparando
   // sequencialmente para não estourar o gate de sessão do backend nem embaralhar
   // downloads simultâneos no navegador.
-  async function gerarRemessasSelecionadas(contas: Array<{ id: number; codigoBanco: string }>) {
+  async function gerarRemessasSelecionadas(contas: Array<{ id: number; codigoBanco: string; tipo?: 'folha' | 'vale' }>) {
     if (contas.length === 0) return;
     setGerandoRemessasLote(true);
     let sucesso = 0;
@@ -1625,6 +1868,7 @@ export default function FolhaPagamento() {
             mesReferencia: mesAno,
             codigoBanco: conta.codigoBanco,
             contaBancariaId: conta.id,
+            tipo: conta.tipo,
           });
           baixarArquivoRemessa(data);
           sucesso++;
@@ -1638,6 +1882,38 @@ export default function FolhaPagamento() {
     }
     if (sucesso > 0) toast.success(`${sucesso} remessa${sucesso !== 1 ? "s" : ""} gerada${sucesso !== 1 ? "s" : ""} (1 arquivo por banco).`);
     if (falhas.length > 0) toast.error(`${falhas.length} falha(s): ${falhas.join(" | ")}`);
+  }
+  // ── Rev. 5034 — Poka-yoke: conferência prévia (dry-run) antes de gerar remessa.
+  // Nada é gerado nem NSA consumido até o usuário confirmar no dialog.
+  const confUtils = trpc.useUtils();
+  type ContaRemessa = { id: number; codigoBanco: string; banco?: string; tipo?: 'folha' | 'vale' };
+  const [confRemessa, setConfRemessa] = useState<null | {
+    contas: ContaRemessa[];
+    carregando: boolean;
+    resultados: Array<{ conta: ContaRemessa; conf: any }>;
+  }>(null);
+  async function abrirConferenciaRemessa(contas: ContaRemessa[]) {
+    if (contas.length === 0) return;
+    setConfRemessa({ contas, carregando: true, resultados: [] });
+    const resultados: Array<{ conta: ContaRemessa; conf: any }> = [];
+    for (const c of contas) {
+      try {
+        const conf = await confUtils.payrollEngine.conferirRemessaCnab.fetch(
+          { companyId, mesReferencia: mesAno, codigoBanco: c.codigoBanco, contaBancariaId: c.id, tipo: c.tipo },
+          { staleTime: 0 },
+        );
+        resultados.push({ conta: c, conf });
+      } catch (e: any) {
+        resultados.push({ conta: c, conf: { podeGerar: false, bloqueios: [e?.message || "Falha na conferência"], avisos: [], totalFuncionarios: 0, totalValor: 0, banco: c.banco || `Banco ${c.codigoBanco}`, remessasAnteriores: [] } });
+      }
+    }
+    setConfRemessa({ contas, carregando: false, resultados });
+  }
+  async function confirmarGeracaoRemessas() {
+    if (!confRemessa) return;
+    const aptas = confRemessa.resultados.filter(r => r.conf?.podeGerar).map(r => r.conta);
+    setConfRemessa(null);
+    await gerarRemessasSelecionadas(aptas);
   }
   const excluirMut = trpc.folha.excluirLancamento.useMutation({
     onSuccess: () => { toast.success("Lançamento excluído!"); statusMes.refetch(); lancamentos.refetch(); mesesComLanc.refetch(); setViewMode("resumo"); },
@@ -1803,6 +2079,62 @@ export default function FolhaPagamento() {
     </>
   );
 
+  // Rev. 5034 — Poka-yoke: dialog de conferência prévia da remessa CNAB.
+  const confRemessaDialog = (
+    <Dialog open={!!confRemessa} onOpenChange={(o) => { if (!o) setConfRemessa(null); }}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Conferência da remessa CNAB</DialogTitle>
+          <DialogDescription>Revise antes de gerar — nada é gerado nem numerado até você confirmar.</DialogDescription>
+        </DialogHeader>
+        {confRemessa?.carregando ? (
+          <div className="flex items-center gap-2 py-6 justify-center text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" /> Conferindo dados...
+          </div>
+        ) : (
+          <div className="space-y-3 max-h-[55vh] overflow-y-auto">
+            {(confRemessa?.resultados || []).map(({ conta, conf }) => (
+              <div key={conta.id} className={`rounded-lg border p-3 space-y-2 ${conf?.podeGerar ? "border-emerald-200 bg-emerald-50/40" : "border-red-200 bg-red-50/40"}`}>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-semibold truncate">{conf?.banco || conta.banco}{conf?.agencia ? ` · Ag ${conf.agencia}` : ""}{conf?.conta ? ` · Cc ${conf.conta}` : ""}</p>
+                  {conf?.podeGerar
+                    ? <span className="text-[11px] font-bold text-emerald-700 shrink-0">✓ PRONTA</span>
+                    : <span className="text-[11px] font-bold text-red-600 shrink-0">✗ BLOQUEADA</span>}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {conf?.totalFuncionarios ?? 0} funcionário(s) · <b>{formatBRL(conf?.totalValor || 0)}</b>
+                  {conf?.convenio ? ` · Convênio ${conf.convenio}` : ""}
+                  {conf?.ambiente === "T" ? " · AMBIENTE TESTE" : ""}
+                </p>
+                {(conf?.bloqueios || []).length > 0 && (
+                  <ul className="text-xs text-red-700 space-y-1">
+                    {conf.bloqueios.slice(0, 10).map((b: string, i: number) => <li key={i}>• {b}</li>)}
+                    {conf.bloqueios.length > 10 && <li>• ... e mais {conf.bloqueios.length - 10}</li>}
+                  </ul>
+                )}
+                {(conf?.avisos || []).length > 0 && (
+                  <ul className="text-xs text-amber-700 space-y-1">
+                    {conf.avisos.map((a: string, i: number) => <li key={i}>⚠ {a}</li>)}
+                  </ul>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={() => setConfRemessa(null)}>Cancelar</Button>
+          <Button
+            disabled={!!confRemessa?.carregando || !(confRemessa?.resultados || []).some(r => r.conf?.podeGerar)}
+            onClick={confirmarGeracaoRemessas}
+          >
+            <FileDown className="h-4 w-4 mr-1" />
+            Gerar {(confRemessa?.resultados || []).filter(r => r.conf?.podeGerar).length > 1 ? `${(confRemessa?.resultados || []).filter(r => r.conf?.podeGerar).length} remessas` : "remessa"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+
   // Rev. 4886 — Dialog de overrides extraído para renderizar em QUALQUER view.
   // Antes ele só existia dentro do branch "calculo_pagamento" (Ver Resultado):
   // clicar em "Resimular" no card detectava os ajustes manuais e abria o prompt,
@@ -1853,7 +2185,7 @@ export default function FolhaPagamento() {
             const manterIds = overridesPrompt.manterIds;
             setOverridesPrompt({ open: false, count: 0, lista: [], manterIds: [] });
             setCalcType("pagamento");
-            simularPagamentoMut.mutate({ companyId, companyIds, mesReferencia: mesAno, manterOverridesIds: manterIds, pontoInicioManual: periodoInicio, pontoFimManual: periodoFim, forcarRecalculoPonto: true });
+            simularPagamentoMut.mutate({ companyId, companyIds, mesReferencia: mesAno, manterOverridesIds: manterIds, pontoInicioManual: periodoInicio, pontoFimManual: periodoFim, forcarRecalculoPonto: true, employeeIds: escopoIdsRef.current['pagamento'] });
           }}>Aplicar e ressimular</Button>
         </DialogFooter>
       </DialogContent>
@@ -3483,6 +3815,7 @@ export default function FolhaPagamento() {
                 acctMeta[key] = key === SEM_CONTA ? null : {
                   id: cb.contaEmpresaId,
                   banco: cb.contaEmpresaBanco || "Banco",
+                  codigoBanco: cb.contaEmpresaCodigoBanco || null,
                   agencia: cb.contaEmpresaAgencia || null,
                   conta: cb.contaEmpresaConta || null,
                   tipo: cb.contaEmpresaTipo || null,
@@ -3568,6 +3901,52 @@ export default function FolhaPagamento() {
                           <span className="text-green-700">Bruto: <strong>{formatBRL(totalBruto)}</strong></span>
                           {totalIr > 0 && <span className="text-red-600">IR: <strong>-{formatBRL(totalIr)}</strong></span>}
                           <span className="text-[#1B2A4A] text-sm font-bold">{formatBRL(totalLiq)}</span>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-[11px] print:hidden"
+                            onClick={() => imprimirPorBanco({
+                              titulo: 'Vale (Adiantamento)',
+                              bancoLabel: acctLabel(meta),
+                              subtitle,
+                              meta,
+                              funcs: bkFuncs,
+                              cols: { bruto: 'Bruto', desc: 'IR' },
+                              brutoDe,
+                              descDe: irDe,
+                              liqDe,
+                              pixDe: (f: any) => f._cb?.tipoChavePix ? `${f._cb.tipoChavePix}: ${f._cb.chavePix || '—'}` : '—',
+                              cpfDe: (f: any) => f._cb?.cpf || '',
+                            })}
+                          >
+                            <Printer className="h-3.5 w-3.5 mr-1" /> Imprimir
+                          </Button>
+                          {(() => {
+                            // Rev. 5035 — Remessa CNAB do VALE: mesma conferência
+                            // poka-yoke da folha, com tipo 'vale' (payroll_advances).
+                            const codigoBanco = meta?.codigoBanco || (() => {
+                              const lower = String(meta?.banco || '').toLowerCase();
+                              if (lower.includes('caixa')) return '104';
+                              if (lower.includes('santander')) return '033';
+                              if (lower.includes('bradesco')) return '237';
+                              if (lower.includes('itau') || lower.includes('itaú')) return '341';
+                              if (lower.includes('banco do brasil')) return '001';
+                              return null;
+                            })();
+                            if (!meta || !codigoBanco || !Number.isFinite(Number(meta.id))) return null;
+                            return (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-[11px] print:hidden"
+                                disabled={gerarRemessaMut.isPending}
+                                onClick={() => abrirConferenciaRemessa([{ id: Number(meta.id), codigoBanco, banco: acctLabel(meta), tipo: 'vale' }])}
+                              >
+                                <FileDown className="h-3.5 w-3.5 mr-1" />
+                                {gerarRemessaMut.isPending ? "Gerando..." : "Gerar Remessa CNAB"}
+                              </Button>
+                            );
+                          })()}
                         </div>
                       </div>
                       <CardContent className="p-0">
@@ -3596,9 +3975,9 @@ export default function FolhaPagamento() {
                                   <tr key={i} className={`border-b border-gray-100 hover:bg-blue-50/40 transition-colors ${zebra}`}>
                                     <td className="py-2 px-3 font-medium whitespace-nowrap">{f.nome}</td>
                                     <td className="py-2 px-2 text-muted-foreground font-mono text-[10px]">{cb?.cpf || '—'}</td>
-                                    <td className="py-2 px-2 font-mono text-[10px]">{meta?.agencia || '—'}</td>
-                                    <td className="py-2 px-2 font-mono text-[10px]">{meta?.conta || '—'}</td>
-                                    <td className="py-2 px-2 text-[10px]">{meta?.tipo || '—'}</td>
+                                    <td className="py-2 px-2 font-mono text-[10px]">{cb?.agencia || meta?.agencia || '—'}</td>
+                                    <td className="py-2 px-2 font-mono text-[10px]">{cb?.conta || meta?.conta || '—'}</td>
+                                    <td className="py-2 px-2 text-[10px]">{(cb?.agencia || cb?.conta) ? (cb?.banco || '—') : (meta?.tipo || '—')}</td>
                                     <td className="py-2 px-2 text-[10px] max-w-[160px] truncate" title={pixInfo}>{pixInfo}</td>
                                     <td className="text-right py-2 px-2 text-green-700">{formatBRL(brutoDe(f))}</td>
                                     <td className="text-right py-2 px-2 text-red-600">{ir > 0 ? `-${formatBRL(ir)}` : '—'}</td>
@@ -3624,6 +4003,9 @@ export default function FolhaPagamento() {
               </div>
             );
           })()}
+
+          {/* Rev. 5036 — Vale Complementar (parcela do complemento "por fora" que sai junto com o vale) */}
+          <FolhaComplementarCard companyId={companyId} mesReferencia={mesAno} parcela="vale" />
         </div>
         <ArredondamentoDialog
           open={arredOpen && arredOrigem === 'vale'}
@@ -3633,6 +4015,7 @@ export default function FolhaPagamento() {
           isPending={arredondarMut.isPending}
           onAplicar={aplicarArred}
         />
+        {confRemessaDialog}
         <PrintFooterLGPD />
       </DashboardLayout>
     );
@@ -3795,7 +4178,7 @@ export default function FolhaPagamento() {
                   className="bg-green-600 hover:bg-green-700 text-white"
                   onClick={() => {
                     setEditadosConfirm(null);
-                    gerarValeMut.mutate({ companyId, companyIds, mesReferencia: mesAno, preservarEditados: true });
+                    gerarValeMut.mutate({ companyId, companyIds, mesReferencia: mesAno, preservarEditados: true, employeeIds: escopoIdsRef.current['vale'] });
                   }}
                 >
                   <ShieldCheck className="h-4 w-4 mr-1" />
@@ -3805,7 +4188,7 @@ export default function FolhaPagamento() {
                   variant="destructive"
                   onClick={() => {
                     setEditadosConfirm(null);
-                    gerarValeMut.mutate({ companyId, companyIds, mesReferencia: mesAno, forcarRecalculoTodos: true });
+                    gerarValeMut.mutate({ companyId, companyIds, mesReferencia: mesAno, forcarRecalculoTodos: true, employeeIds: escopoIdsRef.current['vale'] });
                   }}
                 >
                   <RefreshCw className="h-4 w-4 mr-1" />
@@ -3814,6 +4197,8 @@ export default function FolhaPagamento() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+
+          {escopoDialogEl}
 
           <Dialog open={!!detalheAfericaoEmpId} onOpenChange={(open) => { if (!open) setDetalheAfericaoEmpId(null); }}>
             <DialogContent className="w-[95vw] max-w-[95vw] h-[95vh] max-h-[95vh] flex flex-col p-0" resizable={false}>
@@ -4844,7 +5229,7 @@ export default function FolhaPagamento() {
                       size="sm"
                       className="text-xs h-8"
                       disabled={contasRemessaSelecionadas.size === 0 || gerandoRemessasLote}
-                      onClick={() => gerarRemessasSelecionadas(contasElegiveis.filter(c => contasRemessaSelecionadas.has(c.id)))}
+                      onClick={() => abrirConferenciaRemessa(contasElegiveis.filter(c => contasRemessaSelecionadas.has(c.id)))}
                     >
                       <FileDown className="h-3.5 w-3.5 mr-1" />
                       {gerandoRemessasLote
@@ -4912,18 +5297,33 @@ export default function FolhaPagamento() {
                           <span className="text-green-700">Bruto: <strong>{formatBRL(totalBruto)}</strong></span>
                           <span className="text-red-600">Desc: <strong>{formatBRL(totalDesc)}</strong></span>
                           <span className="text-[#1B2A4A] text-sm font-bold">{formatBRL(totalLiq)}</span>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-xs h-7 print:hidden"
+                            onClick={() => imprimirPorBanco({
+                              titulo: 'Folha de Pagamento',
+                              bancoLabel: acctLabel(meta),
+                              subtitle,
+                              meta,
+                              funcs: bkFuncs,
+                              cols: { bruto: 'Proventos', desc: 'Descontos' },
+                              brutoDe: (f: any) => f.totalProventos || 0,
+                              descDe: (f: any) => f.totalDescontos || 0,
+                              liqDe: (f: any) => f.salarioLiquido || 0,
+                              pixDe: (f: any) => f.tipoChavePix ? `${f.tipoChavePix}: ${f.chavePix || '—'}` : '—',
+                              cpfDe: (f: any) => f.cpf || '',
+                            })}
+                          >
+                            <Printer className="h-3.5 w-3.5 mr-1" /> Imprimir
+                          </Button>
                           {meta && codigoBanco && Number.isFinite(Number(meta.id)) && (
                             <Button
                               size="sm"
                               variant="outline"
                               className="text-xs h-7 ml-2 print:hidden"
                               disabled={gerarRemessaMut.isPending}
-                              onClick={() => gerarRemessaMut.mutate({
-                                companyId,
-                                mesReferencia: mesAno,
-                                codigoBanco: codigoBanco!,
-                                contaBancariaId: Number(meta.id),
-                              })}
+                              onClick={() => abrirConferenciaRemessa([{ id: Number(meta.id), codigoBanco: codigoBanco!, banco: acctLabel(meta) }])}
                             >
                               <FileDown className="h-3.5 w-3.5 mr-1" />
                               {gerarRemessaMut.isPending ? "Gerando..." : "Gerar Remessa CNAB"}
@@ -4955,9 +5355,9 @@ export default function FolhaPagamento() {
                                   <tr key={i} className={`border-b border-gray-100 hover:bg-blue-50/40 transition-colors ${zebra}`}>
                                     <td className="py-2 px-3 font-medium whitespace-nowrap">{f.nome}</td>
                                     <td className="py-2 px-2 text-muted-foreground font-mono text-[10px]">{f.cpf || '—'}</td>
-                                    <td className="py-2 px-2 font-mono text-[10px]">{meta?.agencia || '—'}</td>
-                                    <td className="py-2 px-2 font-mono text-[10px]">{meta?.conta || '—'}</td>
-                                    <td className="py-2 px-2 text-[10px]">{meta?.tipo || '—'}</td>
+                                    <td className="py-2 px-2 font-mono text-[10px]">{cb?.agencia || meta?.agencia || '—'}</td>
+                                    <td className="py-2 px-2 font-mono text-[10px]">{cb?.conta || meta?.conta || '—'}</td>
+                                    <td className="py-2 px-2 text-[10px]">{(cb?.agencia || cb?.conta) ? (cb?.banco || '—') : (meta?.tipo || '—')}</td>
                                     <td className="py-2 px-2 text-[10px] max-w-[160px] truncate" title={pixInfo}>{pixInfo}</td>
                                     <td className="text-right py-2 px-2 text-green-700">{formatBRL(f.totalProventos)}</td>
                                     <td className="text-right py-2 px-2 text-red-600">{formatBRL(f.totalDescontos)}</td>
@@ -5275,12 +5675,13 @@ export default function FolhaPagamento() {
             </p>
           )}
 
-          {/* Rev. 4894 — Folha Complementar (complemento salarial "por fora") */}
-          <FolhaComplementarCard companyId={companyId} mesReferencia={mesAno} />
+          {/* Rev. 4894 — Folha Complementar (complemento salarial "por fora"); Rev. 5036: só a parcela do pagamento (vale fica na tela do Vale) */}
+          <FolhaComplementarCard companyId={companyId} mesReferencia={mesAno} parcela="pagamento" />
         </div>
 
         {/* Dialog: confirma o que fazer com overrides na re-simulação (Rev. 4886 — extraído) */}
         {overridesDialog}
+        {confRemessaDialog}
 
         <ArredondamentoDialog
           open={arredOpen && arredOrigem === 'folha'}
@@ -5771,13 +6172,14 @@ export default function FolhaPagamento() {
                         : <><Unlock className="h-3.5 w-3.5 mr-1.5" /> Travar</>}
                     </Button>
                     <Button className="bg-purple-700 hover:bg-purple-800" disabled={heCalcularMut.isPending || heConsolidadoMod}
-                      onClick={() => heCalcularMut.mutate({ companyId, companyIds, mesReferencia: mesAno, dataInicio: heDataInicio, dataFim: heDataFim })}
+                      onClick={() => { setEscopoSelIds([]); setEscopoBusca(''); setEscopoDialog({ tipo: 'he', step: 'escolha' }); }}
                       title={heConsolidadoMod ? "HE consolidada — desconsolide primeiro para recalcular" : ""}>
                       {heCalcularMut.isPending
                         ? <><RefreshCw className="h-4 w-4 mr-2 animate-spin" /> Calculando...</>
                         : heConsolidadoMod ? <><Lock className="h-4 w-4 mr-2" /> Consolidado</>
                         : <><Zap className="h-4 w-4 mr-2" /> Calcular HE</>}
                     </Button>
+                    {escopoDialogEl}
                     <div className="text-xs text-muted-foreground">
                       {heDatasLocked
                         ? <p className="text-green-700 flex items-center gap-1"><CheckCircle className="h-3 w-3" /> Período padrão: dia 16 do mês anterior ao dia 15 do mês atual</p>
@@ -6853,6 +7255,7 @@ export default function FolhaPagamento() {
       <PrintHeader />
       {fileInputs}
       {overridesDialog}
+      {confRemessaDialog}
       <div className="space-y-6">
         {/* HEADER */}
         <div className="flex items-center justify-between flex-wrap gap-3">
@@ -7351,6 +7754,23 @@ export default function FolhaPagamento() {
                         <p className="text-sm font-black text-orange-800">{formatBRL(valeResult.totalVale)}</p>
                       </div>
                     </div>
+                    {(() => {
+                      const fc = folhaComplTag.data as any;
+                      const compl = Number(fc?.totalVale || 0);
+                      if (!(compl > 0)) return null;
+                      return (
+                        <div className="mt-1.5 pt-1.5 border-t border-orange-200 grid grid-cols-2 gap-1.5">
+                          <div className="text-center">
+                            <p className="text-[9px] text-orange-600 font-medium">+ Complementar</p>
+                            <p className="text-xs font-bold text-orange-700">{formatBRL(compl)}</p>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-[9px] text-orange-600 font-medium">Total Geral</p>
+                            <p className="text-xs font-black text-orange-800">{formatBRL(Number(valeResult.totalVale || 0) + compl)}</p>
+                          </div>
+                        </div>
+                      );
+                    })()}
                     {(valeResult.totalAlertas || 0) > 0 && <p className="text-[9px] text-amber-600 text-center mt-1">{valeResult.totalAlertas} alerta(s)</p>}
                   </div>
                 )}
@@ -7375,9 +7795,10 @@ export default function FolhaPagamento() {
                 )}
                 <Button size="sm" className={`w-full mt-auto ${valeOk ? 'bg-slate-500 hover:bg-slate-600' : 'bg-orange-600 hover:bg-orange-700'}`}
                   disabled={gerarValeMut.isPending || !step1Ready}
-                  onClick={() => { setCalcType("vale"); gerarValeMut.mutate({ companyId, companyIds, mesReferencia: mesAno }); }}>
+                  onClick={() => { setEscopoSelIds([]); setEscopoBusca(''); setEscopoDialog({ tipo: 'vale', step: 'escolha' }); }}>
                   {gerarValeMut.isPending ? <><RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Calculando...</> : valeOk ? <><RefreshCw className="h-3 w-3 mr-1" /> Recalcular</> : <><Zap className="h-3 w-3 mr-1" /> Calcular Vale</>}
                 </Button>
+                {escopoDialogEl}
                 {valeResult && (
                   <Button size="sm" variant="ghost" className="w-full mt-1 text-xs text-orange-700" onClick={() => setViewMode("calculo_vale")}>
                     <Eye className="h-3 w-3 mr-1" /> Ver Resultado
@@ -7584,7 +8005,7 @@ export default function FolhaPagamento() {
                 <Button size="sm" className={`w-full mt-auto ${afericaoConsolidada ? 'bg-gray-400 cursor-not-allowed' : afericaoOk ? 'bg-slate-500 hover:bg-slate-600' : 'bg-amber-600 hover:bg-amber-700'}`}
                   disabled={afericaoMut.isPending || !step3Ready || afericaoConsolidada}
                   title={afericaoConsolidada ? "Aferição consolidada — desconsolide primeiro para reaferir" : ""}
-                  onClick={() => afericaoMut.mutate({ companyId, companyIds, mesReferencia: mesAno })}>
+                  onClick={() => { setEscopoSelIds([]); setEscopoBusca(''); setEscopoDialog({ tipo: 'afericao', step: 'escolha' }); }}>
                   {afericaoMut.isPending ? <><RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Aferindo...</> : afericaoConsolidada ? <><Lock className="h-3 w-3 mr-1" /> Consolidado</> : afericaoOk ? <><RefreshCw className="h-3 w-3 mr-1" /> Reaferir</> : <><Zap className="h-3 w-3 mr-1" /> Aferir Escuro</>}
                 </Button>
                 {afericaoResult && (
@@ -7706,30 +8127,7 @@ export default function FolhaPagamento() {
                 <Button size="sm" className={`w-full mt-auto ${pagamentoConsolidado ? 'bg-gray-400 cursor-not-allowed' : pagOk ? 'bg-slate-500 hover:bg-slate-600' : 'bg-green-600 hover:bg-green-700'}`}
                   disabled={simularPagamentoMut.isPending || !step4Ready || pagamentoConsolidado}
                   title={pagamentoConsolidado ? "Pagamento consolidado — desconsolide primeiro para resimular" : ""}
-                  onClick={() => {
-                    // Detecta overrides ANTES de disparar a simulação para abrir o diálogo na hora,
-                    // evitando que o usuário fique esperando "Simulando..." e só veja a confirmação ao
-                    // entrar em "Ver Resultado". Conta funcionários com descontosManuais não-vazio.
-                    const editados = ((pagamentoResult as any)?.funcionarios || []).filter(
-                      (f: any) => f && ((f.descontosManuais && Object.keys(f.descontosManuais).length > 0)
-                        || f.liquidoEditadoManualmente
-                        || String(f.observacoes || '').includes('LÍQUIDO EDITADO'))
-                    );
-                    if (editados.length > 0) {
-                      const lista = editados.map((f: any) => ({
-                        id: Number(f.employeeId),
-                        nome: String(f.nome || f.nomeCompleto || f.employeeNome || `Funcionário ${f.employeeId}`),
-                        campos: [
-                          ...Object.keys(f.descontosManuais || {}),
-                          ...((f.liquidoEditadoManualmente || String(f.observacoes || '').includes('LÍQUIDO EDITADO')) ? ['líquido'] : []),
-                        ],
-                      }));
-                      setOverridesPrompt({ open: true, count: lista.length, lista, manterIds: lista.map((f: any) => f.id) });
-                      return;
-                    }
-                    setCalcType("pagamento");
-                    simularPagamentoMut.mutate({ companyId, companyIds, mesReferencia: mesAno, pontoInicioManual: periodoInicio, pontoFimManual: periodoFim, forcarRecalculoPonto: true });
-                  }}>
+                  onClick={() => { setEscopoSelIds([]); setEscopoBusca(''); setEscopoDialog({ tipo: 'pagamento', step: 'escolha' }); }}>
                   {simularPagamentoMut.isPending ? <><RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Simulando...</> : pagamentoConsolidado ? <><Lock className="h-3 w-3 mr-1" /> Consolidado</> : pagOk ? <><RefreshCw className="h-3 w-3 mr-1" /> Resimular</> : <><Zap className="h-3 w-3 mr-1" /> Simular Pagamento</>}
                 </Button>
                 {pagamentoResult && (
@@ -11039,7 +11437,7 @@ function DetalhamentoVerbasFuncionario({ linha }: { linha: any }) {
 // ajuste manual por competência (com motivo) e gera título ÚNICO no Contas a
 // Pagar. A folha oficial NÃO soma esse valor.
 // ============================================================
-function FolhaComplementarCard({ companyId, mesReferencia }: { companyId: number; mesReferencia: string }) {
+function FolhaComplementarCard({ companyId, mesReferencia, parcela = "pagamento" }: { companyId: number; mesReferencia: string; parcela?: "vale" | "pagamento" }) {
   const utils = trpc.useUtils();
   const q = trpc.payrollEngine.folhaComplementarGet.useQuery(
     { companyId, mesReferencia },
@@ -11069,23 +11467,147 @@ function FolhaComplementarCard({ companyId, mesReferencia }: { companyId: number
     return `${na}-${String(nm).padStart(2, "0")}-05`;
   })();
   const [venc, setVenc] = useState(defaultVenc);
+  // Rev. 5036 — vale complementar: vencimento padrão dia 20 da própria competência
+  const defaultVencVale = mesReferencia ? `${mesReferencia}-20` : "";
+  const [vencVale, setVencVale] = useState(defaultVencVale);
 
   const data = q.data;
   if (!q.isLoading && (!data || data.funcionarios.length === 0)) return null;
   const ativos = (data?.funcionarios || []).filter((f: any) => !f.excluido);
   const excluidos = (data?.funcionarios || []).filter((f: any) => f.excluido);
 
+  // Rev. 5144 — Impressão do card (HTML self-contained, padrão aprovado + rodapé LGPD)
+  const imprimirCard = () => {
+    const titulo = parcela === "vale" ? "Vale Complementar" : "Folha Complementar";
+    const competBR = mesReferencia?.split("-").reverse().join("/");
+    const logo = `${window.location.origin}/logo-fc.jpg`;
+    const emissaoBR = new Date().toLocaleString('pt-BR');
+    const esc = (v: any) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const valorDe = (f: any) => parcela === "vale" ? (f.valorVale ?? 0) : (f.valorPagamento ?? f.valorFinal ?? 0);
+    const total = parcela === "vale" ? ((data as any)?.totalVale || 0) : ((data as any)?.totalPagamento || 0);
+    const rowsHtml = [...ativos].sort((a: any, b: any) => (a.nome || '').localeCompare(b.nome || '')).map((f: any, i: number) => `
+      <tr>
+        <td>${i + 1}</td>
+        <td style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600">${esc(f.nome)}</td>
+        <td>${esc(f.cargo || '—')}</td>
+        <td style="text-align:right">${formatBRL(f.valorCadastro)}</td>
+        <td style="text-align:right">${f.fatorAdmissao < 1 ? `× ${(f.fatorAdmissao * 100).toFixed(0)}%` : '—'}</td>
+        <td style="text-align:right">${f.faltas > 0 ? f.faltas : '—'}</td>
+        <td style="text-align:right;color:#b91c1c">${f.descontoFaltas > 0 ? `− ${formatBRL(f.descontoFaltas)}` : '—'}</td>
+        <td style="text-align:right;font-weight:700;color:${f.ajusteManual ? '#c2410c' : '#1B2A4A'}">${formatBRL(valorDe(f))}${f.ajusteManual ? '<span style="display:block;font-size:8px;font-weight:400;color:#ea580c">✎ editado' + (f.ajusteManual.motivo ? ` — ${esc(f.ajusteManual.motivo)}` : '') + '</span>' : ''}</td>
+      </tr>`).join('');
+    const exclHtml = excluidos.length ? `<p style="font-size:9px;color:#64748b;margin-top:8px"><strong>Excluídos do cálculo:</strong> ${excluidos.map((f: any) => `${esc(f.nome)} (${esc(f.obs || '—')})`).join('; ')}</p>` : '';
+    const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8" />
+      <title>${esc(titulo)} — ${esc(competBR)}</title>
+      <style>
+        * { box-sizing: border-box; }
+        body { font-family: Arial, Helvetica, sans-serif; color: #1e293b; margin: 24px; font-size: 11px; }
+        .hdr { display:flex; align-items:center; justify-content:space-between; border-bottom:2px solid #0f172a; padding-bottom:8px; margin-bottom:10px; }
+        .hdr img { height: 52px; object-fit: contain; }
+        .hdr .tit h1 { font-size: 15px; margin: 0 0 2px; letter-spacing: .5px; }
+        .hdr .tit .sub { font-size: 10px; color:#64748b; }
+        .hdr .emi { font-size: 9px; color:#64748b; text-align:right; }
+        .faixa { background:#1B2A4A; color:#fff; padding:8px 14px; margin:10px 0; border-radius:4px;
+                 font-size:12px; font-weight:700; letter-spacing:1px; text-transform:uppercase; text-align:center;
+                 -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .nota { font-size:9px; color:#64748b; margin: 4px 0 10px; }
+        table { width:100%; border-collapse: collapse; table-layout: fixed; }
+        th, td { border:1px solid #cbd5e1; padding:5px 6px; }
+        thead th { background:#0f172a; color:#fff; font-size:9px; text-transform:uppercase; letter-spacing:.3px;
+                   -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        tbody tr:nth-child(even) td { background:#f8fafc; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        tfoot td { background:#e2e8f0; font-weight:700; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .lgpd { margin-top:14px; border:1px solid #cbd5e1; border-radius:6px; padding:8px 10px; font-size:8.5px; color:#475569; background:#f8fafc;
+                -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        @page { size: A4 landscape; margin: 12mm; }
+        @media print { body { margin: 0; } }
+      </style></head>
+      <body>
+        <div class="hdr">
+          <div style="display:flex;align-items:center;gap:12px">
+            <img src="${logo}" alt="FC Engenharia" />
+            <div class="tit">
+              <h1>FC ENGENHARIA</h1>
+              <div class="sub">${esc(titulo)} — complemento salarial (por fora)</div>
+            </div>
+          </div>
+          <div class="emi">Emitido em ${esc(emissaoBR)}</div>
+        </div>
+        <div class="faixa">${esc(titulo)} — Competência ${esc(competBR)}</div>
+        <p class="nota">${parcela === "vale"
+          ? `Adiantamento (${(data as any)?.pctVale ?? 50}%) do complemento salarial (por fora) — sai junto com o vale. Não entra na folha oficial.`
+          : 'Complemento salarial (por fora) — proporcional a faltas e admissão. Não entra na folha oficial.'}</p>
+        <table>
+          <colgroup>
+            <col style="width:24px" /><col /><col style="width:120px" /><col style="width:100px" />
+            <col style="width:70px" /><col style="width:52px" /><col style="width:90px" /><col style="width:110px" />
+          </colgroup>
+          <thead><tr>
+            <th>#</th><th style="text-align:left">Funcionário</th><th>Função</th><th>Complemento (cadastro)</th>
+            <th>Admissão</th><th>Faltas</th><th>Desc. Faltas</th><th>Valor ${parcela === "vale" ? 'do Vale' : 'Final'}</th>
+          </tr></thead>
+          <tbody>${rowsHtml}</tbody>
+          <tfoot><tr>
+            <td colspan="7">TOTAL — ${ativos.length} colaborador${ativos.length !== 1 ? 'es' : ''}</td>
+            <td style="text-align:right;color:#1B2A4A">${formatBRL(total)}</td>
+          </tr></tfoot>
+        </table>
+        ${exclHtml}
+        <div class="lgpd">🔒 <strong>LGPD — Lei nº 13.709/2018:</strong> este documento contém dados pessoais e salariais de colaboradores e destina-se exclusivamente ao uso interno autorizado.
+          Emissão registrada e rastreável — emitido em ${esc(emissaoBR)}.</div>
+      </body></html>`;
+    const w = window.open('', '_blank');
+    if (!w) {
+      toast.error('Não foi possível abrir a janela de impressão. Habilite pop-ups para este site e tente novamente.');
+      return;
+    }
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    setTimeout(() => { try { w.print(); } catch { /* usuário pode imprimir manualmente */ } }, 300);
+  };
+
   return (
     <Card className="mt-4 overflow-hidden border-indigo-200">
       <CardContent className="p-0">
         <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 bg-indigo-50/60 border-b border-indigo-100">
           <div>
-            <p className="font-semibold text-sm text-[#1B2A4A]">Folha Complementar — {mesReferencia?.split("-").reverse().join("/")}</p>
+            <p className="font-semibold text-sm text-[#1B2A4A]">{parcela === "vale" ? "Vale Complementar" : "Folha Complementar"} — {mesReferencia?.split("-").reverse().join("/")}</p>
             <p className="text-[11px] text-muted-foreground">
-              Complemento salarial (por fora) — proporcional a faltas e admissão. Não entra na folha oficial.
+              {parcela === "vale"
+                ? `Adiantamento (${(data as any)?.pctVale ?? 50}%) do complemento salarial (por fora) — sai junto com o vale. Não entra na folha oficial.`
+                : "Complemento salarial (por fora) — proporcional a faltas e admissão. Não entra na folha oficial."}
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col items-end gap-1.5">
+            {/* Rev. 5036 — Vale complementar (% de adiantamento) */}
+            {parcela === "vale" && (
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" className="h-8 print:hidden" onClick={imprimirCard} disabled={ativos.length === 0}>
+                <Printer className="h-3.5 w-3.5 mr-1" /> Imprimir
+              </Button>
+              {(data as any)?.tituloVale ? (
+                <Badge variant="outline" className={(data as any).tituloVale.status === "a_pagar" ? "border-amber-400 text-amber-700" : "border-green-500 text-green-700"}>
+                  Vale #{(data as any).tituloVale.id} — {formatBRL(Number((data as any).tituloVale.valor_previsto))} ({(data as any).tituloVale.status === "a_pagar" ? "a pagar" : (data as any).tituloVale.status})
+                </Badge>
+              ) : null}
+              <Input type="date" value={vencVale} onChange={(e) => setVencVale(e.target.value)} className="h-8 w-[150px] text-xs" />
+              <Button
+                size="sm" variant="outline" className="h-8 border-indigo-300 text-indigo-800"
+                disabled={tituloMut.isPending || !vencVale || ((data as any)?.totalVale || 0) <= 0 || ((data as any)?.tituloVale && (data as any).tituloVale.status !== "a_pagar")}
+                onClick={() => tituloMut.mutate({ companyId, mesReferencia, dataVencimento: vencVale, parcela: 'vale' })}
+              >
+                {tituloMut.isPending ? "Gerando..." : (data as any)?.tituloVale ? "Atualizar Vale" : `Gerar Vale (${(data as any)?.pctVale ?? 50}%) — ${formatBRL((data as any)?.totalVale || 0)}`}
+              </Button>
+            </div>
+            )}
+            {/* Pagamento complementar (restante) */}
+            {parcela === "pagamento" && (
+            <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" className="h-8 print:hidden" onClick={imprimirCard} disabled={ativos.length === 0}>
+              <Printer className="h-3.5 w-3.5 mr-1" /> Imprimir
+            </Button>
             {data?.titulo ? (
               <Badge variant="outline" className={data.titulo.status === "a_pagar" ? "border-amber-400 text-amber-700" : "border-green-500 text-green-700"}>
                 Título #{data.titulo.id} — {formatBRL(Number(data.titulo.valor_previsto))} ({data.titulo.status === "a_pagar" ? "a pagar" : data.titulo.status})
@@ -11094,11 +11616,13 @@ function FolhaComplementarCard({ companyId, mesReferencia }: { companyId: number
             <Input type="date" value={venc} onChange={(e) => setVenc(e.target.value)} className="h-8 w-[150px] text-xs" />
             <Button
               size="sm" className="h-8"
-              disabled={tituloMut.isPending || !venc || (data?.total || 0) <= 0 || (data?.titulo && data.titulo.status !== "a_pagar")}
-              onClick={() => tituloMut.mutate({ companyId, mesReferencia, dataVencimento: venc })}
+              disabled={tituloMut.isPending || !venc || ((data as any)?.totalPagamento || 0) <= 0 || (data?.titulo && data.titulo.status !== "a_pagar")}
+              onClick={() => tituloMut.mutate({ companyId, mesReferencia, dataVencimento: venc, parcela: 'pagamento' })}
             >
-              {tituloMut.isPending ? "Gerando..." : data?.titulo ? "Atualizar Título" : "Gerar Título no Contas a Pagar"}
+              {tituloMut.isPending ? "Gerando..." : data?.titulo ? "Atualizar Pagamento" : `Gerar Pagamento (${100 - ((data as any)?.pctVale ?? 50)}%) — ${formatBRL((data as any)?.totalPagamento || 0)}`}
             </Button>
+            </div>
+            )}
           </div>
         </div>
         <div className="overflow-x-auto">
@@ -11125,7 +11649,7 @@ function FolhaComplementarCard({ companyId, mesReferencia }: { companyId: number
                   <td className="text-right py-2 px-2">{f.faltas > 0 ? f.faltas : "—"}</td>
                   <td className="text-right py-2 px-2 text-red-600">{f.descontoFaltas > 0 ? `− ${formatBRL(f.descontoFaltas)}` : "—"}</td>
                   <td className={`text-right py-2 px-2 font-bold ${f.ajusteManual ? "text-orange-700" : "text-[#1B2A4A]"}`}>
-                    {formatBRL(f.valorFinal)}
+                    {formatBRL(parcela === "vale" ? (f.valorVale ?? 0) : (f.valorPagamento ?? f.valorFinal))}
                     {f.ajusteManual && (
                       <span className="block text-[9px] font-normal text-orange-600" title={`Ajustado por ${f.ajusteManual.por}${f.ajusteManual.motivo ? ` — ${f.ajusteManual.motivo}` : ""} (calculado: ${formatBRL(f.valorCalculado)})`}>
                         ✎ editado
@@ -11134,7 +11658,7 @@ function FolhaComplementarCard({ companyId, mesReferencia }: { companyId: number
                   </td>
                   <td className="py-2 px-2 text-right">
                     <Button variant="ghost" size="sm" className="h-6 px-2 text-[10px]"
-                      onClick={() => { setEditRow(f); setEditValor(String(f.valorFinal).replace(".", ",")); setEditMotivo(f.ajusteManual?.motivo || ""); }}>
+                      onClick={() => { setEditRow(f); setEditValor(String(parcela === "vale" ? (f.valorVale ?? f.valorFinal) : f.valorFinal).replace(".", ",")); setEditMotivo(f.ajusteManual?.motivo || ""); }}>
                       Editar
                     </Button>
                   </td>
@@ -11153,7 +11677,7 @@ function FolhaComplementarCard({ companyId, mesReferencia }: { companyId: number
             <tfoot>
               <tr className="border-t-2 bg-gray-100 font-bold text-xs">
                 <td className="py-2.5 px-3" colSpan={6}>TOTAL — {ativos.length} colaborador{ativos.length !== 1 ? "es" : ""}</td>
-                <td className="text-right py-2.5 px-2 text-[#1B2A4A]">{formatBRL(data?.total || 0)}</td>
+                <td className="text-right py-2.5 px-2 text-[#1B2A4A]">{formatBRL(parcela === "vale" ? ((data as any)?.totalVale || 0) : ((data as any)?.totalPagamento || 0))}</td>
                 <td></td>
               </tr>
             </tfoot>
@@ -11166,18 +11690,22 @@ function FolhaComplementarCard({ companyId, mesReferencia }: { companyId: number
           <DialogHeader>
             <DialogTitle className="text-base">Ajustar complemento — {editRow?.nome}</DialogTitle>
             <DialogDescription className="text-xs">
-              Calculado: {formatBRL(editRow?.valorCalculado || 0)} (cadastro {formatBRL(editRow?.valorCadastro || 0)}
-              {editRow?.faltas > 0 ? ` − ${editRow.faltas} falta(s)` : ""}). O ajuste vale só para esta competência — não altera o cadastro.
+              {parcela === "vale" ? (
+                <>Parcela do vale calculada: {formatBRL(((editRow?.valorCalculado || 0) * ((data as any)?.pctVale ?? 50)) / 100)} — {(data as any)?.pctVale ?? 50}% do complemento do mês ({formatBRL(editRow?.valorCalculado || 0)}; cadastro {formatBRL(editRow?.valorCadastro || 0)}{editRow?.faltas > 0 ? ` − ${editRow.faltas} falta(s)` : ""}). O valor digitado aqui é a PARCELA DO VALE; o mês inteiro é ajustado proporcionalmente. Só para esta competência — não altera o cadastro.</>
+              ) : (
+                <>Calculado: {formatBRL(editRow?.valorCalculado || 0)} (cadastro {formatBRL(editRow?.valorCadastro || 0)}
+                {editRow?.faltas > 0 ? ` − ${editRow.faltas} falta(s)` : ""}). O ajuste vale só para esta competência — não altera o cadastro.</>
+              )}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <div>
-              <label className="text-xs font-medium">Novo valor (R$)</label>
+              <label className="text-xs font-medium">{parcela === "vale" ? "Novo valor da parcela do vale (R$)" : "Novo valor (R$)"}</label>
               <Input value={editValor} onChange={(e) => setEditValor(e.target.value)} placeholder="0,00" />
             </div>
             <div>
-              <label className="text-xs font-medium">Motivo (opcional)</label>
-              <Textarea value={editMotivo} onChange={(e) => setEditMotivo(e.target.value)} rows={2} placeholder="Ex.: acordo, desconto adicional..." />
+              <label className="text-xs font-medium">Observações <span className="text-red-500">*</span> <span className="font-normal text-muted-foreground">(obrigatório)</span></label>
+              <Textarea value={editMotivo} onChange={(e) => setEditMotivo(e.target.value)} rows={3} placeholder="Descreva o que está sendo considerado no cálculo. Ex.: complemento salarial + valor referente ao período de férias..." />
             </div>
           </div>
           <DialogFooter className="gap-2">
@@ -11191,7 +11719,12 @@ function FolhaComplementarCard({ companyId, mesReferencia }: { companyId: number
               onClick={() => {
                 const v = parseFloat(editValor.replace(/\./g, "").replace(",", "."));
                 if (isNaN(v) || v < 0) { toast.error("Valor inválido"); return; }
-                ajusteMut.mutate({ companyId, mesReferencia, employeeId: editRow.employeeId, valor: v, motivo: editMotivo || undefined });
+                if (!editMotivo.trim()) { toast.error("Preencha as observações: descreva o que está sendo considerado no cálculo"); return; }
+                // Rev. 5129 — na aba do VALE o valor digitado é a PARCELA do vale;
+                // converte para o complemento do mês inteiro (split pctVale/100−pctVale).
+                const pct = (data as any)?.pctVale ?? 50;
+                const valorMes = parcela === "vale" ? Math.round((v * 100 / pct) * 100) / 100 : v;
+                ajusteMut.mutate({ companyId, mesReferencia, employeeId: editRow.employeeId, valor: valorMes, motivo: editMotivo || undefined });
               }}>
               {ajusteMut.isPending ? "Salvando..." : "Salvar ajuste"}
             </Button>

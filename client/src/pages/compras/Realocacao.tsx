@@ -92,6 +92,14 @@ export default function ComprasRealocacao() {
     );
   const reservas = reservasData ?? [];
 
+  // Rev. 5138 — pop-up de memória de cálculo dos cards de saldo
+  const [cardDetail, setCardDetail] = useState<null | "orcado" | "utilizado" | "economia" | "reservado" | "disponivel">(null);
+  const { data: di08PorObra, isLoading: loadingDi08PorObra } =
+    trpc.compras.getRealocacaoDi08PorObra.useQuery(
+      { companyId },
+      { enabled: !!companyId && cardDetail === "orcado" }
+    );
+
   const [estenderModal, setEstenderModal] = useState<{ id: number; cotacaoId: number; numeroCotacao: string | null } | null>(null);
   const [diasEstender, setDiasEstender] = useState("3");
   const [motivoEstender, setMotivoEstender] = useState("");
@@ -216,7 +224,7 @@ export default function ComprasRealocacao() {
           <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
             <Tooltip>
               <TooltipTrigger asChild>
-                <div className="bg-white rounded-xl border border-blue-100 p-4 shadow-sm cursor-help">
+                <div className="bg-white rounded-xl border border-blue-100 p-4 shadow-sm cursor-pointer hover:border-blue-300 transition-colors" onClick={() => setCardDetail("orcado")}>
                   <div className="flex items-center gap-2 mb-1">
                     <ShieldAlert className="h-4 w-4 text-blue-500" />
                     <p className="text-xs text-gray-500 font-medium">DI-08 — Orçado</p>
@@ -233,7 +241,7 @@ export default function ComprasRealocacao() {
 
             <Tooltip>
               <TooltipTrigger asChild>
-                <div className="bg-white rounded-xl border border-orange-100 p-4 shadow-sm cursor-help">
+                <div className="bg-white rounded-xl border border-orange-100 p-4 shadow-sm cursor-pointer hover:border-orange-300 transition-colors" onClick={() => setCardDetail("utilizado")}>
                   <div className="flex items-center gap-2 mb-1">
                     <TrendingDown className="h-4 w-4 text-orange-500" />
                     <p className="text-xs text-gray-500 font-medium">DI-08 — Utilizado</p>
@@ -250,7 +258,7 @@ export default function ComprasRealocacao() {
 
             <Tooltip>
               <TooltipTrigger asChild>
-                <div className="bg-white rounded-xl border border-teal-100 p-4 shadow-sm cursor-help">
+                <div className="bg-white rounded-xl border border-teal-100 p-4 shadow-sm cursor-pointer hover:border-teal-300 transition-colors" onClick={() => setCardDetail("economia")}>
                   <div className="flex items-center gap-2 mb-1">
                     <PackageSearch className="h-4 w-4 text-teal-500" />
                     <p className="text-xs text-gray-500 font-medium">Economia em Compras</p>
@@ -267,7 +275,7 @@ export default function ComprasRealocacao() {
 
             <Tooltip>
               <TooltipTrigger asChild>
-                <div className="bg-white rounded-xl border border-amber-200 p-4 shadow-sm cursor-help">
+                <div className="bg-white rounded-xl border border-amber-200 p-4 shadow-sm cursor-pointer hover:border-amber-400 transition-colors" onClick={() => setCardDetail("reservado")}>
                   <div className="flex items-center gap-2 mb-1">
                     <Hourglass className="h-4 w-4 text-amber-500" />
                     <p className="text-xs text-gray-500 font-medium">Reservado</p>
@@ -286,7 +294,7 @@ export default function ComprasRealocacao() {
 
             <Tooltip>
               <TooltipTrigger asChild>
-                <div className="bg-emerald-600 rounded-xl p-4 shadow-sm cursor-help">
+                <div className="bg-emerald-600 rounded-xl p-4 shadow-sm cursor-pointer hover:bg-emerald-700 transition-colors" onClick={() => setCardDetail("disponivel")}>
                   <div className="flex items-center gap-2 mb-1">
                     <CheckCircle className="h-4 w-4 text-emerald-100" />
                     <p className="text-xs text-emerald-100 font-medium">Disponível Real</p>
@@ -983,6 +991,182 @@ export default function ComprasRealocacao() {
                     Confirmar Reversão
                   </Button>
                 </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* ── Rev. 5138 — Memória de cálculo dos cards de saldo ────── */}
+        <Dialog open={cardDetail != null} onOpenChange={(o) => { if (!o) setCardDetail(null); }}>
+          <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                {cardDetail === "orcado" && <><ShieldAlert className="h-5 w-5 text-blue-500" /> DI-08 Orçado — por obra</>}
+                {cardDetail === "utilizado" && <><TrendingDown className="h-5 w-5 text-orange-500" /> DI-08 Utilizado — débitos realizados</>}
+                {cardDetail === "economia" && <><PackageSearch className="h-5 w-5 text-teal-500" /> Economia em Compras — OCs abaixo da meta</>}
+                {cardDetail === "reservado" && <><Hourglass className="h-5 w-5 text-amber-500" /> Reservado — reservas preventivas ativas</>}
+                {cardDetail === "disponivel" && <><CheckCircle className="h-5 w-5 text-emerald-600" /> Disponível Real — como é calculado</>}
+                {obraAtual && <Badge variant="outline" className="ml-1 text-[10px]">{obraAtual.nome}</Badge>}
+              </DialogTitle>
+            </DialogHeader>
+
+            {cardDetail === "orcado" && (
+              loadingDi08PorObra ? (
+                <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-gray-400" /></div>
+              ) : (() => {
+                const rows = (di08PorObra ?? []).filter((r: any) => !obraIdNum || r.obraId === obraIdNum);
+                if (rows.length === 0) return <p className="text-sm text-gray-500 py-4 text-center">Nenhuma obra com DI-08 orçado.</p>;
+                return (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Obra</TableHead>
+                        <TableHead className="text-right">DI-08 Orçado</TableHead>
+                        <TableHead className="text-right">Utilizado</TableHead>
+                        <TableHead className="text-right">Reservado</TableHead>
+                        <TableHead className="text-right">Disponível</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {rows.map((r: any) => (
+                        <TableRow key={r.obraId}>
+                          <TableCell className="max-w-[220px] truncate font-medium">{r.nome}</TableCell>
+                          <TableCell className="text-right text-blue-700 font-semibold">{fmt(r.di08Total)}</TableCell>
+                          <TableCell className="text-right text-orange-600">{fmt(r.di08Usado)}</TableCell>
+                          <TableCell className="text-right text-amber-700">{fmt(r.reservado)}</TableCell>
+                          <TableCell className="text-right text-emerald-700 font-semibold">{fmt(Math.max(0, r.di08Total - r.di08Usado - r.reservado))}</TableCell>
+                        </TableRow>
+                      ))}
+                      <TableRow className="bg-gray-50 font-bold">
+                        <TableCell>Total</TableCell>
+                        <TableCell className="text-right text-blue-700">{fmt(rows.reduce((s: number, r: any) => s + r.di08Total, 0))}</TableCell>
+                        <TableCell className="text-right text-orange-600">{fmt(rows.reduce((s: number, r: any) => s + r.di08Usado, 0))}</TableCell>
+                        <TableCell className="text-right text-amber-700">{fmt(rows.reduce((s: number, r: any) => s + r.reservado, 0))}</TableCell>
+                        <TableCell className="text-right text-emerald-700">{fmt(rows.reduce((s: number, r: any) => s + Math.max(0, r.di08Total - r.di08Usado - r.reservado), 0))}</TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                );
+              })()
+            )}
+
+            {cardDetail === "utilizado" && (
+              debitos.length === 0 ? (
+                <p className="text-sm text-gray-500 py-4 text-center">Nenhum débito registrado{obraAtual ? ` para ${obraAtual.nome}` : ""}.</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Cotação</TableHead>
+                      <TableHead>Obra</TableHead>
+                      <TableHead className="text-right">Valor</TableHead>
+                      <TableHead>Data</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {debitos.map((d: any) => (
+                      <TableRow key={d.id}>
+                        <TableCell className="text-xs font-medium text-blue-700">{d.numeroCotacao ? `#${formatNumeroCotacaoDisplay(d.numeroCotacao)}` : "—"}</TableCell>
+                        <TableCell className="max-w-[200px] truncate text-xs">{d.obraNome || "—"}</TableCell>
+                        <TableCell className="text-right text-orange-600 font-semibold">{fmt(Number(d.valor))}</TableCell>
+                        <TableCell className="text-xs text-gray-500">{d.criadoEm ? format(new Date(d.criadoEm), "dd/MM/yy HH:mm", { locale: ptBR }) : "—"}</TableCell>
+                      </TableRow>
+                    ))}
+                    <TableRow className="bg-gray-50 font-bold">
+                      <TableCell colSpan={2}>Total ({debitos.length} débitos)</TableCell>
+                      <TableCell className="text-right text-orange-600">{fmt(debitos.reduce((s: number, d: any) => s + Number(d.valor), 0))}</TableCell>
+                      <TableCell />
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              )
+            )}
+
+            {cardDetail === "economia" && (
+              economias.length === 0 ? (
+                <p className="text-sm text-gray-500 py-4 text-center">Nenhuma OC com economia{obraAtual ? ` para ${obraAtual.nome}` : ""}.</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>OC</TableHead>
+                      <TableHead>Obra</TableHead>
+                      <TableHead className="text-right">Meta</TableHead>
+                      <TableHead className="text-right">Comprado</TableHead>
+                      <TableHead className="text-right">Economia</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {economias.map((e: any) => (
+                      <TableRow key={e.id}>
+                        <TableCell className="text-xs font-medium text-blue-700">{e.numeroOc ? formatNumeroOcDisplay(e.numeroOc) : `#${e.id}`}</TableCell>
+                        <TableCell className="max-w-[200px] truncate text-xs">{e.obraNome || "—"}</TableCell>
+                        <TableCell className="text-right text-xs">{fmt(Number(e.totalMeta))}</TableCell>
+                        <TableCell className="text-right text-xs">{fmt(Number(e.totalComprado))}</TableCell>
+                        <TableCell className="text-right text-teal-700 font-semibold">{fmt(Number(e.sobra))}</TableCell>
+                      </TableRow>
+                    ))}
+                    <TableRow className="bg-gray-50 font-bold">
+                      <TableCell colSpan={4}>Total ({economias.length} OCs)</TableCell>
+                      <TableCell className="text-right text-teal-700">{fmt(economias.reduce((s: number, e: any) => s + Number(e.sobra), 0))}</TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              )
+            )}
+
+            {cardDetail === "reservado" && (
+              reservas.length === 0 ? (
+                <p className="text-sm text-gray-500 py-4 text-center">Nenhuma reserva preventiva ativa{obraAtual ? ` para ${obraAtual.nome}` : ""}.</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Cotação</TableHead>
+                      <TableHead className="text-right">DI-08</TableHead>
+                      <TableHead className="text-right">Economia</TableHead>
+                      <TableHead className="text-right">Total</TableHead>
+                      <TableHead>Prazo</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {reservas.map((r: any) => (
+                      <TableRow key={r.id} className={r.vencida ? "bg-red-50" : undefined}>
+                        <TableCell className="text-xs font-medium text-blue-700">{r.numeroCotacao ? `#${formatNumeroCotacaoDisplay(r.numeroCotacao)}` : `#${r.cotacaoId}`}</TableCell>
+                        <TableCell className="text-right text-xs">{fmt(Number(r.valorDi08 ?? 0))}</TableCell>
+                        <TableCell className="text-right text-xs">{fmt(Number(r.valorEconomia ?? 0))}</TableCell>
+                        <TableCell className="text-right text-amber-700 font-semibold">{fmt(Number(r.valorTotal ?? 0))}</TableCell>
+                        <TableCell className="text-xs">
+                          {r.vencida
+                            ? <span className="text-red-600 font-semibold">Vencida</span>
+                            : <span className="text-gray-500">{r.diasRestantes}d restantes</span>}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    <TableRow className="bg-gray-50 font-bold">
+                      <TableCell>Total ({reservas.length})</TableCell>
+                      <TableCell className="text-right text-xs">{fmt(reservas.reduce((s: number, r: any) => s + Number(r.valorDi08 ?? 0), 0))}</TableCell>
+                      <TableCell className="text-right text-xs">{fmt(reservas.reduce((s: number, r: any) => s + Number(r.valorEconomia ?? 0), 0))}</TableCell>
+                      <TableCell className="text-right text-amber-700">{fmt(reservas.reduce((s: number, r: any) => s + Number(r.valorTotal ?? 0), 0))}</TableCell>
+                      <TableCell />
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              )
+            )}
+
+            {cardDetail === "disponivel" && (
+              <div className="space-y-2 text-sm">
+                <div className="rounded-lg border border-gray-200 divide-y divide-gray-100">
+                  <div className="flex justify-between px-3 py-2"><span className="text-gray-600">DI-08 Orçado</span><span className="font-semibold text-blue-700">{fmt(saldos?.di08Total ?? 0)}</span></div>
+                  <div className="flex justify-between px-3 py-2"><span className="text-gray-600">(−) DI-08 Utilizado</span><span className="font-semibold text-orange-600">− {fmt(saldos?.di08Usado ?? 0)}</span></div>
+                  <div className="flex justify-between px-3 py-2"><span className="text-gray-600">(−) DI-08 Reservado</span><span className="font-semibold text-amber-700">− {fmt((saldos as any)?.di08Reservado ?? 0)}</span></div>
+                  <div className="flex justify-between px-3 py-2 bg-blue-50"><span className="font-medium text-blue-800">= DI-08 disponível real</span><span className="font-bold text-blue-800">{fmt((saldos as any)?.di08DisponivelReal ?? 0)}</span></div>
+                  <div className="flex justify-between px-3 py-2"><span className="text-gray-600">(+) Economia em Compras (líquida)</span><span className="font-semibold text-teal-700">{fmt(saldos?.totalSobras ?? 0)}</span></div>
+                  <div className="flex justify-between px-3 py-2"><span className="text-gray-600">(−) Economia Reservada</span><span className="font-semibold text-amber-700">− {fmt((saldos as any)?.sobrasReservadas ?? 0)}</span></div>
+                  <div className="flex justify-between px-3 py-2 bg-emerald-50"><span className="font-bold text-emerald-800">= Disponível Real</span><span className="font-extrabold text-emerald-800">{fmt((saldos as any)?.totalDisponivelReal ?? saldos?.totalDisponivel ?? 0)}</span></div>
+                </div>
+                <p className="text-[11px] text-gray-500">A Economia líquida já desconta sobras consumidas em realocações anteriores ({fmt((saldos as any)?.sobrasJaConsumidas ?? 0)}). Reservas preventivas ativas: {(saldos as any)?.totalReservasAtivas ?? 0} — veja a aba "Reservas em Andamento".</p>
               </div>
             )}
           </DialogContent>

@@ -30,6 +30,15 @@ function formatDateTimeBR(v: string | null | undefined): string {
   return hora ? `${data} às ${hora}` : data;
 }
 
+// Rev. 5046 — Frame FORA do componente: definido dentro, era recriado a cada
+// render (cada tecla), o React remontava a árvore e o input perdia o foco —
+// CPF/data "travavam" após 1-2 dígitos.
+const Frame = ({ children, wide }: { children: React.ReactNode; wide?: boolean }) => (
+  <div className="min-h-screen bg-gradient-to-b from-slate-100 to-slate-200 flex items-start justify-center p-4 py-8">
+    <div className={`w-full ${wide ? "max-w-3xl" : "max-w-lg"} bg-white rounded-2xl shadow-xl overflow-hidden`}>{children}</div>
+  </div>
+);
+
 export default function ComunicadoCiencia() {
   const [, params] = useRoute("/ciencia/:token");
   const token = params?.token || "";
@@ -55,12 +64,6 @@ export default function ComunicadoCiencia() {
     },
     onError: (e: any) => toast.error(e.message),
   });
-
-  const Frame = ({ children, wide }: { children: React.ReactNode; wide?: boolean }) => (
-    <div className="min-h-screen bg-gradient-to-b from-slate-100 to-slate-200 flex items-start justify-center p-4 py-8">
-      <div className={`w-full ${wide ? "max-w-3xl" : "max-w-lg"} bg-white rounded-2xl shadow-xl overflow-hidden`}>{children}</div>
-    </div>
-  );
 
   if (token.length < 32) {
     return <Frame><div className="p-10 text-center"><AlertTriangle className="h-12 w-12 mx-auto text-amber-500 mb-3" /><p className="text-lg font-semibold">Link inválido</p><p className="text-sm text-muted-foreground mt-1">O link do comunicado está incompleto.</p></div></Frame>;
@@ -108,7 +111,15 @@ export default function ComunicadoCiencia() {
                 inputMode="numeric"
                 placeholder="000.000.000-00"
                 value={cpf}
-                onChange={(e) => setCpf(formatCPF(e.target.value))}
+                onChange={(e) => {
+                  // Máscara progressiva (formatCPF só formata CPF completo — travava a digitação)
+                  const d = e.target.value.replace(/\D/g, "").slice(0, 11);
+                  let out = d;
+                  if (d.length > 9) out = `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
+                  else if (d.length > 6) out = `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}`;
+                  else if (d.length > 3) out = `${d.slice(0, 3)}.${d.slice(3)}`;
+                  setCpf(out);
+                }}
                 className="mt-1"
               />
             </div>

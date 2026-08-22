@@ -78,13 +78,18 @@ export function PersonPhoto({
   useEffect(() => {
     if (!open) return;
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") close();
+      if (e.key === "Escape") {
+        // Captura o ESC antes do Radix Dialog de baixo — fecha SÓ a foto
+        e.stopPropagation();
+        e.preventDefault();
+        close();
+      }
     }
-    window.addEventListener("keydown", onKey);
+    window.addEventListener("keydown", onKey, true);
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
-      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("keydown", onKey, true);
       document.body.style.overflow = prevOverflow;
     };
   }, [open, close]);
@@ -122,7 +127,12 @@ export function PersonPhoto({
       {open && hasPhoto && createPortal(
         <div
           className="fixed inset-0 z-[120] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 animate-in fade-in duration-150"
-          onClick={close}
+          onClick={(e) => { e.stopPropagation(); close(); }}
+          // Segura pointer/touch aqui — senão o Radix Dialog de baixo entende como
+          // "clique fora" e fecha a tela inteira junto com a foto (bug iPad 09/08/2026)
+          onPointerDown={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
           role="dialog"
           aria-modal="true"
           aria-label={`Foto ampliada de ${alt}`}

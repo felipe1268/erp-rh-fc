@@ -41,6 +41,10 @@ const PROJ_ORIGENS = [
   // Rev. 1636 — Férias e Rescisão de Aviso projetadas
   "ferias_projetada",
   "rescisao_projetada",
+  // Rev. 5038 — Previsão de Vale/Pagamento com base na FOLHA ANTERIOR
+  // (substituídas pelo título exato 'folha_oficial' na consolidação).
+  "folha_prevista_vale",
+  "folha_prevista_pagamento",
 ] as const;
 
 // ─────────── Helpers ─────────────────────────────────────────
@@ -469,6 +473,53 @@ async function getMesesComFolhaReal(db: any, companyId: number, mesInicio: strin
   return new Set(rows.map((r: any) => r.mes as string));
 }
 
+// ─────────── 4b) Base "folha anterior" p/ previsão (Rev. 5038) ───────────
+// Regra do usuário: a PREVISÃO de vale/pagamento no Financeiro usa sempre a
+// folha ANTERIOR como base. Pegamos os 2 últimos meses com valores em
+// payroll_advances / payroll_payments; para projetar o mês M usamos o mais
+// recente com mes < M. Valores VARCHAR misto → fc_money() (função no banco).
+type BaseFolha = { mes: string; total: number };
+async function getBasesFolhaAnterior(db: any, companyId: number): Promise<{ vale: BaseFolha[]; pagamento: BaseFolha[] }> {
+  const [v, p] = await Promise.all([
+    dbExecute(db,
+      `SELECT "mesReferencia" AS mes, SUM(fc_money("valorLiquidoVale")) AS total
+       FROM payroll_advances
+       WHERE "companyId" = $1 AND status <> 'rejeitado' AND COALESCE(bloqueado,0) = 0
+       GROUP BY 1 HAVING SUM(fc_money("valorLiquidoVale")) > 0
+       ORDER BY 1 DESC LIMIT 2`, [companyId]),
+    dbExecute(db,
+      `SELECT "mesReferencia" AS mes, SUM(fc_money("salarioLiquido")) AS total
+       FROM payroll_payments
+       WHERE "companyId" = $1 AND status <> 'cancelado'
+       GROUP BY 1 HAVING SUM(fc_money("salarioLiquido")) > 0
+       ORDER BY 1 DESC LIMIT 2`, [companyId]),
+  ]);
+  const map = (rows: any[]) => rows.map((r) => ({ mes: String(r.mes), total: num(r.total) }));
+  return { vale: map(v.rows), pagamento: map(p.rows) };
+}
+function baseParaMes(bases: BaseFolha[], mes: string): BaseFolha | undefined {
+  return bases.find((b) => b.mes < mes);
+}
+
+// Meses que já têm título EXATO consolidado ('folha_oficial') por parcela —
+// nesses a previsão daquela parcela não entra (o exato substitui).
+async function getParcelasOficiais(db: any, companyId: number, mesIni: string, mesFim: string): Promise<Map<string, Set<string>>> {
+  const { rows } = await dbExecute(db,
+    `SELECT TO_CHAR(data_competencia,'YYYY-MM') AS mes, (origem_id % 100) AS slot
+     FROM financial_entries
+     WHERE company_id = $1 AND origem_modulo = 'folha_oficial' AND status <> 'cancelado'
+       AND TO_CHAR(data_competencia,'YYYY-MM') BETWEEN $2 AND $3`,
+    [companyId, mesIni, mesFim]
+  );
+  const out = new Map<string, Set<string>>();
+  for (const r of rows) {
+    const set = out.get(r.mes) ?? new Set<string>();
+    set.add(Number(r.slot) === 8 ? "vale" : "pagamento");
+    out.set(r.mes, set);
+  }
+  return out;
+}
+
 // ─────────── 5) Limpa projeções antigas da empresa ───────────
 async function limparProjecoesAntigas(db: any, companyId: number): Promise<void> {
   await dbExecute(db,
@@ -509,7 +560,11 @@ export async function importFolhaProjecao(companyId: number, opts?: { mesesAFren
     const mesFimRef = fmtMes(new Date(Date.UTC(ano0, mes0 + horizonte - 1, 1)));
 
     // Bulk: quais meses do horizonte já têm folha REAL consolidada?
-    const mesesComFolhaReal = await getMesesComFolhaReal(db, companyId, mesIniRef, mesFimRef);
+    const [mesesComFolhaReal, basesAnt, parcelasOficiais] = await Promise.all([
+      getMesesComFolhaReal(db, companyId, mesIniRef, mesFimRef),
+      getBasesFolhaAnterior(db, companyId),
+      getParcelasOficiais(db, companyId, mesIniRef, mesFimRef),
+    ]);
 
     for (let i = 0; i < horizonte; i++) {
       const ref = new Date(Date.UTC(ano0, mes0 + i, 1));
@@ -522,8 +577,45 @@ export async function importFolhaProjecao(companyId: number, opts?: { mesesAFren
       // pulamos a projeção pra evitar duplicidade no calendário e nos cards.
       const folhaJaReal = mesesComFolhaReal.has(mes);
 
-      // ── 6.1 Folha CLT (vencimento dia 5 — recua p/ dia útil)
-      if (!folhaJaReal && quadro.totalSalarioBruto > 0) {
+      // ── 6.1 Folha CLT — Rev. 5038: se há histórico de folha, a previsão
+      // usa a FOLHA ANTERIOR como base, em 2 parcelas (vale dia 20 do mês,
+      // pagamento dia 5 do mês seguinte). Cada parcela some quando o título
+      // exato ('folha_oficial', gerado na consolidação) existe no mês.
+      // Sem histórico → fallback antigo (quadro ativo, 'folha_projetada').
+      const baseVale = baseParaMes(basesAnt.vale, mes);
+      const basePag = baseParaMes(basesAnt.pagamento, mes);
+      const oficiais = parcelasOficiais.get(mes) ?? new Set<string>();
+      if (!folhaJaReal && (baseVale || basePag)) {
+        if (baseVale && !oficiais.has("vale")) {
+          await insertProjEntry(db, {
+            companyId,
+            contaNome: "FOLHA DE PAGAMENTO — VALE",
+            valor: baseVale.total,
+            competencia,
+            vencimento: lastBusinessDayOrEarlier(ano, mNum, 20),
+            origemModulo: "folha_prevista_vale",
+            origemId: syntheticId(mes, 8),
+            origemDescricao: `Previsão de vale — base folha ${fmtMesBR(baseVale.mes)}`,
+            descricao: `Vale Folha (previsão) — ref. ${fmtMesBR(mes)} — base ${fmtMesBR(baseVale.mes)}`,
+          });
+          inseridos++;
+        }
+        if (basePag && !oficiais.has("pagamento")) {
+          const refPg = new Date(Date.UTC(ano, mNum, 1)); // mês seguinte
+          await insertProjEntry(db, {
+            companyId,
+            contaNome: "FOLHA DE PAGAMENTO",
+            valor: basePag.total,
+            competencia,
+            vencimento: lastBusinessDayOrEarlier(refPg.getUTCFullYear(), refPg.getUTCMonth() + 1, 5),
+            origemModulo: "folha_prevista_pagamento",
+            origemId: syntheticId(mes, 9),
+            origemDescricao: `Previsão de pagamento — base folha ${fmtMesBR(basePag.mes)}`,
+            descricao: `Folha de Pagamento (previsão) — ref. ${fmtMesBR(mes)} — base ${fmtMesBR(basePag.mes)}`,
+          });
+          inseridos++;
+        }
+      } else if (!folhaJaReal && quadro.totalSalarioBruto > 0 && !oficiais.has("pagamento")) {
         const vencFolha = lastBusinessDayOrEarlier(ano, mNum, 5);
         await insertProjEntry(db, {
           companyId,
@@ -537,8 +629,10 @@ export async function importFolhaProjecao(companyId: number, opts?: { mesesAFren
           descricao: `Folha CLT — ${quadro.count} funcionário(s) — ref. ${fmtMesBR(mes)}`,
         });
         inseridos++;
+      }
 
-        // ── 6.2 Encargos (FGTS + INSS pat + RAT/Terceiros)
+      // ── 6.2 Encargos (FGTS + INSS pat + RAT/Terceiros) — segue no quadro ativo
+      if (!folhaJaReal && quadro.totalSalarioBruto > 0) {
         const valEncargos = quadro.totalSalarioBruto * ENCARGOS_FOLHA_PERCENT;
         if (valEncargos > 0) {
           const vencEnc = lastBusinessDayOrEarlier(ano, mNum, 20); // GPS/FGTS dia 20
@@ -557,40 +651,69 @@ export async function importFolhaProjecao(companyId: number, opts?: { mesesAFren
         }
       }
 
-      // ── 6.3 VR (Vale Refeição) — café/lanche/janta × ativos
-      if (!folhaJaReal && quadro.count > 0 && beneficios.vrPorFuncMes > 0) {
-        const valVR = beneficios.vrPorFuncMes * quadro.count;
-        const vencVR = lastBusinessDayOrEarlier(ano, mNum, 5);
-        await insertProjEntry(db, {
-          companyId,
-          contaNome: "VALE ALIMENTAÇÃO",
-          valor: valVR,
-          competencia,
-          vencimento: vencVR,
-          origemModulo: "beneficio_vr_projetado",
-          origemId: syntheticId(mes, 3),
-          origemDescricao: `VR projetado — ${quadro.count} func. × R$ ${beneficios.vrPorFuncMes.toFixed(2)}/mês`,
-          descricao: `Vale Refeição — ${quadro.count} funcionário(s) — ref. ${fmtMesBR(mes)}`,
-        });
-        inseridos++;
-      }
-
-      // ── 6.4 VA (Vale Alimentação)
-      if (!folhaJaReal && quadro.count > 0 && beneficios.vaPorFuncMes > 0) {
-        const valVA = beneficios.vaPorFuncMes * quadro.count;
-        const vencVA = lastBusinessDayOrEarlier(ano, mNum, 5);
-        await insertProjEntry(db, {
-          companyId,
-          contaNome: "VALE ALIMENTAÇÃO",
-          valor: valVA,
-          competencia,
-          vencimento: vencVA,
-          origemModulo: "beneficio_va_projetado",
-          origemId: syntheticId(mes, 4),
-          origemDescricao: `VA projetado — ${quadro.count} func. × R$ ${beneficios.vaPorFuncMes.toFixed(2)}/mês`,
-          descricao: `Vale Alimentação — ${quadro.count} funcionário(s) — ref. ${fmtMesBR(mes)}`,
-        });
-        inseridos++;
+      // ── 6.3/6.4 VA + VR — Rev. 5044: mesma regra da folha oficial.
+      // Se o módulo Vale Alimentação já APROVOU o mês (título origem
+      // 'vale_alimentacao' ativo), NÃO projeta nada — o exato substitui.
+      // Senão, PREVISÃO baseada no total REAL do mês anterior (vr_benefits);
+      // sem mês anterior, cai no cálculo por configuração (legado).
+      const vaTituloOficial = (await dbExecute(db,
+        `SELECT 1 FROM financial_entries
+          WHERE company_id = $1 AND origem_modulo = 'vale_alimentacao'
+            AND status <> 'cancelado' AND TO_CHAR(data_competencia,'YYYY-MM') = $2
+          LIMIT 1`, [companyId, mes])).rows.length > 0;
+      if (!folhaJaReal && !vaTituloOficial) {
+        const prevMes = (() => { const d = new Date(Date.UTC(ano, mNum - 2, 1)); return d.toISOString().slice(0, 7); })();
+        const prevRow = (await dbExecute(db,
+          `SELECT COALESCE(SUM(fc_money("valorTotal")),0) AS total, COUNT(*) AS qtd
+             FROM vr_benefits
+            WHERE "companyId" = $1 AND "mesReferencia" = $2 AND status IN ('aprovado','pago')`,
+          [companyId, prevMes])).rows[0] || {};
+        const prevTotal = num(prevRow.total);
+        if (prevTotal > 0) {
+          await insertProjEntry(db, {
+            companyId,
+            contaNome: "VALE ALIMENTAÇÃO",
+            valor: prevTotal,
+            competencia,
+            vencimento: lastBusinessDayOrEarlier(ano, mNum, 5),
+            origemModulo: "beneficio_va_projetado",
+            origemId: syntheticId(mes, 4),
+            origemDescricao: `Previsão VA — base mês anterior (${fmtMesBR(prevMes)}: ${prevRow.qtd} colaborador(es))`,
+            descricao: `Vale Alimentação (previsão) — ref. ${fmtMesBR(mes)} — base ${fmtMesBR(prevMes)}`,
+          });
+          inseridos++;
+        } else {
+          if (quadro.count > 0 && beneficios.vrPorFuncMes > 0) {
+            const valVR = beneficios.vrPorFuncMes * quadro.count;
+            await insertProjEntry(db, {
+              companyId,
+              contaNome: "VALE ALIMENTAÇÃO",
+              valor: valVR,
+              competencia,
+              vencimento: lastBusinessDayOrEarlier(ano, mNum, 5),
+              origemModulo: "beneficio_vr_projetado",
+              origemId: syntheticId(mes, 3),
+              origemDescricao: `VR projetado — ${quadro.count} func. × R$ ${beneficios.vrPorFuncMes.toFixed(2)}/mês`,
+              descricao: `Vale Refeição — ${quadro.count} funcionário(s) — ref. ${fmtMesBR(mes)}`,
+            });
+            inseridos++;
+          }
+          if (quadro.count > 0 && beneficios.vaPorFuncMes > 0) {
+            const valVA = beneficios.vaPorFuncMes * quadro.count;
+            await insertProjEntry(db, {
+              companyId,
+              contaNome: "VALE ALIMENTAÇÃO",
+              valor: valVA,
+              competencia,
+              vencimento: lastBusinessDayOrEarlier(ano, mNum, 5),
+              origemModulo: "beneficio_va_projetado",
+              origemId: syntheticId(mes, 4),
+              origemDescricao: `VA projetado — ${quadro.count} func. × R$ ${beneficios.vaPorFuncMes.toFixed(2)}/mês`,
+              descricao: `Vale Alimentação — ${quadro.count} funcionário(s) — ref. ${fmtMesBR(mes)}`,
+            });
+            inseridos++;
+          }
+        }
       }
 
       // ── 6.5 13º Salário — 1ª parcela em NOV (até 30/11) e 2ª em DEZ (até 20/12)

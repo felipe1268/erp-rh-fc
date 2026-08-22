@@ -53,6 +53,7 @@ const VARIAVEIS: { chave: string; descricao: string; categoria: string }[] = [
   { chave: "{{PRAZO_EMISSAO_NF}}", descricao: "Prazo para emissão da NF em dias úteis (ex: 3)", categoria: "Medição/Pagamento" },
   { chave: "{{PRAZO_LIBERACAO_OP}}", descricao: "Prazo para liberação da OP em dias úteis (ex: 5)", categoria: "Medição/Pagamento" },
   { chave: "{{DIA_PAGAMENTO}}", descricao: "Dia do pagamento no mês subsequente (ex: 10)", categoria: "Medição/Pagamento" },
+  { chave: "{{DADOS_BANCARIOS}}", descricao: "Dados bancários do cadastro da contratada (banco, agência, conta, PIX)", categoria: "Medição/Pagamento" },
 ];
 
 const TEMPLATE_PADRAO = `CONTRATO DE PRESTAÇÃO DE SERVIÇOS Nº {{NUMERO_CONTRATO}}
@@ -96,6 +97,8 @@ d) EMISSÃO DA NOTA FISCAL (Até {{PRAZO_EMISSAO_NF}} dias úteis após aprovaç
 e) LIBERAÇÃO DA ORDEM DE PAGAMENTO (Até {{PRAZO_LIBERACAO_OP}} dias úteis após recebimento da NF) — Conferência da Nota Fiscal e liberação da Ordem de Pagamento (OP) pela área financeira da CONTRATANTE;
 
 f) PAGAMENTO (Dia {{DIA_PAGAMENTO}} do mês subsequente) — Crédito em conta bancária da CONTRATADA, referente à medição aprovada do mês anterior.
+
+{{DADOS_BANCARIOS}}
 
 3.3 RESUMO DOS PRAZOS:
 • Dia da Medição: dia {{DIA_MEDICAO}} de cada mês
@@ -571,7 +574,7 @@ EAP          | Descrição                                             | Un    |
                   {previewTexto.split("\n").map((line, idx) => {
                     const trimmed = line.trim();
                     if (!trimmed) return <div key={idx} className="h-3" />;
-                    if (/^\{\{FLUXOGRAMA_PAGAMENTO\}\}$/.test(trimmed)) {
+                    if (/^\{\{FLUXOGRAMA_PAGAMENTO\}\}$/.test(trimmed) || /^MEDIÇÃO \(dia .*→.*PAGAMENTO/.test(trimmed)) {
                       return <FluxogramaPagamento key={idx} compact />;
                     }
                     const isClausula = /^CL[ÁA]USULA\s/i.test(trimmed);

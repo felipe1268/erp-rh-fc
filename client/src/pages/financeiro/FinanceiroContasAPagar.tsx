@@ -33,6 +33,7 @@ import {
 import { isProjecaoOrigem, FINANCEIRO_SOMENTE_REAL } from "@shared/financeiroProjecao";
 // Rev. 4070 — diálogo de pagamento consolidado por fornecedor/ciclo (cheque auto-dividido em N parcelas)
 import PagarConsolidadoDialog from "./PagarConsolidadoDialog";
+import { resolveParcelaFinanceira } from "@shared/parcelaFinanceira";
 
 const MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 
@@ -60,6 +61,22 @@ function DetSection({ icon, title, tint, children }: { icon: ReactNode; title: s
 
 function formatBRL(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
+}
+
+function ParcelaBadge({ entry, compact = false }: { entry: any; compact?: boolean }) {
+  const parcela = resolveParcelaFinanceira(entry);
+  if (!parcela) return null;
+  return (
+    <span
+      className={`inline-flex items-center gap-0.5 rounded-full border border-blue-200 bg-blue-50 font-bold text-blue-700 whitespace-nowrap ${
+        compact ? "px-1.5 py-0.5 text-[9px]" : "px-2 py-0.5 text-[10px]"
+      }`}
+      title={`Parcela ${parcela.numero} de ${parcela.total}`}
+    >
+      <HashIcon className={compact ? "w-2.5 h-2.5" : "w-3 h-3"} />
+      Parcela {parcela.numero}/{parcela.total}
+    </span>
+  );
 }
 // Rev. 4599 — valores em reais digitados no padrão BR (1.234,56).
 // Regra de parse: se tem vírgula, pontos são milhar; senão, ponto é decimal.
@@ -343,6 +360,10 @@ export default function FinanceiroContasAPagar() {
     setFiltroKpi(prev => (prev === k ? null : k));
   // Rev. 4077 — Filtro "FD" (Faturamento Direto): cliente/terceiro/fc x normal.
   const [fdFilter, setFdFilter] = useState<"all" | "fd_fora" | "fd_abate" | "normal">("all");
+  // Rev. — filtro por intervalo de datas de VENCIMENTO. Quando preenchido,
+  // ignora o mês selecionado e busca no ano todo dentro do intervalo.
+  const [dataDe, setDataDe] = useState("");
+  const [dataAte, setDataAte] = useState("");
   // Rev. 1629 — Separação Efetivo × Projeção (APQC PCF 8.7 / PMBOK / Brealey-Myers cap. 30):
   // dívida incorrida (Compras, Folha, PJ, Benefícios, Frota, Parceiros, Almox, Medição, Seguro)
   // não pode dividir tela com forecast de cronograma. Default = Efetivo.
@@ -715,6 +736,15 @@ export default function FinanceiroContasAPagar() {
     },
     onError: (e: any) => toast({ title: "Erro ao anexar", description: e.message, variant: "destructive" }),
   });
+  // Rev. 5131 — excluir comprovante de pagamento do título
+  const removerComprovanteMut = (trpc as any).financial.removerComprovanteEntry.useMutation({
+    onSuccess: () => {
+      toast({ title: "Comprovante excluído" });
+      refetch();
+      if (detailEntryId) detailQuery.refetch();
+    },
+    onError: (e: any) => toast({ title: "Erro ao excluir comprovante", description: e.message, variant: "destructive" }),
+  });
   function openAnexo(c: any) {
     setAnexoUrl(c.anexoUrl ?? "");
     setAnexoNome(c.anexoNome ?? "");
@@ -1009,7 +1039,19 @@ export default function FinanceiroContasAPagar() {
     // Rev. 4576 — filtro por card de KPI (precedência sobre as pills de status).
     // "Em Aberto (Acum.)" olha TODOS os meses do ano (mesma base do card);
     // os demais respeitam o escopo do mês/ano selecionado.
-    let list = filtroKpi === "aberto_acum" ? (((allContas as any[]) ?? [])) : escopoData;
+    // Rev. — com intervalo de datas ativo, a base vira o ANO TODO (allContas),
+    // senão o range fora do mês selecionado devolveria lista vazia.
+    const temRangeData = !!(dataDe || dataAte);
+    let list = (filtroKpi === "aberto_acum" || temRangeData) ? (((allContas as any[]) ?? [])) : escopoData;
+    if (temRangeData) {
+      list = list.filter((c: any) => {
+        const dv = (c.dataVencimento || "").slice(0, 10);
+        if (!dv) return false;
+        if (dataDe && dv < dataDe) return false;
+        if (dataAte && dv > dataAte) return false;
+        return true;
+      });
+    }
     if (filtroKpi === "aberto_acum" || filtroKpi === "a_pagar") {
       list = list.filter((c: any) => c.status !== "pago");
     } else if (filtroKpi === "vencidas") {
@@ -1028,13 +1070,25 @@ export default function FinanceiroContasAPagar() {
     else if (fdFilter === "normal") list = list.filter((c: any) => !fdBadgeInfo(c));
     if (search) {
       const q = search.toLowerCase();
+      // Rev. 5046 — busca também por VALOR ("1278", "123,96", "1.278,00", "R$ 123,96"):
+      // compara os dígitos do valor (com centavos) começando pelos dígitos digitados.
+      const qDigits = /\d/.test(q) ? q.replace(/[^\d]/g, "") : "";
+      const matchValor = (c: any) => {
+        if (!qDigits) return false;
+        return [c.valorPrevisto, c.valorRealizado].some((v: any) => {
+          const n = Number(v ?? 0);
+          if (!Number.isFinite(n) || n === 0) return false;
+          return Math.abs(n).toFixed(2).replace(/[^\d]/g, "").startsWith(qDigits);
+        });
+      };
       list = list.filter((c: any) =>
         (c.descricao ?? "").toLowerCase().includes(q) ||
         (c.contaNome ?? "").toLowerCase().includes(q) ||
         (c.obraNome ?? "").toLowerCase().includes(q) ||
         (c.origemDescricao ?? "").toLowerCase().includes(q) ||
         (c.fornecedorNome ?? "").toLowerCase().includes(q) ||
-        extractOcNumero(c).toLowerCase().includes(q)
+        extractOcNumero(c).toLowerCase().includes(q) ||
+        matchValor(c)
       );
     }
     // Ordena por: bucket (vencidas primeiro) → data → valor desc
@@ -1047,7 +1101,7 @@ export default function FinanceiroContasAPagar() {
       if (da !== db) return da.localeCompare(db);
       return Number(b.valorPrevisto ?? 0) - Number(a.valorPrevisto ?? 0);
     });
-  }, [escopoData, allContas, filtroKpi, statusFilter, naturezaFilter, origemFilter, fdFilter, search, hojeStr]);
+  }, [escopoData, allContas, filtroKpi, statusFilter, naturezaFilter, origemFilter, fdFilter, search, hojeStr, dataDe, dataAte]);
 
   // Rev. 1619 — agrupamento por horizonte de vencimento (cabeçalhos sticky)
   const grupos = useMemo(() => {
@@ -1649,9 +1703,21 @@ export default function FinanceiroContasAPagar() {
               </div>
               <FdLegendaPopover />
             </div>
+            {/* Rev. — filtro por intervalo de vencimento (ignora o mês selecionado) */}
+            <div className="flex items-center gap-1.5" title="Filtra por data de vencimento (busca no ano todo, ignora o mês selecionado)">
+              <span className="text-xs text-gray-500 whitespace-nowrap">Vencimento:</span>
+              <Input type="date" className="h-8 w-[135px] text-xs" value={dataDe} max={dataAte || undefined} onChange={e => setDataDe(e.target.value)} />
+              <span className="text-xs text-gray-400">até</span>
+              <Input type="date" className="h-8 w-[135px] text-xs" value={dataAte} min={dataDe || undefined} onChange={e => setDataAte(e.target.value)} />
+              {(dataDe || dataAte) && (
+                <button onClick={() => { setDataDe(""); setDataAte(""); }}
+                  className="h-8 px-2 text-xs text-gray-500 hover:text-red-600 border border-gray-200 rounded-md bg-white"
+                  title="Limpar filtro de datas">✕</button>
+              )}
+            </div>
             <div className="relative flex-1 min-w-[180px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <Input className="pl-9 h-8 text-sm" placeholder="Buscar conta, OC/OS, fornecedor..." value={search} onChange={e => setSearch(e.target.value)} />
+              <Input className="pl-9 h-8 text-sm" placeholder="Buscar conta, OC/OS, fornecedor ou valor..." value={search} onChange={e => setSearch(e.target.value)} />
             </div>
             <Button variant="outline" size="sm" onClick={imprimirRelatorio} className="h-8 text-xs gap-1" disabled={!filtered.length}>
               <Printer className="w-3.5 h-3.5" />Imprimir
@@ -1947,7 +2013,10 @@ export default function FinanceiroContasAPagar() {
                                         </div>
                                       </td>
                                       <td className="px-2 py-2 whitespace-nowrap">
-                                        <span className="text-[11px] font-mono text-slate-500">#{c.id}</span>
+                                        <div className="flex flex-col items-start gap-1">
+                                          <span className="text-[11px] font-mono text-slate-500">{c.numeroOc ? formatNumeroOcDisplay(c.numeroOc) : `#${c.id}`}</span>
+                                          <ParcelaBadge entry={c} compact />
+                                        </div>
                                       </td>
                                       <td className="px-2 py-2 max-w-[220px]">
                                         {c.origemModulo === "pagamento_pj" ? (() => {
@@ -2162,7 +2231,10 @@ export default function FinanceiroContasAPagar() {
                                         </div>
                                       </td>
                                       <td className="px-2 py-2 whitespace-nowrap">
-                                        <span className="text-[11px] font-mono text-slate-500">#{c.id}</span>
+                                        <div className="flex flex-col items-start gap-1">
+                                          <span className="text-[11px] font-mono text-slate-500">{c.numeroOc ? formatNumeroOcDisplay(c.numeroOc) : `#${c.id}`}</span>
+                                          <ParcelaBadge entry={c} compact />
+                                        </div>
                                       </td>
                                       <td className="px-2 py-2 max-w-[220px]">
                                         {c.origemModulo === "pagamento_pj" ? (() => {
@@ -2290,9 +2362,12 @@ export default function FinanceiroContasAPagar() {
                               </td>
                               {/* Nº OC/OS */}
                               <td className="px-3 py-2.5 whitespace-nowrap">
-                                <span className="text-xs font-mono font-semibold text-slate-700 bg-slate-50 border border-slate-200 px-1.5 py-0.5 rounded">
-                                  {oc}
-                                </span>
+                                <div className="flex flex-col items-start gap-1">
+                                  <span className="text-xs font-mono font-semibold text-slate-700 bg-slate-50 border border-slate-200 px-1.5 py-0.5 rounded">
+                                    {oc}
+                                  </span>
+                                  <ParcelaBadge entry={c} />
+                                </div>
                               </td>
                               {/* Descrição */}
                               <td className="px-2 py-2.5 max-w-[220px]">
@@ -2555,6 +2630,7 @@ export default function FinanceiroContasAPagar() {
             ) : detailQuery.data ? (() => {
               const d = detailQuery.data;
               const e = d.entry;
+              const parcela = resolveParcelaFinanceira(e);
               const vencida = e.dataVencimento && e.dataVencimento.slice(0,10) < hojeStr && e.status !== "pago";
               return (
                 <div className="space-y-4">
@@ -2632,7 +2708,7 @@ export default function FinanceiroContasAPagar() {
                             <KV label="Valor Previsto">{formatBRL(Number(e.valorPrevisto))}</KV>
                             <KV label="Valor Realizado">{e.valorRealizado != null ? formatBRL(Number(e.valorRealizado)) : "—"}</KV>
                             <KV label="Forma">{e.formaPagamento ?? "—"}</KV>
-                            <KV label="Parcela">{e.parcelaNumero ? `${e.parcelaNumero}/${e.parcelaTotal}` : "1/1"}</KV>
+                            <KV label="Parcela">{parcela ? `${parcela.numero}/${parcela.total}` : "Única"}</KV>
                             {e.codigoBarras && <KV label="Cód. de Barras"><span className="font-mono text-[11px]">{e.codigoBarras}</span></KV>}
                             {e.chequeNumero && <KV label="Cheque">{e.chequeNumero} ({e.chequeBanco})</KV>}
                           </div>
@@ -2748,7 +2824,23 @@ export default function FinanceiroContasAPagar() {
                             <Paperclip className="w-3.5 h-3.5" /> {e.anexoUrl ? "Trocar documento" : "Anexar documento"}
                           </Button>
                         </div>
-                        {e.anexoUrl ? (
+                        {(() => {
+                          // Rev. 5043 — múltiplos anexos (ex.: boletos de fornecedores diferentes do VT)
+                          let lista: Array<{ url: string; nome?: string }> = [];
+                          try { const a = JSON.parse((e as any).anexosJson || "[]"); if (Array.isArray(a)) lista = a.filter((x: any) => x?.url); } catch { /* ignore */ }
+                          if (lista.length > 1) return (
+                            <div className="space-y-1">
+                              {lista.map((a) => (
+                                <a key={a.url} href={a.url} target="_blank" rel="noopener noreferrer"
+                                  className="flex items-center gap-2 text-sm text-emerald-700 hover:underline break-all">
+                                  <Paperclip className="w-4 h-4 flex-shrink-0" />{a.nome || "Documento anexado"}
+                                  <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                                </a>
+                              ))}
+                            </div>
+                          );
+                          return null;
+                        })() || (e.anexoUrl ? (
                           <a href={e.anexoUrl} target="_blank" rel="noopener noreferrer"
                             className="flex items-center gap-2 text-sm text-emerald-700 hover:underline break-all">
                             <Paperclip className="w-4 h-4 flex-shrink-0" />Ver documento anexado{e.anexoNome ? ` — ${e.anexoNome}` : ""}
@@ -2756,13 +2848,23 @@ export default function FinanceiroContasAPagar() {
                           </a>
                         ) : (
                           <p className="text-xs text-slate-500">Nenhum documento anexado (boleto, NF, contrato, foto...).</p>
-                        )}
+                        ))}
                         {e.comprovanteUrl && (
-                          <a href={e.comprovanteUrl} target="_blank" rel="noopener noreferrer"
-                            className="inline-flex items-center gap-2 text-sm text-blue-700 hover:underline">
-                            <Paperclip className="w-4 h-4" />Ver comprovante de pagamento
-                            <ExternalLink className="w-3 h-3" />
-                          </a>
+                          <div className="flex items-center gap-3 flex-wrap">
+                            <a href={e.comprovanteUrl} target="_blank" rel="noopener noreferrer"
+                              className="inline-flex items-center gap-2 text-sm text-blue-700 hover:underline">
+                              <Paperclip className="w-4 h-4" />Ver comprovante de pagamento
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 gap-1"
+                              disabled={removerComprovanteMut.isPending}
+                              onClick={() => {
+                                if (!window.confirm("Excluir o comprovante de pagamento deste título? Esta ação não pode ser desfeita.")) return;
+                                removerComprovanteMut.mutate({ companyId, entryId: e.id });
+                              }}>
+                              {removerComprovanteMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />} Excluir comprovante
+                            </Button>
+                          </div>
                         )}
                       </div>
                     </TabsContent>

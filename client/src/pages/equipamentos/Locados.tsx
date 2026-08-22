@@ -1217,6 +1217,9 @@ export default function EquipamentosLocados() {
       quantidade: form.quantidade || 1, // Rev. 4345 — quantidade de unidades físicas.
       regimeUso: form.regimeUso, // Rev. 4563 — regime de uso
       ordemCompraId: ocSelecionada?.id, // Rev. 2371 — vincula OC quando o user clicou em "Receber esta OC"
+      // O servidor confirma e impõe esta mesma obra pela OC, evitando que o
+      // estado visual do modal seja a fonte de verdade do vínculo.
+      obraId: ocSelecionadaFull?.obraId ?? undefined,
       // Rev. 2465 — assinaturas só quando não é fluxo de importação em lote.
       ...(!noFluxoImport && recEntSig && recRecSig ? {
         assinaturaEntregadorNome: recEntNome.trim(),

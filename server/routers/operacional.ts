@@ -1,12 +1,32 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
-import { getDb, getEffectiveAllowedObraIds, userCanAccessObra, recordTrashEntry } from "../db";
+import { getDb, getEffectiveAllowedObraIds, userCanAccessObra, recordTrashEntry, getUserCompanyLinks } from "../db";
 import { sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { verificarAssinaturaMemorial } from "../services/assinaturaMemorial";
 
 function rows(result: any): any[] {
   return (result as any).rows ?? result ?? [];
+}
+
+// Guard PERMISSIVO de empresa (mesmo padrão de medicao/compras): admin libera;
+// usuário sem vínculo libera; bloqueia usuário vinculado tentando outra empresa.
+async function assertCompanyAccess(ctxUser: any, companyId: number) {
+  if (!ctxUser?.id) throw new TRPCError({ code: "UNAUTHORIZED", message: "Sessão inválida." });
+  if (ctxUser.role === "admin" || ctxUser.role === "admin_master") return;
+  const links = await getUserCompanyLinks(ctxUser.id);
+  const allowedIds = (links as any[]).map((l: any) => l.companyId).filter((v: any) => typeof v === "number");
+  if (allowedIds.length === 0) return;
+  if (!allowedIds.includes(companyId)) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+  }
+}
+// Guard combinado empresa+obra para o Mapa de Concretagem.
+async function assertConcretagemAccess(ctxUser: any, companyId: number, obraId: number) {
+  await assertCompanyAccess(ctxUser, companyId);
+  if (!(await userCanAccessObra(ctxUser.id, ctxUser.role, obraId))) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta obra" });
+  }
 }
 
 // Guards locais: garantem que o usuário tem acesso à obra do RDO antes de
@@ -1137,11 +1157,17 @@ export const operacionalRouter = router({
 
   listarConcretagem: protectedProcedure
     .input(z.object({ companyId: z.number(), obraId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await assertConcretagemAccess(ctx.user, input.companyId, input.obraId);
       const db = await getDb();
       return rows(await db.execute(sql`
         SELECT cm.*,
-          (SELECT COALESCE(SUM(volume_entregue), 0) FROM concretagem_lancamentos WHERE mapa_id = cm.id) as volume_realizado
+          (SELECT COALESCE(SUM(volume_entregue), 0) FROM concretagem_lancamentos WHERE mapa_id = cm.id) as volume_realizado,
+          (SELECT COUNT(*) FROM concretagem_lancamentos WHERE mapa_id = cm.id) as total_lancamentos,
+          (SELECT COUNT(*) FROM concretagem_trechos t WHERE t.mapa_id = cm.id AND t.deleted_at IS NULL) as total_trechos,
+          (SELECT COUNT(*) FROM ensaios_tecnologicos e JOIN concretagem_lancamentos cl ON cl.id = e.lancamento_id WHERE cl.mapa_id = cm.id) as ensaios_total,
+          (SELECT COUNT(*) FROM ensaios_tecnologicos e JOIN concretagem_lancamentos cl ON cl.id = e.lancamento_id WHERE cl.mapa_id = cm.id AND e.resultado = 'reprovado') as ensaios_reprovados,
+          (SELECT COUNT(*) FROM ensaios_tecnologicos e JOIN concretagem_lancamentos cl ON cl.id = e.lancamento_id WHERE cl.mapa_id = cm.id AND e.resultado = 'aprovado') as ensaios_aprovados
         FROM concretagem_mapa cm
         WHERE cm.company_id = ${input.companyId} AND cm.obra_id = ${input.obraId}
         ORDER BY cm.pavimento, cm.elemento
@@ -1159,7 +1185,8 @@ export const operacionalRouter = router({
       volumePrevisto: z.number(),
       dataPrevista: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await assertConcretagemAccess(ctx.user, input.companyId, input.obraId);
       const db = await getDb();
       await db.execute(sql`
         INSERT INTO concretagem_mapa (company_id, obra_id, pavimento, elemento, tipo_elemento, fck, volume_previsto, data_prevista, status)
@@ -1186,11 +1213,20 @@ export const operacionalRouter = router({
       horaFimLancamento: z.string().optional(),
       temperatura: z.number().optional(),
       observacoes: z.string().optional(),
+      fiscalNoteId: z.number().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
-      const mapa = rows(await db.execute(sql`SELECT id FROM concretagem_mapa WHERE id = ${input.mapaId} AND company_id = ${input.companyId}`));
+      const mapa = rows(await db.execute(sql`SELECT id, obra_id FROM concretagem_mapa WHERE id = ${input.mapaId} AND company_id = ${input.companyId}`));
       if (!mapa.length) throw new Error("Elemento não encontrado");
+      // Obra SEMPRE derivada do elemento (nunca do input) + guard de acesso.
+      const obraDoMapa = Number(mapa[0].obra_id);
+      await assertConcretagemAccess(ctx.user, input.companyId, obraDoMapa);
+      // Poka-yoke anti-IDOR: a NF-e vinculada precisa ser da MESMA empresa.
+      if (input.fiscalNoteId) {
+        const nf = rows(await db.execute(sql`SELECT id FROM fiscal_notes WHERE id = ${input.fiscalNoteId} AND company_id = ${input.companyId}`));
+        if (!nf.length) throw new Error("Nota fiscal não encontrada");
+      }
 
       let tempoMax: number | null = null;
       if (input.horaSaidaUsina && input.horaFimLancamento) {
@@ -1204,15 +1240,15 @@ export const operacionalRouter = router({
           mapa_id, company_id, obra_id, data_lancamento, fornecedor, nota_fiscal,
           fck_nota, slump_previsto, slump_realizado, volume_entregue,
           hora_saida_usina, hora_chegada_obra, hora_inicio_lancamento, hora_fim_lancamento,
-          tempo_maximo_minutos, temperatura, observacoes, status
+          tempo_maximo_minutos, temperatura, observacoes, fiscal_note_id, status
         ) VALUES (
-          ${input.mapaId}, ${input.companyId}, ${input.obraId}, ${input.dataLancamento},
+          ${input.mapaId}, ${input.companyId}, ${obraDoMapa}, ${input.dataLancamento},
           ${input.fornecedor || null}, ${input.notaFiscal || null},
           ${input.fckNota || null}, ${input.slumpPrevisto || null}, ${input.slumpRealizado || null},
           ${input.volumeEntregue},
           ${input.horaSaidaUsina || null}, ${input.horaChegadaObra || null},
           ${input.horaInicioLancamento || null}, ${input.horaFimLancamento || null},
-          ${tempoMax}, ${input.temperatura || null}, ${input.observacoes || null}, 'lancado'
+          ${tempoMax}, ${input.temperatura || null}, ${input.observacoes || null}, ${input.fiscalNoteId || null}, 'lancado'
         ) RETURNING id
       `));
       const lancamentoId = result[0]?.id;
@@ -1224,10 +1260,17 @@ export const operacionalRouter = router({
 
   listarLancamentos: protectedProcedure
     .input(z.object({ mapaId: z.number(), companyId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
+      const mapa = rows(await db.execute(sql`SELECT obra_id FROM concretagem_mapa WHERE id = ${input.mapaId} AND company_id = ${input.companyId}`));
+      if (!mapa.length) return [];
+      await assertConcretagemAccess(ctx.user, input.companyId, Number(mapa[0].obra_id));
       return rows(await db.execute(sql`
-        SELECT cl.*, (SELECT COUNT(*) FROM concretagem_cps WHERE lancamento_id = cl.id) as total_cps
+        SELECT cl.*,
+          (SELECT COUNT(*) FROM concretagem_cps WHERE lancamento_id = cl.id) as total_cps,
+          (SELECT COUNT(*) FROM ensaios_tecnologicos e WHERE e.lancamento_id = cl.id) as ensaios_total,
+          (SELECT COUNT(*) FROM ensaios_tecnologicos e WHERE e.lancamento_id = cl.id AND e.resultado = 'reprovado') as ensaios_reprovados,
+          (SELECT COUNT(*) FROM ensaios_tecnologicos e WHERE e.lancamento_id = cl.id AND e.resultado = 'aprovado') as ensaios_aprovados
         FROM concretagem_lancamentos cl
         WHERE cl.mapa_id = ${input.mapaId}
         AND cl.mapa_id IN (SELECT id FROM concretagem_mapa WHERE company_id = ${input.companyId})
@@ -1243,10 +1286,11 @@ export const operacionalRouter = router({
       dataMoldagem: z.string(),
       fckProjeto: z.number(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
-      const lanc = rows(await db.execute(sql`SELECT id FROM concretagem_lancamentos WHERE id = ${input.lancamentoId} AND company_id = ${input.companyId}`));
+      const lanc = rows(await db.execute(sql`SELECT id, obra_id FROM concretagem_lancamentos WHERE id = ${input.lancamentoId} AND company_id = ${input.companyId}`));
       if (!lanc.length) throw new Error("Lançamento não encontrado");
+      await assertConcretagemAccess(ctx.user, input.companyId, Number(lanc[0].obra_id));
 
       const d = new Date(input.dataMoldagem);
       const d7 = new Date(d); d7.setDate(d7.getDate() + 7);
@@ -1259,6 +1303,99 @@ export const operacionalRouter = router({
           ${input.fckProjeto})
       `);
       return { ok: true };
+    }),
+
+  // ===== Rev. 4865 — Mapa de Concretagem na planta + rastreio de ensaios =====
+  // Nota de remessa é DIGITADA pelo usuário na obra (decisão do user 08/08/2026 —
+  // sem picker SEFAZ; o número serve como referência para localizar o caminhão).
+
+  // Trechos concretados desenhados na planta (geometria normalizada 0..1 sobre o
+  // PDF da biblioteca da obra — mesmo padrão do Levantamento de Campo).
+  listarTrechosConcretagem: protectedProcedure
+    .input(z.object({ companyId: z.number(), obraId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      await assertConcretagemAccess(ctx.user, input.companyId, input.obraId);
+      const db = await getDb();
+      return rows(await db.execute(sql`
+        SELECT t.*, cm.elemento, cm.pavimento, cm.fck
+        FROM concretagem_trechos t
+        JOIN concretagem_mapa cm ON cm.id = t.mapa_id
+        WHERE t.company_id = ${input.companyId} AND t.obra_id = ${input.obraId} AND t.deleted_at IS NULL
+        ORDER BY t.id
+      `));
+    }),
+
+  salvarTrechoConcretagem: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      obraId: z.number(),
+      mapaId: z.number(),
+      pavimentoId: z.number().optional(),
+      pdfId: z.number(),
+      pagina: z.number().default(1),
+      geometriaJson: z.string().max(100_000),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      await assertConcretagemAccess(ctx.user, input.companyId, input.obraId);
+      const mapa = rows(await db.execute(sql`
+        SELECT id FROM concretagem_mapa WHERE id = ${input.mapaId} AND company_id = ${input.companyId} AND obra_id = ${input.obraId}
+      `));
+      if (!mapa.length) throw new TRPCError({ code: "NOT_FOUND", message: "Elemento não encontrado" });
+      // Anti-IDOR: o PDF precisa ser da MESMA empresa E de um pavimento DESTA obra
+      // (mesma resolução do viewer: medicao_campo_pdfs.pavimento_id → obra_pavimentos).
+      const pdf = rows(await db.execute(sql`
+        SELECT p.id FROM medicao_campo_pdfs p
+        JOIN medicao_campo c ON c.id = p.medicao_campo_id
+        JOIN obra_pavimentos op ON op.id = p.pavimento_id
+        WHERE p.id = ${input.pdfId} AND c.company_id = ${input.companyId}
+          AND op.obra_id = ${input.obraId} AND op.company_id = ${input.companyId}
+      `));
+      if (!pdf.length) throw new TRPCError({ code: "NOT_FOUND", message: "Planta não encontrada nesta obra" });
+      // Geometria: array de pontos {x,y} normalizados 0..1 (validação estrita).
+      let pts: any[] = [];
+      try { pts = JSON.parse(input.geometriaJson); } catch { /* inválido */ }
+      if (!Array.isArray(pts) || pts.length < 3 || !pts.every((p) =>
+        p && typeof p.x === "number" && typeof p.y === "number" &&
+        p.x >= -0.05 && p.x <= 1.05 && p.y >= -0.05 && p.y <= 1.05)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Desenhe o trecho com pelo menos 3 pontos" });
+      }
+      const geometria = JSON.stringify(pts.map((p) => ({ x: p.x, y: p.y })));
+      const res = rows(await db.execute(sql`
+        INSERT INTO concretagem_trechos (company_id, obra_id, mapa_id, pavimento_id, pdf_id, pagina, geometria_json)
+        VALUES (${input.companyId}, ${input.obraId}, ${input.mapaId}, ${input.pavimentoId || null}, ${input.pdfId}, ${input.pagina || 1}, ${geometria})
+        RETURNING id
+      `));
+      return { ok: true, id: res[0]?.id };
+    }),
+
+  excluirTrechoConcretagem: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      const own = rows(await db.execute(sql`SELECT obra_id FROM concretagem_trechos WHERE id = ${input.id} AND company_id = ${input.companyId} AND deleted_at IS NULL`));
+      if (!own.length) throw new TRPCError({ code: "NOT_FOUND", message: "Trecho não encontrado" });
+      await assertConcretagemAccess(ctx.user, input.companyId, Number(own[0].obra_id));
+      await db.execute(sql`UPDATE concretagem_trechos SET deleted_at = NOW() WHERE id = ${input.id} AND company_id = ${input.companyId}`);
+      return { ok: true };
+    }),
+
+  // Caminhões (lançamentos) de uma obra, para o Ensaio vincular o corpo de prova
+  // ao caminhão exato — rastreabilidade concreto ensaiado ↔ trecho da planta.
+  listarLancamentosObra: protectedProcedure
+    .input(z.object({ companyId: z.number(), obraId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      await assertConcretagemAccess(ctx.user, input.companyId, input.obraId);
+      const db = await getDb();
+      return rows(await db.execute(sql`
+        SELECT cl.id, cl.data_lancamento, cl.fornecedor, cl.nota_fiscal, cl.fck_nota,
+               cl.volume_entregue, cl.slump_previsto, cm.elemento, cm.pavimento, cm.fck as fck_elemento
+        FROM concretagem_lancamentos cl
+        JOIN concretagem_mapa cm ON cm.id = cl.mapa_id
+        WHERE cl.company_id = ${input.companyId} AND cl.obra_id = ${input.obraId}
+        ORDER BY cl.data_lancamento DESC, cl.id DESC
+        LIMIT 200
+      `));
     }),
 
   listarFotos: protectedProcedure
@@ -1588,10 +1725,21 @@ export const operacionalRouter = router({
         idadeDias: z.number(),
         dataRuptura: z.string().optional(),
       })).optional(),
+      lancamentoId: z.number().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       const userName = ctx.user?.name || ctx.user?.email || 'sistema';
+      // Anti-IDOR: o caminhão vinculado precisa ser da MESMA empresa, o usuário
+      // precisa de acesso à obra dele, e a obra do ensaio (se informada) deve bater.
+      if (input.lancamentoId) {
+        const lanc = rows(await db.execute(sql`SELECT id, obra_id FROM concretagem_lancamentos WHERE id = ${input.lancamentoId} AND company_id = ${input.companyId}`));
+        if (!lanc.length) throw new Error("Caminhão (lançamento) não encontrado");
+        await assertConcretagemAccess(ctx.user, input.companyId, Number(lanc[0].obra_id));
+        if (input.obraId && Number(input.obraId) !== Number(lanc[0].obra_id)) {
+          throw new Error("O caminhão selecionado é de outra obra");
+        }
+      }
       const numRes = rows(await db.execute(sql`SELECT COUNT(*) + 1 as num FROM ensaios_tecnologicos WHERE company_id = ${input.companyId}`));
       const autoNum = input.numeroEnsaio || `ENS-${String(numRes[0]?.num || 1).padStart(4, '0')}`;
 
@@ -1601,7 +1749,7 @@ export const operacionalRouter = router({
           data_coleta, data_ruptura, idade_dias, local_coleta, elemento_estrutural,
           peca, fornecedor_concreto, nota_fiscal, traco, fck_projeto,
           slump_previsto, slump_realizado, temperatura, volume_m3,
-          laboratorio, responsavel, observacoes, created_by, status
+          laboratorio, responsavel, observacoes, created_by, lancamento_id, status
         ) VALUES (
           ${input.companyId}, ${input.obraId || null}, ${input.obraNome || null},
           ${input.tipo}, ${input.subtipo || null}, ${autoNum},
@@ -1612,7 +1760,7 @@ export const operacionalRouter = router({
           ${input.slumpPrevisto || null}, ${input.slumpRealizado || null},
           ${input.temperatura || null}, ${input.volumeM3 || null},
           ${input.laboratorio || null}, ${input.responsavel || null},
-          ${input.observacoes || null}, ${userName}, 'pendente'
+          ${input.observacoes || null}, ${userName}, ${input.lancamentoId || null}, 'pendente'
         ) RETURNING *
       `));
 

@@ -24,9 +24,9 @@ import {
   Users, Eye, X, RefreshCw, ChevronLeft, ChevronRight,
   Clock, CheckCircle2, Ban, CalendarDays, TrendingUp,
   Zap, CheckCheck, PenLine, Info, Loader2, ArrowRight, Play, Square, Undo2,
-  ChevronDown, Trash2, MapPin,
+  ChevronDown, Trash2, MapPin, Radar as RadarIcon, UserX, Building2, ShieldAlert,
 } from "lucide-react";
-import { useState, useMemo, useEffect, useCallback } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Calendar } from "@/components/ui/calendar";
 import { DayButton, getDefaultClassNames } from "react-day-picker";
@@ -779,7 +779,13 @@ export default function Ferias() {
   const [periodoFilter, setPeriodoFilter] = useState<"todos" | "1" | "2mais">("todos");
   const [inicioDe, setInicioDe] = useState("");
   const [inicioAte, setInicioAte] = useState("");
-  const [tab, setTab] = useState("lista");
+  // Rev. 5102 — deep-link do alerta in-app: /ferias?tab=radar
+  const [tab, setTab] = useState(() => {
+    try {
+      const t = new URLSearchParams(window.location.search).get("tab");
+      return t && ["lista", "vencidas", "calendario", "fluxo", "radar"].includes(t) ? t : "lista";
+    } catch { return "lista"; }
+  });
   const [anoCalendario, setAnoCalendario] = useState(new Date().getFullYear());
   const [showDialog, setShowDialog] = useState(false);
   const [showDetailDialog, setShowDetailDialog] = useState(false);
@@ -864,6 +870,24 @@ export default function Ferias() {
     { companyId, ...(isConstrutoras ? { companyIds } : {}) },
     { enabled: (isConstrutoras ? companyIds.length > 0 : companyId > 0) && tab === "vencidas" }
   );
+  // Rev. 5102 — Radar de Férias (riscos operacionais nos próximos 60 dias)
+  const { data: radarData, refetch: refetchRadar } = trpc.avisoPrevio.ferias.radar.useQuery(
+    { companyId }, { enabled: companyId > 0 }
+  );
+  const [radarResolverItem, setRadarResolverItem] = useState<any>(null);
+  const [radarDecisao, setRadarDecisao] = useState("ciente");
+  const [radarObs, setRadarObs] = useState("");
+  const [radarVerResolvidos, setRadarVerResolvidos] = useState(false);
+  const [radarSubAba, setRadarSubAba] = useState<"alertas" | "efetivo">("alertas");
+  const [radarObraExpandida, setRadarObraExpandida] = useState<number | null>(null);
+  const [radarTimelineModo, setRadarTimelineModo] = useState<"mes" | "semana" | "dia">("mes");
+  const radarResolverMut = trpc.avisoPrevio.ferias.radarResolver.useMutation({
+    onSuccess: () => { toast.success("Decisão registrada!"); setRadarResolverItem(null); setRadarObs(""); refetchRadar(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const radarPendentes = useMemo(() => (radarData?.riscos || []).filter((r: any) => !radarData?.resolucoes?.[r.chave]), [radarData]);
+  const radarResolvidos = useMemo(() => (radarData?.riscos || []).filter((r: any) => radarData?.resolucoes?.[r.chave]), [radarData]);
+
   const { data: empList = [] } = trpc.employees.list.useQuery({ companyId, companyIds, excludeTerminated: true }, { enabled: !!companyId || companyIds?.length > 0 });
   const activeEmployees = useMemo(() => (empList as any[]).filter((e: any) => e.status === "Ativo" && !e.deletedAt), [empList]);
 
@@ -900,6 +924,15 @@ export default function Ferias() {
   });
   const updateFerias = trpc.avisoPrevio.ferias.update.useMutation({
     onSuccess: () => { refetch(); utils.obras.efetivoPorObra.invalidate(); toast.success("Férias atualizadas!"); },
+  });
+  // Rev. 5039 — sugestão automática (CLT 130 + pensão do cadastro) e envio manual ao Financeiro
+  const sugestaoAjustes = trpc.avisoPrevio.ferias.sugestaoAjustes.useQuery(
+    { companyId, ...(isConstrutoras ? { companyIds } : {}), id: selectedItem?.id ?? 0 },
+    { enabled: !!selectedItem?.id }
+  );
+  const enviarFinanceiro = trpc.avisoPrevio.ferias.enviarFinanceiro.useMutation({
+    onSuccess: (d: any) => { toast.success(`Título enviado ao Contas a Pagar (${formatMoeda(d.valor)}).`); refetch(); },
+    onError: (e: any) => toast.error(e.message),
   });
   const removeReciboFerias = trpc.avisoPrevio.ferias.removeReciboFerias.useMutation({
     onSuccess: () => {
@@ -1479,6 +1512,12 @@ export default function Ferias() {
             </TabsTrigger>
             <TabsTrigger value="calendario"><CalendarDays className="h-4 w-4 mr-1" /> Calendário</TabsTrigger>
             <TabsTrigger value="fluxo"><TrendingUp className="h-4 w-4 mr-1" /> Fluxo de Caixa</TabsTrigger>
+            <TabsTrigger value="radar" className="relative">
+              <RadarIcon className="h-4 w-4 mr-1" /> Radar
+              {radarPendentes.length > 0 && (
+                <span className="ml-1.5 bg-red-500 text-white text-[10px] font-bold rounded-full h-5 min-w-5 flex items-center justify-center px-1">{radarPendentes.length}</span>
+              )}
+            </TabsTrigger>
           </TabsList>
 
           {/* ===== ABA: LISTA ===== */}
@@ -2685,6 +2724,423 @@ export default function Ferias() {
               </CardContent>
             </Card>
           </TabsContent>
+
+          {/* ===== ABA: RADAR DE FÉRIAS (Rev. 5102) ===== */}
+          <TabsContent value="radar">
+            <Card className="mb-3">
+              <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center gap-2 justify-between">
+                <div>
+                  <p className="font-semibold flex items-center gap-2"><RadarIcon className="h-4 w-4 text-blue-600" /> Radar de Férias — próximos 60 dias</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Cruzamento automático de férias agendadas com o efetivo por obra: função sem substituto, obra esvaziando (≥30% simultâneo) e concessivo apertado.
+                    Gestor de obra vê só as obras dele; alertas in-app são enviados diariamente.
+                  </p>
+                </div>
+                {radarResolvidos.length > 0 && (
+                  <Button variant="outline" size="sm" onClick={() => setRadarVerResolvidos(v => !v)}>
+                    {radarVerResolvidos ? "Ocultar resolvidos" : `Ver resolvidos (${radarResolvidos.length})`}
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Rev. 5114 — painel de indicadores + linha do tempo do risco */}
+            {(radarPendentes.length > 0 || radarResolvidos.length > 0) && (() => {
+              const criticos = radarPendentes.filter((r: any) => r.severidade === "critico").length;
+              const atencao = radarPendentes.length - criticos;
+              const porTipo = (t: string) => radarPendentes.filter((r: any) => r.tipoRisco === t).length;
+              const obrasAfetadas = new Set(radarPendentes.map((r: any) => r.obraNome)).size;
+              const tiles = [
+                { label: "Críticos", sub: "exigem ação", val: criticos, cls: "border-red-200 bg-red-50", num: "text-red-600" },
+                { label: "Atenção", sub: "monitorar", val: atencao, cls: "border-amber-200 bg-amber-50", num: "text-amber-600" },
+                { label: "Sem substituto", sub: "função descoberta", val: porTipo("sem_substituto"), cls: "border-rose-200 bg-white", num: "text-rose-600" },
+                { label: "Obra esvaziando", sub: "≥30% simultâneo", val: porTipo("esvaziamento"), cls: "border-orange-200 bg-white", num: "text-orange-600" },
+                { label: "Concessivo", sub: "prazo apertado", val: porTipo("concessivo"), cls: "border-purple-200 bg-white", num: "text-purple-600" },
+                { label: "Obras afetadas", sub: "com alerta", val: obrasAfetadas, cls: "border-blue-200 bg-white", num: "text-blue-600" },
+                { label: "Resolvidos", sub: "decisão registrada", val: radarResolvidos.length, cls: "border-emerald-200 bg-white", num: "text-emerald-600" },
+              ];
+              // Rev. 5117 — linha do tempo agrupada por Mês / Semana / Dia, com quem sai em cada bucket
+              const hoje = new Date(); hoje.setHours(12, 0, 0, 0);
+              const fmtBRd = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
+              const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+              const DIAS_SEM = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
+              const comData = radarPendentes.filter((r: any) => r.dataInicio).sort((a: any, b: any) => a.dataInicio.localeCompare(b.dataInicio));
+              const semData = radarPendentes.length - comData.length;
+              const bucketDe = (iso: string): { key: string; label: string } => {
+                const d = new Date(iso + "T12:00:00");
+                if (radarTimelineModo === "mes") return { key: iso.slice(0, 7), label: `${MESES[d.getMonth()]} / ${d.getFullYear()}` };
+                if (radarTimelineModo === "semana") {
+                  const seg = new Date(d); seg.setDate(seg.getDate() - ((seg.getDay() + 6) % 7));
+                  const domF = new Date(seg); domF.setDate(domF.getDate() + 6);
+                  const f = (x: Date) => `${String(x.getDate()).padStart(2, "0")}/${String(x.getMonth() + 1).padStart(2, "0")}`;
+                  return { key: seg.toISOString().slice(0, 10), label: `Semana ${f(seg)} – ${f(domF)}` };
+                }
+                return { key: iso, label: `${fmtBRd(iso)} (${DIAS_SEM[d.getDay()]}) — ${MESES[d.getMonth()]}` };
+              };
+              const buckets = new Map<string, { label: string; itens: any[] }>();
+              for (const r of comData) {
+                const b = bucketDe(r.dataInicio);
+                if (!buckets.has(b.key)) buckets.set(b.key, { label: b.label, itens: [] });
+                buckets.get(b.key)!.itens.push(r);
+              }
+              const bucketsOrd = [...buckets.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+              const maxB = Math.max(1, ...bucketsOrd.map(([, b]) => b.itens.length));
+              return (
+                <div className="mb-3 space-y-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+                    {tiles.map(t => (
+                      <div key={t.label} className={`rounded-xl border ${t.cls} px-3 py-2.5`}>
+                        <p className={`text-2xl font-bold leading-none ${t.num}`}>{t.val}</p>
+                        <p className="text-[11px] font-semibold text-gray-700 mt-1">{t.label}</p>
+                        <p className="text-[10px] text-gray-400">{t.sub}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <Card>
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
+                        <p className="text-xs font-semibold text-gray-700 flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5 text-blue-600" /> Quando os riscos acontecem</p>
+                        <div className="flex gap-0.5 p-0.5 bg-gray-100 rounded-lg">
+                          {([["mes", "Mês"], ["semana", "Semana"], ["dia", "Dia"]] as const).map(([k, l]) => (
+                            <button key={k} type="button" onClick={() => setRadarTimelineModo(k)}
+                              className={`px-3 py-1 rounded-md text-xs font-semibold transition-colors ${radarTimelineModo === k ? "bg-white text-blue-700 shadow-sm" : "text-gray-500 hover:text-gray-800"}`}>
+                              {l}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      {bucketsOrd.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">Nenhum alerta com data de início definida.</p>
+                      ) : (
+                        // Rev. 5122 — agenda vertical: data em destaque + um cartão por pessoa
+                        // (obra, tipo de risco, gravidade) no lugar das barras sem escala.
+                        <div className="relative pl-[52px] sm:pl-[64px]">
+                          <div className="absolute left-[22px] sm:left-[28px] top-2 bottom-2 w-px bg-gray-200" />
+                          <div className="space-y-4">
+                            {bucketsOrd.map(([key, b]) => {
+                              const temCrit = b.itens.some((r: any) => r.severidade === "critico");
+                              const TIPO_LABEL: Record<string, string> = { sem_substituto: "Sem substituto na função", esvaziamento: "Obra esvaziando", concessivo: "Concessivo apertado" };
+                              const diaNum = radarTimelineModo === "dia" ? key.slice(8, 10) : null;
+                              return (
+                                <div key={key} className="relative">
+                                  <div className={`absolute -left-[42px] sm:-left-[52px] top-0 h-10 w-10 sm:h-12 sm:w-12 rounded-xl border flex flex-col items-center justify-center ${temCrit ? "bg-red-50 border-red-200" : "bg-amber-50 border-amber-200"}`}>
+                                    {diaNum ? (
+                                      <>
+                                        <span className={`text-base sm:text-lg font-bold leading-none ${temCrit ? "text-red-600" : "text-amber-600"}`}>{diaNum}</span>
+                                        <span className="text-[9px] text-gray-500 uppercase leading-none mt-0.5">{b.label.split("—")[1]?.trim().slice(0, 3)}</span>
+                                      </>
+                                    ) : (
+                                      <CalendarDays className={`h-5 w-5 ${temCrit ? "text-red-500" : "text-amber-500"}`} />
+                                    )}
+                                  </div>
+                                  <p className="text-xs font-semibold text-gray-700 leading-none pt-0.5">{b.label}</p>
+                                  <div className="mt-1.5 space-y-1.5">
+                                    {b.itens.map((r: any, i: number) => (
+                                      <div key={`${r.chave}-${i}`} className="flex items-center gap-2 rounded-lg border border-gray-100 bg-gray-50/60 px-2.5 py-1.5 flex-wrap">
+                                        {r.employeeName ? (
+                                          <PersonPhoto src={r.fotoUrl} alt={r.employeeName} size="sm" />
+                                        ) : (
+                                          <span className={`h-2 w-2 rounded-full shrink-0 ${r.severidade === "critico" ? "bg-red-500" : "bg-amber-400"}`} />
+                                        )}
+                                        <div className="min-w-0 flex-1">
+                                          <p className="text-xs font-semibold text-gray-800 break-words leading-tight">{r.employeeName || r.obraNome}</p>
+                                          <p className="text-[10px] text-gray-500 break-words leading-tight">
+                                            {r.employeeName ? `${r.obraNome} · ` : ""}{TIPO_LABEL[r.tipoRisco] || r.tipoRisco}{radarTimelineModo !== "dia" && r.dataInicio ? ` · sai ${fmtBRd(r.dataInicio)}` : ""}
+                                          </p>
+                                        </div>
+                                        <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full shrink-0 ${r.severidade === "critico" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}>
+                                          {r.severidade === "critico" ? "Crítico" : "Atenção"}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                      {semData > 0 && (
+                        <p className="mt-3 text-[10px] text-gray-400">{semData} alerta(s) sem data de início (ex.: concessivo vencido) não aparecem na linha do tempo — veja na lista de alertas abaixo.</p>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+              );
+            })()}
+
+            {/* Rev. 5115 — sub-abas: Alertas | Efetivo por Obra */}
+            <div className="flex gap-1 p-1 bg-gray-100 rounded-xl w-full sm:w-auto sm:inline-flex mb-3">
+              {([
+                { key: "alertas", label: `Alertas${radarPendentes.length ? ` (${radarPendentes.length})` : ""}`, icon: <ShieldAlert className="h-4 w-4" /> },
+                { key: "efetivo", label: "Efetivo por Obra", icon: <Building2 className="h-4 w-4" /> },
+              ] as { key: "alertas" | "efetivo"; label: string; icon: React.ReactNode }[]).map(t => (
+                <button key={t.key} type="button" onClick={() => setRadarSubAba(t.key)}
+                  className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${radarSubAba === t.key ? "bg-white text-blue-700 shadow-sm" : "text-gray-500 hover:text-gray-800"}`}>
+                  {t.icon}<span>{t.label}</span>
+                </button>
+              ))}
+            </div>
+
+            {radarSubAba === "efetivo" && (() => {
+              const fmtBRd = (iso?: string | null) => iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : "—";
+              const tabela = (radarData as any)?.efetivoObras || [];
+              const totE = tabela.reduce((s: number, r: any) => s + r.efetivo, 0);
+              const totS = tabela.reduce((s: number, r: any) => s + r.saindoFerias, 0);
+              const TagPeriodo = ({ n }: { n: number }) => n >= 2 ? (
+                <Badge className="bg-red-100 text-red-700 text-[9px] px-1.5 py-0 shrink-0">{n}º período · não alterar</Badge>
+              ) : (
+                <Badge className="bg-blue-100 text-blue-700 text-[9px] px-1.5 py-0 shrink-0">1º período</Badge>
+              );
+              const TagLimite = ({ s }: { s: any }) => {
+                if (s.emGozo || !s.dataLimiteInicio) return null;
+                const dias = Math.round((new Date(s.dataLimiteInicio + "T12:00:00").getTime() - new Date(s.dataInicio + "T12:00:00").getTime()) / 86400000);
+                if (dias > 0) return <Badge className="bg-emerald-100 text-emerald-700 text-[9px] px-1.5 py-0 shrink-0">sai {dias}d antes do limite ({fmtBRd(s.dataLimiteInicio)}) — dá p/ ajustar</Badge>;
+                return <Badge className="bg-red-100 text-red-700 text-[9px] px-1.5 py-0 shrink-0">na data limite ({fmtBRd(s.dataLimiteInicio)})</Badge>;
+              };
+              return tabela.length === 0 ? (
+                <Card><CardContent className="p-8 text-center text-muted-foreground">Nenhuma obra com efetivo alocado.</CardContent></Card>
+              ) : (
+                <Card>
+                  <CardContent className="p-4 overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b bg-gray-50 text-left text-xs text-gray-500">
+                          <th className="py-2 px-2">Obra</th>
+                          <th className="py-2 px-2 text-center">Efetivo</th>
+                          <th className="py-2 px-2 text-center">Saindo de férias (60d)</th>
+                          <th className="py-2 px-2 text-center">Saldo</th>
+                          <th className="py-2 px-2 text-center">% fora</th>
+                          <th className="py-2 px-2" />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {tabela.map((r: any) => {
+                          const pct = r.efetivo > 0 ? Math.round((r.saindoFerias / r.efetivo) * 100) : 0;
+                          const aberta = radarObraExpandida === r.obraId;
+                          return (
+                            <React.Fragment key={r.obraId}>
+                              <tr className={`border-b cursor-pointer hover:bg-blue-50/40 ${pct >= 30 ? "bg-red-50/50" : ""}`}
+                                onClick={() => setRadarObraExpandida(aberta ? null : r.obraId)}>
+                                <td className="py-2 px-2 font-medium break-words">{r.obraNome}</td>
+                                <td className="py-2 px-2 text-center tabular-nums">{r.efetivo}</td>
+                                <td className="py-2 px-2 text-center tabular-nums font-semibold text-amber-700">{r.saindoFerias || "—"}</td>
+                                <td className={`py-2 px-2 text-center tabular-nums font-bold ${pct >= 30 ? "text-red-600" : "text-emerald-700"}`}>{r.saldo}</td>
+                                <td className="py-2 px-2 text-center">
+                                  <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded-full ${pct >= 30 ? "bg-red-100 text-red-700" : pct > 0 ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-400"}`}>{pct}%</span>
+                                </td>
+                                <td className="py-2 px-2 text-center">
+                                  {r.saindoFerias > 0 && <ChevronDown className={`h-4 w-4 text-gray-400 inline transition-transform ${aberta ? "rotate-180" : ""}`} />}
+                                </td>
+                              </tr>
+                              {aberta && r.saindo.length > 0 && (
+                                <tr className="border-b bg-gray-50/60">
+                                  <td colSpan={6} className="py-2 px-3">
+                                    <div className="space-y-1.5">
+                                      {r.saindo.map((s: any, i: number) => (
+                                        <div key={`${s.employeeId}-${i}`} className="flex items-center gap-2 flex-wrap text-xs">
+                                          <PersonPhoto src={s.fotoUrl} alt={s.nome} size="sm" />
+                                          <span className="font-medium">{s.nome}</span>
+                                          {s.funcao && <span className="text-gray-400">· {s.funcao}</span>}
+                                          <span className="tabular-nums text-gray-600">{fmtBRd(s.dataInicio)} → {fmtBRd(s.dataFim)}</span>
+                                          {s.emGozo ? (
+                                            <Badge className="bg-sky-100 text-sky-700 text-[9px] px-1.5 py-0 shrink-0">🏖 de férias agora · volta {fmtBRd(s.dataFim)}</Badge>
+                                          ) : (
+                                            <TagPeriodo n={s.numeroPeriodo} />
+                                          )}
+                                          <TagLimite s={s} />
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </React.Fragment>
+                          );
+                        })}
+                        <tr className="bg-gray-50 font-semibold">
+                          <td className="py-2 px-2 text-sm">Total</td>
+                          <td className="py-2 px-2 text-center tabular-nums">{totE}</td>
+                          <td className="py-2 px-2 text-center tabular-nums text-amber-700">{totS}</td>
+                          <td className="py-2 px-2 text-center tabular-nums">{totE - totS}</td>
+                          <td colSpan={2} />
+                        </tr>
+                      </tbody>
+                    </table>
+                    <p className="text-[10px] text-gray-400 mt-2">Efetivo = CLT ativos alocados na obra · Saindo = com férias agendadas/em gozo nos próximos 60 dias · linha vermelha = ≥30% do efetivo fora (esvaziamento). Toque na linha para ver quem sai, com o período e a folga até a data limite.</p>
+                  </CardContent>
+                </Card>
+              );
+            })()}
+
+            {radarSubAba === "alertas" && radarPendentes.length === 0 && (
+              <Card><CardContent className="p-8 text-center text-muted-foreground">
+                <CheckCircle2 className="h-8 w-8 mx-auto mb-2 text-green-500" />
+                Nenhum risco operacional detectado nos próximos 60 dias.
+              </CardContent></Card>
+            )}
+
+            {/* Rev. 5113/5115 — cartões estruturados, agrupados por obra, com foto e tags */}
+            {radarSubAba === "alertas" && (
+            <div className="space-y-4">
+              {(() => {
+                const fmtBRd = (iso?: string | null) => iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : "—";
+                const todos = [...radarPendentes, ...(radarVerResolvidos ? radarResolvidos : [])];
+                const porObra: Record<string, any[]> = {};
+                for (const r of todos) (porObra[r.obraNome || "Sem obra"] ||= []).push(r);
+                const TIPO_CFG: Record<string, { label: string; icon: any }> = {
+                  sem_substituto: { label: "Função sem substituto", icon: UserX },
+                  esvaziamento: { label: "Obra esvaziando", icon: Building2 },
+                  concessivo: { label: "Concessivo apertado", icon: ShieldAlert },
+                };
+                return Object.entries(porObra).map(([obraNome, riscos]) => (
+                  <div key={obraNome}>
+                    <div className="flex items-center gap-2 mb-2 px-1">
+                      <Building2 className="h-4 w-4 text-gray-400" />
+                      <span className="font-semibold text-sm text-gray-700">{obraNome}</span>
+                      <span className="text-[11px] text-gray-400">{riscos.length} alerta(s)</span>
+                    </div>
+                    <div className="space-y-2">
+                      {riscos.map((r: any) => {
+                        const resolucao = radarData?.resolucoes?.[r.chave];
+                        const cfg = TIPO_CFG[r.tipoRisco] || TIPO_CFG.sem_substituto;
+                        const Icon = cfg.icon;
+                        const critico = r.severidade === "critico";
+                        const cor = resolucao ? "border-l-slate-300 opacity-70" : critico ? "border-l-red-500" : "border-l-amber-400";
+                        const diasAntesLimite = r.dataLimiteInicio && r.dataInicio
+                          ? Math.round((new Date(r.dataLimiteInicio + "T12:00:00").getTime() - new Date(r.dataInicio + "T12:00:00").getTime()) / 86400000)
+                          : null;
+                        return (
+                          <Card key={r.chave} className={`border-l-4 ${cor}`}>
+                            <CardContent className="p-4">
+                              {/* Linha 1: tipo do risco + severidade + tags de período/limite */}
+                              <div className="flex items-center gap-2 flex-wrap mb-2">
+                                <Badge variant="outline" className={resolucao ? "" : critico ? "border-red-300 text-red-700 bg-red-50" : "border-amber-300 text-amber-700 bg-amber-50"}>
+                                  {resolucao ? "✔ Resolvido" : critico ? "Crítico" : "Atenção"}
+                                </Badge>
+                                <span className={`flex items-center gap-1 text-xs font-semibold ${resolucao ? "text-slate-500" : critico ? "text-red-700" : "text-amber-700"}`}>
+                                  <Icon className="h-3.5 w-3.5" /> {cfg.label}
+                                </span>
+                                {r.numeroPeriodo ? (r.numeroPeriodo >= 2 ? (
+                                  <Badge className="bg-red-100 text-red-700 text-[10px] px-1.5 py-0">{r.numeroPeriodo}º período · não alterar</Badge>
+                                ) : (
+                                  <Badge className="bg-blue-100 text-blue-700 text-[10px] px-1.5 py-0">1º período</Badge>
+                                )) : null}
+                                {diasAntesLimite !== null && (diasAntesLimite > 0 ? (
+                                  <Badge className="bg-emerald-100 text-emerald-700 text-[10px] px-1.5 py-0">sai {diasAntesLimite}d antes do limite ({fmtBRd(r.dataLimiteInicio)}) — dá p/ ajustar</Badge>
+                                ) : (
+                                  <Badge className="bg-red-100 text-red-700 text-[10px] px-1.5 py-0">na data limite ({fmtBRd(r.dataLimiteInicio)})</Badge>
+                                ))}
+                              </div>
+                              {/* Linha 2: quem + quando, em campos separados */}
+                              <div className="flex flex-wrap items-center gap-x-6 gap-y-1.5">
+                                {r.employeeName && (
+                                  <div className="min-w-0 flex items-center gap-2">
+                                    <PersonPhoto src={r.fotoUrl} alt={r.employeeName} size="md" />
+                                    <div className="min-w-0">
+                                      <p className="text-[10px] uppercase tracking-wide text-gray-400">Colaborador</p>
+                                      <p className="font-semibold text-sm break-words">{r.employeeName}{r.funcao ? <span className="font-normal text-gray-500"> · {r.funcao}</span> : null}</p>
+                                    </div>
+                                  </div>
+                                )}
+                                {r.dataInicio && (
+                                  <div>
+                                    <p className="text-[10px] uppercase tracking-wide text-gray-400">{r.tipoRisco === "concessivo" ? "Concessivo" : "Férias"}</p>
+                                    <p className="text-sm font-medium tabular-nums">{fmtBRd(r.dataInicio)}{r.dataFim ? ` → ${fmtBRd(r.dataFim)}` : ""}</p>
+                                  </div>
+                                )}
+                                {r.concessivoFim && (
+                                  <div>
+                                    <p className="text-[10px] uppercase tracking-wide text-gray-400">Limite concessivo</p>
+                                    <p className="text-sm font-medium tabular-nums text-red-700">{fmtBRd(r.concessivoFim)}</p>
+                                  </div>
+                                )}
+                              </div>
+                              {/* Linha 3: o problema + a sugestão */}
+                              <p className="text-xs text-muted-foreground mt-2 break-words">{r.detalhe}</p>
+                              <div className={`mt-2 rounded-md px-2.5 py-1.5 text-xs font-medium break-words ${resolucao ? "bg-slate-50 text-slate-500" : "bg-blue-50 text-blue-800 border border-blue-100"}`}>
+                                💡 {r.sugestao}
+                              </div>
+                              {r.candidatos?.length > 0 && (
+                                <div className="flex flex-wrap items-center gap-1 mt-2">
+                                  <span className="text-[10px] uppercase tracking-wide text-gray-400 mr-1">Candidatos p/ realocação:</span>
+                                  {r.candidatos.map((c: any) => (
+                                    <span key={c.employeeId} className="text-[11px] bg-gray-100 text-gray-700 rounded-full px-2 py-0.5">{c.nome} <span className="text-gray-400">({c.obraNome})</span></span>
+                                  ))}
+                                </div>
+                              )}
+                              {r.envolvidos?.length > 0 && (
+                                <div className="flex flex-wrap items-center gap-1 mt-2">
+                                  <span className="text-[10px] uppercase tracking-wide text-gray-400 mr-1">De férias no período:</span>
+                                  {r.envolvidos.map((e: any) => (
+                                    <span key={e.employeeId} className="text-[11px] bg-gray-100 text-gray-700 rounded-full px-2 py-0.5">{e.nome} <span className="text-gray-400">({fmtBRd(e.dataInicio)}–{fmtBRd(e.dataFim)})</span></span>
+                                  ))}
+                                </div>
+                              )}
+                              {resolucao && (
+                                <p className="text-xs mt-2 text-green-700 break-words">
+                                  ✔ Decisão: <b>{String(resolucao.decisao).replace(/_/g, " ")}</b>
+                                  {resolucao.observacao ? ` — ${resolucao.observacao}` : ""}
+                                  {resolucao.user_nome ? ` (${resolucao.user_nome})` : ""}
+                                </p>
+                              )}
+                              {/* Linha 4: ações */}
+                              {!resolucao && (
+                                <div className="flex items-center justify-end gap-2 mt-3 pt-2 border-t border-gray-100">
+                                  {r.employeeId && (
+                                    <Button variant="outline" size="sm" onClick={() => setGanttEmployeeId(r.employeeId)}>
+                                      <CalendarDays className="h-3.5 w-3.5 mr-1" /> Reagendar
+                                    </Button>
+                                  )}
+                                  <Button size="sm" onClick={() => { setRadarResolverItem(r); setRadarDecisao(r.tipoRisco === "sem_substituto" && (r.numeroPeriodo || 1) <= 1 ? "postergar" : "ciente"); setRadarObs(""); }}>
+                                    Registrar decisão
+                                  </Button>
+                                </div>
+                              )}
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ));
+              })()}
+            </div>
+            )}
+
+            {/* Dialog: registrar decisão */}
+            <Dialog open={!!radarResolverItem} onOpenChange={(o) => { if (!o) setRadarResolverItem(null); }}>
+              <DialogContent className="max-w-md">
+                <DialogHeader><DialogTitle>Registrar decisão</DialogTitle></DialogHeader>
+                {radarResolverItem && (
+                  <div className="space-y-3">
+                    <p className="text-sm text-muted-foreground break-words">{radarResolverItem.titulo}</p>
+                    <div>
+                      <label className="text-xs font-medium">Decisão</label>
+                      <select className="w-full border rounded-md h-9 px-2 text-sm mt-1" value={radarDecisao} onChange={e => setRadarDecisao(e.target.value)}>
+                        <option value="postergar">Postergar férias</option>
+                        <option value="antecipar">Antecipar férias</option>
+                        <option value="treinar_substituto">Treinar substituto</option>
+                        <option value="realocar">Realocar pessoa de outra obra</option>
+                        <option value="folguista">Contratar folguista</option>
+                        <option value="ciente">Ciente — sem ação necessária</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium">Observação (opcional)</label>
+                      <Textarea rows={2} value={radarObs} onChange={e => setRadarObs(e.target.value)} placeholder="Ex.: vamos realocar o vigia da obra X na semana das férias" />
+                    </div>
+                  </div>
+                )}
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setRadarResolverItem(null)}>Cancelar</Button>
+                  <Button disabled={radarResolverMut.isPending} onClick={() => radarResolverMut.mutate({ companyId, chave: radarResolverItem.chave, decisao: radarDecisao as any, observacao: radarObs || undefined })}>
+                    {radarResolverMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null} Salvar
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </TabsContent>
         </Tabs>
 
         {/* ===== DIALOG: DETALHAMENTO DO MÊS - FLUXO DE CAIXA ===== */}
@@ -3439,6 +3895,17 @@ export default function Ferias() {
                       </div>
                     </div>
 
+                    {/* Rev. 5039 — Faltas do período aquisitivo (CLT art. 130) */}
+                    {sugestaoAjustes.data?.faltas && (
+                      <div className={`rounded-lg border p-2 text-xs ${sugestaoAjustes.data.faltas.excedeDireito ? "bg-red-50 border-red-300 text-red-800" : "bg-slate-50 border-slate-200 text-slate-600"}`}>
+                        <span className="font-semibold">Faltas no período aquisitivo (CLT 130):</span>{" "}
+                        {sugestaoAjustes.data.faltas.totalFaltasInjustificadas} injustificada(s) → direito a {sugestaoAjustes.data.faltas.diasDireito} dias ({sugestaoAjustes.data.faltas.tabelaAplicada}).
+                        {sugestaoAjustes.data.faltas.excedeDireito && (
+                          <span className="font-semibold"> Atenção: gozo agendado de {sugestaoAjustes.data.faltas.diasGozoAtual} dias excede o direito — ajuste as datas/dias.</span>
+                        )}
+                      </div>
+                    )}
+
                     {/* Descontos adicionais */}
                     <div className="border border-red-200 bg-red-50 rounded-lg p-3 space-y-2">
                       <p className="text-xs font-semibold text-red-800 uppercase">Descontos</p>
@@ -3450,6 +3917,16 @@ export default function Ferias() {
                           onChange={e => setPensaoDesconto(e.target.value)}
                           placeholder="0,00"
                         />
+                        {sugestaoAjustes.data?.pensao?.ativa && (
+                          <button
+                            type="button"
+                            className="text-[10px] text-blue-700 underline whitespace-nowrap"
+                            title={sugestaoAjustes.data.pensao.detalhe}
+                            onClick={() => setPensaoDesconto(formatMoeda(sugestaoAjustes.data!.pensao.valorSugerido))}
+                          >
+                            Usar do cadastro: {formatMoeda(sugestaoAjustes.data.pensao.valorSugerido)}
+                          </button>
+                        )}
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-slate-600 w-24 shrink-0">Outros desc.:</span>
@@ -3549,6 +4026,28 @@ export default function Ferias() {
                             Salvar Líquido
                           </Button>
                         </div>
+                      </div>
+                      {/* Rev. 5041 — Férias Complementar ("por fora") */}
+                      {sugestaoAjustes.data?.complemento?.ativa && (
+                        <div className="mt-2 rounded-lg border border-violet-200 bg-violet-50 p-2 text-xs text-violet-800" title={sugestaoAjustes.data.complemento.detalhe}>
+                          <span className="font-semibold">Férias Complementar (por fora):</span>{" "}
+                          {formatMoeda(sugestaoAjustes.data.complemento.valorSalvo > 0 ? sugestaoAjustes.data.complemento.valorSalvo : sugestaoAjustes.data.complemento.valorSugerido)}
+                          {" "}— {sugestaoAjustes.data.complemento.detalhe}. Gera título separado no Contas a Pagar (não entra no líquido oficial).
+                        </div>
+                      )}
+                      {/* Rev. 5039 — envio manual ao Contas a Pagar */}
+                      <div className="flex justify-end pt-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs border-blue-300 text-blue-700 hover:bg-blue-50"
+                          disabled={enviarFinanceiro.isPending || updateFerias.isPending}
+                          title="Cria/atualiza o título no Contas a Pagar com o valor líquido salvo (ou total, se não houver líquido). Salve o líquido antes."
+                          onClick={() => enviarFinanceiro.mutate({ companyId, ...(isConstrutoras ? { companyIds } : {}), id: selectedItem.id })}
+                        >
+                          {enviarFinanceiro.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : null}
+                          Enviar para Financeiro
+                        </Button>
                       </div>
                     </div>
 

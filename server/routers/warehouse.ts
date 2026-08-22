@@ -2,10 +2,13 @@ import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb, getEffectiveAllowedObraIds, userCanAccessObra, userCanAccessObraAlmox, getAlmoxAllowedObraIdSet, getCompaniesForUser } from "../db";
+import { assertRaioXAccess, assertFullRaioXAccess } from "../raioXGuard";
 import { eq, and, desc, sql, inArray, ne, or, isNull } from "drizzle-orm";
 import crypto from "crypto";
+import * as XLSX from "xlsx";
 import { buscarFotoParaItem } from "../_core/autoFoto";
 import { storagePut } from "../storage";
+import { assertAiModuleEnabled } from "../_core/aiConfig";
 import {
   almoxarifadoItens,
   almoxarifadoMovimentacoes,
@@ -28,6 +31,7 @@ import {
   warnings,
   obras,
 } from "../../drizzle/schema";
+import { erroEscolhaDestino, mesmoDestinoEstoque } from "../utils/recebimentoAlmox";
 
 const isAdmin = (ctx: any) =>
   ctx.user.role === "admin" || ctx.user.role === "admin_master";
@@ -81,7 +85,8 @@ export const warehouseRouter = router({
         .where(
           and(
             eq(almoxarifadoItens.companyId, input.companyId),
-            eq(almoxarifadoItens.ativo, true)
+            eq(almoxarifadoItens.ativo, true),
+            isNull(almoxarifadoItens.equipamentoVinculadoTipo),
           )
         );
 
@@ -135,7 +140,7 @@ export const warehouseRouter = router({
       z.object({
         companyId: z.number(),
         itemId: z.number(),
-        quantidade: z.number().positive(),
+        quantidade: z.number().int().positive(),
         motivo: z.string().optional(),
         notaFiscal: z.string().optional(),
         obraId: z.number().optional(),
@@ -198,7 +203,7 @@ export const warehouseRouter = router({
       z.object({
         companyId: z.number(),
         itemId: z.number(),
-        quantidade: z.number().positive(),
+        quantidade: z.number().int().positive(),
         obraId: z.number().optional(),
         obraNome: z.string().optional(),
         motivo: z.string().optional(),
@@ -598,6 +603,8 @@ export const warehouseRouter = router({
         obraId: z.number().optional(),
         quantidade: z.number().positive().default(1),
         funcionarioCodigo: z.string().optional(),
+        // Rev. 5063 — poka-yoke: terceiro só por CADASTRO (id), nome livre proibido
+        terceiroId: z.number().optional(),
         terceiroNome: z.string().optional(),
         terceiroEmpresa: z.string().optional(),
         observacoes: z.string().optional(),
@@ -610,9 +617,33 @@ export const warehouseRouter = router({
       let funcionarioId: number | null = null;
       let funcionarioNome: string;
       let funcionarioCodigo: string | null = null;
+      let terceiroEmpresaNome: string | null = null;
 
-      if (input.terceiroNome) {
-        funcionarioNome = input.terceiroNome;
+      if (input.terceiroId) {
+        // Rev. 5063 — terceiro DEVE existir no cadastro, com o mínimo completo
+        const tRows = (await db.execute(sql`
+          SELECT ft.nome, ft.cpf, ft.rg, ft.foto_url,
+                 COALESCE(NULLIF(et.nome_fantasia,''), et.razao_social) AS empresa
+          FROM funcionarios_terceiros ft
+          LEFT JOIN empresas_terceiras et ON et.id = ft."empresaTerceiraId"
+          WHERE ft.id = ${input.terceiroId}
+            AND ft."companyId" = ${input.companyId}
+            AND ft.deleted_at IS NULL
+        `)).rows as any[];
+        const t = tRows[0];
+        if (!t) throw new TRPCError({ code: "NOT_FOUND", message: "Terceiro não encontrado no cadastro." });
+        const faltando: string[] = [];
+        // Rev. — RG deixou de ser exigido (documento novo nem traz RG); CPF é o documento obrigatório.
+        if (!String(t.cpf || "").trim()) faltando.push("CPF");
+        if (!String(t.foto_url || "").trim()) faltando.push("foto");
+        if (faltando.length > 0) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: `Cadastro do terceiro incompleto (falta: ${faltando.join(", ")}). Complete o cadastro em Terceiros antes de emprestar.` });
+        }
+        funcionarioNome = String(t.nome);
+        terceiroEmpresaNome = t.empresa ? String(t.empresa) : null;
+      } else if (input.terceiroNome) {
+        // Rev. 5063 — bloqueio de nome digitado à mão (rastreabilidade)
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Nome digitado não é permitido. Selecione um terceiro CADASTRADO ou faça o cadastro (empresa, nome completo, CPF e foto) antes de emprestar." });
       } else {
         if (!input.funcionarioCodigo) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Informe o funcionário ou o nome do terceiro" });
@@ -672,7 +703,7 @@ export const warehouseRouter = router({
       const hora = new Date().toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" });
 
       const observacoes = [
-        input.terceiroEmpresa ? `Empresa: ${input.terceiroEmpresa}` : null,
+        terceiroEmpresaNome ? `Empresa: ${terceiroEmpresaNome}` : null,
         input.observacoes?.trim() || null,
       ].filter(Boolean).join(" · ") || null;
 
@@ -878,8 +909,36 @@ export const warehouseRouter = router({
       await db
         .update(almoxarifadoItens)
         .set({
-          quantidadeAtual: sql`${almoxarifadoItens.quantidadeAtual}::numeric + ${loan.quantidade}::numeric`,
-          ativo: true,
+          quantidadeAtual: sql`
+            CASE
+              WHEN ${almoxarifadoItens.equipamentoVinculadoTipo} = 'proprio'
+               AND EXISTS (
+                 SELECT 1 FROM equipamentos_proprios ep
+                 WHERE ep.id = ${almoxarifadoItens.equipamentoVinculadoId}
+                   AND ep.company_id = ${almoxarifadoItens.companyId}
+                    AND (
+                      ep.localizacao_atual_obra_id IS NULL
+                      OR COALESCE(ep.status, 'disponivel') IN ('manutencao', 'baixado')
+                    )
+               )
+              THEN 0
+              ELSE ${almoxarifadoItens.quantidadeAtual}::numeric + ${loan.quantidade}::numeric
+            END`,
+          ativo: sql`
+            CASE
+              WHEN ${almoxarifadoItens.equipamentoVinculadoTipo} = 'proprio'
+               AND EXISTS (
+                 SELECT 1 FROM equipamentos_proprios ep
+                 WHERE ep.id = ${almoxarifadoItens.equipamentoVinculadoId}
+                   AND ep.company_id = ${almoxarifadoItens.companyId}
+                    AND (
+                      ep.localizacao_atual_obra_id IS NULL
+                      OR COALESCE(ep.status, 'disponivel') IN ('manutencao', 'baixado')
+                    )
+               )
+              THEN false
+              ELSE true
+            END`,
         } as any)
         .where(eq(almoxarifadoItens.id, loan.itemId));
 
@@ -968,6 +1027,35 @@ export const warehouseRouter = router({
     }),
 
   // ── BUSCAR FUNCIONÁRIOS (SUGESTÕES) ────────────────────────────
+  // Rev. 5063 — busca de TERCEIROS cadastrados p/ o empréstimo (poka-yoke)
+  searchTerceiros: protectedProcedure
+    .input(z.object({ companyId: z.number(), q: z.string() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const { sql: drizzleSql } = await import("drizzle-orm");
+      const q = input.q.trim();
+      if (q.length < 2) return [];
+      const pattern = `%${q}%`;
+      const rows = await db.execute(drizzleSql`
+        SELECT ft.id, ft.nome, ft.cpf, ft.rg, ft.foto_url AS "fotoUrl", ft.funcao,
+               ft."empresaTerceiraId",
+               COALESCE(NULLIF(et.nome_fantasia,''), et.razao_social) AS empresa
+        FROM funcionarios_terceiros ft
+        LEFT JOIN empresas_terceiras et ON et.id = ft."empresaTerceiraId"
+        WHERE ft."companyId" = ${input.companyId}
+          AND ft.deleted_at IS NULL
+          AND (
+            unaccent(lower(ft.nome)) LIKE unaccent(lower(${pattern}))
+            OR unaccent(lower(COALESCE(et.nome_fantasia,''))) LIKE unaccent(lower(${pattern}))
+            OR unaccent(lower(COALESCE(et.razao_social,''))) LIKE unaccent(lower(${pattern}))
+          )
+        ORDER BY ft.nome
+        LIMIT 8
+      `);
+      return (rows?.rows ?? rows ?? []) as any[];
+    }),
+
   searchFuncionarios: protectedProcedure
     .input(z.object({ companyId: z.number(), q: z.string() }))
     .query(async ({ input }) => {
@@ -1066,8 +1154,130 @@ Responda SOMENTE com JSON válido (sem markdown, sem explicações):
       fileBase64: z.string().max(15_000_000),
       mimeType: z.string().default("image/jpeg"),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       try {
+        const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+        if (!allowedCompanies.some((company: any) => company.id === input.companyId)) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+        }
+
+        const mime = input.mimeType === "image/jpg" ? "image/jpeg" : input.mimeType;
+        const supportedMimeTypes = [
+          "application/pdf",
+          "image/jpeg",
+          "image/png",
+          "application/vnd.ms-excel",
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ];
+        if (!supportedMimeTypes.includes(mime)) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Formato inválido. Envie uma planilha Excel, PDF, JPG ou PNG.",
+          });
+        }
+        let fileBuffer: Buffer;
+        try {
+          fileBuffer = Buffer.from(input.fileBase64, "base64");
+        } catch {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Não foi possível ler o arquivo enviado." });
+        }
+        if (!fileBuffer.length || fileBuffer.length > 10 * 1024 * 1024) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "O arquivo deve ter no máximo 10 MB." });
+        }
+        const isSpreadsheet = [
+          "application/vnd.ms-excel",
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ].includes(mime);
+
+        if (isSpreadsheet) {
+          const workbook = XLSX.read(fileBuffer, { type: "buffer", cellDates: false });
+          const firstSheetName = workbook.SheetNames[0];
+          if (!firstSheetName) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "A planilha não possui nenhuma aba para importar." });
+          }
+          const rows = XLSX.utils.sheet_to_json<any[]>(workbook.Sheets[firstSheetName], { header: 1, defval: "" });
+          const headerIndex = rows.findIndex(row => row.some((cell: unknown) => String(cell ?? "").trim() !== ""));
+          if (headerIndex < 0) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "A planilha está vazia." });
+          }
+          const key = (value: unknown) => String(value ?? "")
+            .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+            .toLowerCase().replace(/[^a-z0-9]+/g, "");
+          const headers = rows[headerIndex].map(key);
+          const findColumn = (aliases: string[]) => headers.findIndex(header => aliases.includes(header));
+          const nomeCol = findColumn(["nome", "item", "descricao", "material", "produto", "descricaoitem", "nomedoitem"]);
+          const unidadeCol = findColumn(["unidade", "un", "und", "unid", "um"]);
+          const categoriaCol = findColumn(["categoria", "grupo", "familia"]);
+          const quantidadeCol = findColumn(["quantidade", "qtd", "qtde", "quant", "saldo", "estoque"]);
+          if (nomeCol < 0) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Não encontrei a coluna do item. Use um cabeçalho como Nome, Item, Descrição, Material ou Produto.",
+            });
+          }
+          const parseQuantidadeInteira = (value: unknown) => {
+            if (typeof value === "number") {
+              if (!Number.isFinite(value) || value < 0 || !Number.isInteger(value)) {
+                return { quantidade: 0, erro: "Quantidade deve ser um número inteiro não negativo." };
+              }
+              return { quantidade: value, erro: null };
+            }
+
+            const raw = String(value ?? "").trim().replace(/\s/g, "");
+            if (!raw) return { quantidade: 0, erro: null };
+
+            let parsed: number;
+            if (raw.includes(",")) {
+              // Formato brasileiro: ponto só pode ser separador de milhar e
+              // vírgula é decimal. Ex.: 1.000,5 -> 1000.5 (linha inválida).
+              const formatoBr = /^-?(?:\d{1,3}(?:\.\d{3})+|\d+)(?:,\d+)?$/;
+              if (!formatoBr.test(raw)) {
+                return { quantidade: 0, erro: "Quantidade inválida." };
+              }
+              parsed = Number(raw.replace(/\./g, "").replace(",", "."));
+            } else if (/^-?\d{1,3}(?:\.\d{3})+$/.test(raw)) {
+              // Sem vírgula, pontos em grupos de 3 representam milhares.
+              parsed = Number(raw.replace(/\./g, ""));
+            } else {
+              // Um ponto fora do padrão de milhar é decimal: 1.5 deve ficar
+              // bloqueado, jamais ser arredondado para 2 ou lido como 15.
+              parsed = Number(raw);
+            }
+
+            if (!Number.isFinite(parsed) || parsed < 0 || !Number.isInteger(parsed)) {
+              return { quantidade: 0, erro: "Quantidade deve ser um número inteiro não negativo." };
+            }
+            return { quantidade: parsed, erro: null };
+          };
+          const itens = rows.slice(headerIndex + 1)
+            .filter(row => row.some((cell: unknown) => String(cell ?? "").trim() !== ""))
+            .map((row, index) => {
+              const nome = String(row[nomeCol] ?? "").trim().slice(0, 200);
+              const unidade = unidadeCol >= 0 ? String(row[unidadeCol] ?? "").trim().slice(0, 20) : "un";
+              const categoria = categoriaCol >= 0 ? String(row[categoriaCol] ?? "").trim().slice(0, 80) : "Outros";
+              const quantidadeOriginal = quantidadeCol >= 0 ? row[quantidadeCol] : 0;
+              const quantidade = parseQuantidadeInteira(quantidadeOriginal);
+              const erros: string[] = [];
+              if (!nome) erros.push("Nome do item não informado.");
+              if (unidadeCol >= 0 && !unidade) erros.push("Unidade não informada.");
+              if (categoriaCol >= 0 && !categoria) erros.push("Categoria não informada.");
+              if (quantidade.erro) erros.push(quantidade.erro);
+              return {
+                nome,
+                unidade: unidade || "un",
+                categoria: categoria || "Outros",
+                quantidade: quantidade.quantidade,
+                linha: headerIndex + index + 2,
+                erros,
+              };
+            });
+          if (itens.length === 0) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "Não encontrei linhas para revisar na planilha." });
+          }
+          return { itens, fonte: "planilha" as const };
+        }
+
+        await assertAiModuleEnabled(input.companyId, "compras");
         const { invokeAnthropicVision } = await import("../_core/llm");
         const prompt = `Analise este documento (lista de materiais, planilha, orçamento, catálogo ou foto) e extraia TODOS os itens listados para cadastrar em um sistema de almoxarifado de construção civil.
 
@@ -1088,7 +1298,6 @@ REGRAS:
     }
   ]
 }`;
-        const mime = (input.mimeType === "image/jpg" ? "image/jpeg" : input.mimeType) as any;
         const text = await invokeAnthropicVision({
           prompt,
           base64: input.fileBase64,
@@ -1111,10 +1320,17 @@ REGRAS:
             quantidade: Math.max(0, parseInt(it.quantidade) || 0),
           }))
           .filter((it: any) => it.nome.length > 1);
+        if (itens.length === 0) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Não foi possível identificar itens no documento. Tente uma imagem mais nítida ou informe uma planilha.",
+          });
+        }
         console.log(`[extrairItensAlmoxIA] companyId=${input.companyId} itens=${itens.length}`);
-        return { itens };
+        return { itens, fonte: "ia" as const };
       } catch (err: any) {
         console.error("[extrairItensAlmoxIA] Erro:", err?.message ?? err);
+        if (err instanceof TRPCError) throw err;
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: String(err?.message ?? "Erro ao analisar documento") });
       }
     }),
@@ -1667,6 +1883,11 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
       mesDesconto:   z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
+      // Rev. 5195 — management mutation (create payroll discount): hidden/disabled
+      // for self-only users → require full access scoped to the target company,
+      // plus target-employee scope. Self users can never create discounts.
+      await assertFullRaioXAccess(ctx as any, input.companyId);
+      await assertRaioXAccess(ctx as any, input.employeeId);
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
@@ -1700,7 +1921,16 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
       status:     z.string().optional(),
       employeeId: z.number().optional(),
     }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      // Rev. 5194 — Raio-X guard.
+      // With employeeId: guard the specific employee (self or full access allowed).
+      // Without employeeId: tenant-wide query — only full-access users permitted;
+      // non-full users must not obtain all employees' payroll discount records.
+      if (input.employeeId != null) {
+        await assertRaioXAccess(ctx as any, input.employeeId);
+      } else {
+        await assertFullRaioXAccess(ctx as any);
+      }
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
@@ -1723,6 +1953,17 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
+      // Rev. 5195 — management mutation (approve): derive record employee/company
+      // server-side, then require full access. Self users can never approve.
+      const [rec] = await db.select({
+        employeeId: almoxarifadoDescontoFolha.employeeId,
+        companyId:  almoxarifadoDescontoFolha.companyId,
+      })
+        .from(almoxarifadoDescontoFolha).where(eq(almoxarifadoDescontoFolha.id, input.id)).limit(1);
+      if (!rec) throw new TRPCError({ code: "NOT_FOUND", message: "Registro não encontrado." });
+      await assertFullRaioXAccess(ctx as any, rec.companyId);
+      await assertRaioXAccess(ctx as any, rec.employeeId);
+
       await db
         .update(almoxarifadoDescontoFolha)
         .set({
@@ -1741,6 +1982,17 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      // Rev. 5195 — management mutation (reject): derive record employee/company
+      // server-side, then require full access. Self users can never reject.
+      const [rec2] = await db.select({
+        employeeId: almoxarifadoDescontoFolha.employeeId,
+        companyId:  almoxarifadoDescontoFolha.companyId,
+      })
+        .from(almoxarifadoDescontoFolha).where(eq(almoxarifadoDescontoFolha.id, input.id)).limit(1);
+      if (!rec2) throw new TRPCError({ code: "NOT_FOUND", message: "Registro não encontrado." });
+      await assertFullRaioXAccess(ctx as any, rec2.companyId);
+      await assertRaioXAccess(ctx as any, rec2.employeeId);
 
       await db
         .update(almoxarifadoDescontoFolha)
@@ -1913,6 +2165,7 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
       limit:          z.number().default(200),
       funcionarioId:  z.number().optional(),
       obraId:         z.number().optional(),
+      itemId:         z.number().optional(), // Rev. 5033 — filtro por material (histórico completo)
       data:           z.string().optional(), // YYYY-MM-DD
     }))
     .query(async ({ input }) => {
@@ -1923,6 +2176,7 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
             WHERE company_id = ${input.companyId}
             ${input.funcionarioId ? sql`AND funcionario_id = ${input.funcionarioId}` : sql``}
             ${input.obraId ? sql`AND obra_id = ${input.obraId}` : sql``}
+            ${input.itemId ? sql`AND item_id = ${input.itemId}` : sql``}
             ${input.data ? sql`AND DATE(created_at) = ${input.data}::date` : sql``}
             ORDER BY created_at DESC
             LIMIT ${input.limit}`
@@ -2006,7 +2260,7 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
     .input(z.object({
       companyId:      z.number(),
       itemIdOrigem:   z.number(),
-      quantidade:     z.number().positive(),
+      quantidade:     z.number().int().positive(),
       origemTipo:     z.enum(["central", "obra"]),
       origemObraId:   z.number().optional(),
       origemObraNome: z.string().optional(),
@@ -2158,8 +2412,9 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
         destinoObraId:  destinoObraId,
         destinoObraNome: destinoObraNomeServer,
         motivo:         input.motivo ?? null,
-        almoxarifeId:   input.almoxarifeId ?? null,
-        almoxarifeNome: input.almoxarifeNome ?? null,
+        // O remetente vem da sessão autenticada; não confiar em nome/id do cliente.
+        almoxarifeId:   ctx.user.id,
+        almoxarifeNome: ctx.user.name || ctx.user.email || "Usuário autenticado",
       } as any);
 
       return { success: true, itemNome: itemOrigem.nome, novoEstoque: estoqueAtual - input.quantidade };
@@ -2178,7 +2433,7 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
       companyId:       z.number(),
       itens:           z.array(z.object({
         itemIdOrigem: z.number(),
-        quantidade:   z.number().positive(),
+        quantidade:   z.number().int().positive(),
       })).min(1),
       destinoTipo:     z.enum(["central", "obra"]),
       destinoObraId:   z.number().optional(),
@@ -2333,8 +2588,8 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
               destinoObraId,
               destinoObraNome: destinoObraNomeResolvido,
               motivo:          input.motivo ?? null,
-              almoxarifeId:    input.almoxarifeId ?? null,
-              almoxarifeNome:  input.almoxarifeNome ?? null,
+              almoxarifeId:    ctx.user.id,
+              almoxarifeNome:  ctx.user.name || ctx.user.email || "Usuário autenticado",
             } as any);
           });
 
@@ -2350,7 +2605,11 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
   // ── LISTAR TRANSFERÊNCIAS ───────────────────────────────────
   listTransferencias: protectedProcedure
     .input(z.object({ companyId: z.number(), limit: z.number().optional(), data: z.string().optional() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!allowedCompanies.some((company: any) => company.id === input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a essa empresa." });
+      }
       const db = await getDb();
       if (!db) return [];
       const rows = await db.execute(
@@ -2734,6 +2993,7 @@ REGRAS:
         ocItemId: z.number().optional(),
         quantidadeOc: z.number().optional(),
         itemNovo: z.boolean().default(false),
+        modoAlocacao: z.enum(["existente", "novo"]).optional(),
         motivoDivergencia: z.string().optional(),
         fotoAvariaUrl: z.string().optional(),
         recebido: z.boolean().default(true),
@@ -2741,55 +3001,126 @@ REGRAS:
       observacoes: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const rootDb = await getDb();
+      if (!rootDb) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!allowedCompanies.map((company: any) => Number(company.id)).includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
 
+      const txResult = await rootDb.transaction(async (db: any) => {
       if (input.ordemCompraId) {
-        const [ocCheck] = await db
-          .select({
-            id: comprasOrdens.id,
-            numeroOc: comprasOrdens.numeroOc,
-            status: comprasOrdens.status,
-            obraId: comprasOrdens.obraId,
-            obraNome: obras.nome,
-          })
-          .from(comprasOrdens)
-          .leftJoin(obras, eq(obras.id, comprasOrdens.obraId))
-          .where(and(eq(comprasOrdens.id, input.ordemCompraId), eq(comprasOrdens.companyId, input.companyId)));
-        if (ocCheck && ocCheck.status === "entregue") {
+        // A OC inteira é a unidade de concorrência: duas entradas de itens
+        // diferentes precisam serializar o cálculo do status final.
+        const ocLocked: any = await db.execute(sql`
+          SELECT co.id, co.numero_oc, co.status, co.obra_id, o.nome AS obra_nome
+          FROM compras_ordens co
+          LEFT JOIN obras o ON o.id = co.obra_id
+          WHERE co.id = ${input.ordemCompraId}
+            AND co.company_id = ${input.companyId}
+          FOR UPDATE OF co
+        `);
+        const ocRow = (ocLocked?.rows ?? ocLocked ?? [])[0];
+        const ocCheck = ocRow ? {
+          id: Number(ocRow.id),
+          numeroOc: String(ocRow.numero_oc || ""),
+          status: String(ocRow.status || ""),
+          obraId: ocRow.obra_id == null ? null : Number(ocRow.obra_id),
+          obraNome: ocRow.obra_nome == null ? null : String(ocRow.obra_nome),
+        } : null;
+        if (!ocCheck) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Ordem de compra não encontrada nesta empresa." });
+        }
+        if (ocCheck.status === "entregue") {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Esta OC já foi totalmente entregue. Não é possível registrar novo recebimento." });
         }
-        if (ocCheck) {
-          // Rev. 2303 — regra-de-ouro: recebimento SÓ na obra da OC.
-          // Se OC tem obra vinculada e o input vier sem obra OU com obra diferente,
-          // bloqueamos e devolvemos a obra correta no message pra UI orientar.
-          if (ocCheck.obraId) {
-            if (!input.obraId) {
-              // Auto-anexa a obra da OC ao recebimento (sem obrigar refluxo de UI).
-              input.obraId = ocCheck.obraId;
-              if (!input.obraNome && ocCheck.obraNome) {
-                input.obraNome = ocCheck.obraNome;
-              }
-            } else if (Number(input.obraId) !== Number(ocCheck.obraId)) {
-              const ocObraNome = ocCheck.obraNome ? `"${ocCheck.obraNome}"` : `obra #${ocCheck.obraId}`;
-              throw new TRPCError({
-                code: "BAD_REQUEST",
-                message: `Esta OC ${ocCheck.numeroOc || ""} foi emitida para ${ocObraNome}. O recebimento só pode ser feito na MESMA obra da solicitação/ordem de compra.`,
-              });
+        // Regra-de-ouro: recebimento SÓ no mesmo destino da OC.
+        if (ocCheck.obraId != null) {
+          if (input.obraId == null) {
+            input.obraId = ocCheck.obraId;
+            if (!input.obraNome && ocCheck.obraNome) {
+              input.obraNome = ocCheck.obraNome;
             }
+          } else if (Number(input.obraId) !== Number(ocCheck.obraId)) {
+            const ocObraNome = ocCheck.obraNome ? `"${ocCheck.obraNome}"` : `obra #${ocCheck.obraId}`;
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: `Esta OC ${ocCheck.numeroOc || ""} foi emitida para ${ocObraNome}. O recebimento só pode ser feito na MESMA obra da solicitação/ordem de compra.`,
+            });
           }
-          const ocItensCheck = await db.select().from(comprasOrdensItens)
-            .where(eq(comprasOrdensItens.ordemId, input.ordemCompraId));
-          const allDelivered = ocItensCheck.every(it =>
-            parseFloat(String(it.quantidadeEntregue) || "0") >= parseFloat(String(it.quantidade) || "0")
-          );
-          if (allDelivered) {
-            throw new TRPCError({ code: "BAD_REQUEST", message: "Todos os itens desta OC já foram entregues. Não há pendências de recebimento." });
-          }
+        } else if (input.obraId != null) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `Esta OC ${ocCheck.numeroOc || ""} pertence ao Escritório Central e não pode ser recebida em uma obra.`,
+          });
+        }
+        const ocItensCheck = await db.select().from(comprasOrdensItens)
+          .where(eq(comprasOrdensItens.ordemId, input.ordemCompraId));
+        const allDelivered = ocItensCheck.every(it =>
+          parseFloat(String(it.quantidadeEntregue) || "0") >= parseFloat(String(it.quantidade) || "0")
+        );
+        if (allDelivered) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Todos os itens desta OC já foram entregues. Não há pendências de recebimento." });
+        }
+      }
+
+      if (input.obraId != null) {
+        const [obraDestino] = await db
+          .select({ id: obras.id, nome: obras.nome })
+          .from(obras)
+          .where(and(
+            eq(obras.id, Number(input.obraId)),
+            eq(obras.companyId, input.companyId),
+          ))
+          .limit(1);
+        if (!obraDestino) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "A obra de destino não existe nesta empresa." });
+        }
+        if (!input.obraNome) input.obraNome = obraDestino.nome;
+        const allowedObras = await getAlmoxAllowedObraIdSet(ctx.user.id, ctx.user.role, ctx.user.email);
+        if (allowedObras !== null && !allowedObras.has(Number(input.obraId))) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Sem permissão para operar o almoxarifado desta obra (somente leitura).",
+          });
         }
       }
 
       const itensRecebidos = input.itens.filter(i => i.recebido);
+      for (const item of input.itens) {
+        const erroDestino = erroEscolhaDestino(item);
+        if (erroDestino) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: erroDestino });
+        }
+        if (!item.recebido) continue;
+        if (item.modoAlocacao === "existente") {
+          // Mantém o item no mesmo destino até o commit. Sem este lock, uma
+          // transferência concorrente poderia movê-lo após a conferência.
+          const destinoLocked: any = await db.execute(sql`
+            SELECT id, company_id, obra_id, equipamento_vinculado_tipo
+            FROM almoxarifado_itens
+            WHERE id = ${item.itemId!}
+              AND company_id = ${input.companyId}
+            FOR UPDATE
+          `);
+          const destinoRow = (destinoLocked?.rows ?? destinoLocked ?? [])[0];
+          const destino = destinoRow ? {
+            id: Number(destinoRow.id),
+            companyId: Number(destinoRow.company_id),
+            obraId: destinoRow.obra_id == null ? null : Number(destinoRow.obra_id),
+            equipamentoVinculadoTipo: destinoRow.equipamento_vinculado_tipo,
+          } : null;
+          if (!destino || destino.equipamentoVinculadoTipo) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: `O item escolhido para "${item.itemNome}" não é um material válido deste estoque.` });
+          }
+          if (!mesmoDestinoEstoque(destino.obraId, input.obraId)) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: `O item escolhido para "${item.itemNome}" pertence a outro destino. Selecione um item da mesma obra ou do Escritório Central.`,
+            });
+          }
+        }
+      }
       const temDivergencia = input.itens.some(i =>
         !i.recebido ||
         (i.quantidadeNf > 0 && i.quantidadeRecebida < i.quantidadeNf) ||
@@ -2832,7 +3163,7 @@ REGRAS:
           statusItem = "avariado";
         }
 
-        if (item.itemNovo && !itemId && item.recebido) {
+        if (item.modoAlocacao === "novo" && !itemId && item.recebido) {
           // Rev. 2389 — Mesma guarda do fluxo OC→Almox: nada de serviço/
           // administrativo/tributo cair no almoxarifado por engano via
           // "recebimento inteligente" com `itemNovo: true`.
@@ -2856,57 +3187,71 @@ REGRAS:
             origem: "proprio",
             criadoPorId: ctx.user?.id ?? null,
             criadoPorNome: ctx.user?.name || null,
-          });
+          }, { rejeitarEquivalente: true });
           itemId = newItem.id;
           createdItems.push(newItem.id);
         }
 
-        if (item.recebido && itemId && item.quantidadeRecebida > 0) {
-          const [existing] = await db
-            .select()
-            .from(almoxarifadoItens)
-            .where(and(eq(almoxarifadoItens.id, itemId), eq(almoxarifadoItens.companyId, input.companyId)));
-
-          if (existing) {
-            const antes = parseFloat(String(existing.quantidadeAtual) || "0");
-            const depois = antes + item.quantidadeRecebida;
-            // Rev. 2392 — reativa item se estava soft-deleted (zerou via transferência).
-            await db
-              .update(almoxarifadoItens)
-              .set({ quantidadeAtual: String(depois), ativo: true } as any)
-              .where(and(eq(almoxarifadoItens.id, itemId), eq(almoxarifadoItens.companyId, input.companyId)));
-
-            await db.insert(almoxarifadoMovimentacoes).values({
-              companyId: input.companyId,
-              itemId,
-              tipo: "entrada",
-              quantidade: String(item.quantidadeRecebida),
-              obraId: input.obraId || null,
-              obraNome: input.obraNome || null,
-              motivo: input.numeroNf ? `Recebimento NF: ${input.numeroNf}` : "Recebimento inteligente",
-              usuarioId: ctx.user.id,
-              usuarioNome: ctx.user.name || "",
-            } as any);
+        if (item.ocItemId && item.recebido && item.quantidadeRecebida > 0 && input.ordemCompraId) {
+          const locked: any = await db.execute(sql`
+            SELECT id, quantidade, quantidade_entregue
+            FROM compras_ordens_itens
+            WHERE id = ${item.ocItemId}
+              AND ordem_id = ${input.ordemCompraId}
+            FOR UPDATE
+          `);
+          const ocItem = (locked?.rows ?? locked ?? [])[0];
+          if (!ocItem) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: `O item "${item.itemNome}" não pertence à OC informada.` });
           }
+          const entregueAtual = Number(ocItem.quantidade_entregue) || 0;
+          const qtdOc = Number(ocItem.quantidade) || 0;
+          const pendente = Math.max(0, qtdOc - entregueAtual);
+          if (pendente <= 0 || item.quantidadeRecebida > pendente + 0.000001) {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: `A quantidade pendente de "${item.itemNome}" mudou durante o recebimento. Recarregue a OC e confira novamente.`,
+            });
+          }
+          await db.update(comprasOrdensItens)
+            .set({ quantidadeEntregue: String(entregueAtual + item.quantidadeRecebida) } as any)
+            .where(and(
+              eq(comprasOrdensItens.id, item.ocItemId),
+              eq(comprasOrdensItens.ordemId, input.ordemCompraId),
+            ));
         }
 
-        if (item.ocItemId && item.recebido && item.quantidadeRecebida > 0 && input.ordemCompraId) {
-          const [validOc] = await db.select({ id: comprasOrdens.id }).from(comprasOrdens)
-            .where(and(eq(comprasOrdens.id, input.ordemCompraId), eq(comprasOrdens.companyId, input.companyId)));
-          if (validOc) {
-            const [ocItem] = await db.select().from(comprasOrdensItens)
-              .where(and(eq(comprasOrdensItens.id, item.ocItemId), eq(comprasOrdensItens.ordemId, input.ordemCompraId)));
-            if (ocItem) {
-              const entregueAtual = parseFloat(String(ocItem.quantidadeEntregue) || "0");
-              const qtdOc = parseFloat(String(ocItem.quantidade) || "0");
-              const pendente = Math.max(0, qtdOc - entregueAtual);
-              if (pendente <= 0) continue;
-              const qtdAceita = Math.min(item.quantidadeRecebida, pendente);
-              await db.update(comprasOrdensItens)
-                .set({ quantidadeEntregue: String(entregueAtual + qtdAceita) } as any)
-                .where(and(eq(comprasOrdensItens.id, item.ocItemId), eq(comprasOrdensItens.ordemId, input.ordemCompraId)));
-            }
+        if (item.recebido && itemId && item.quantidadeRecebida > 0) {
+          const updated = await db
+            .update(almoxarifadoItens)
+            .set({
+              quantidadeAtual: sql`COALESCE(${almoxarifadoItens.quantidadeAtual}, 0)::numeric + ${item.quantidadeRecebida}`,
+              ativo: true,
+            } as any)
+            .where(and(
+              eq(almoxarifadoItens.id, itemId),
+              eq(almoxarifadoItens.companyId, input.companyId),
+              input.obraId == null
+                ? isNull(almoxarifadoItens.obraId)
+                : eq(almoxarifadoItens.obraId, Number(input.obraId)),
+              isNull(almoxarifadoItens.equipamentoVinculadoTipo),
+            ))
+            .returning({ id: almoxarifadoItens.id });
+          if (updated.length === 0) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: `O item de destino de "${item.itemNome}" não está mais disponível.` });
           }
+
+          await db.insert(almoxarifadoMovimentacoes).values({
+            companyId: input.companyId,
+            itemId,
+            tipo: "entrada",
+            quantidade: String(item.quantidadeRecebida),
+            obraId: input.obraId || null,
+            obraNome: input.obraNome || null,
+            motivo: input.numeroNf ? `Recebimento NF: ${input.numeroNf}` : "Recebimento inteligente",
+            usuarioId: ctx.user.id,
+            usuarioNome: ctx.user.name || "",
+          } as any);
         }
 
         if (statusItem !== "recebido") {
@@ -2929,7 +3274,7 @@ REGRAS:
           ocItemId: item.ocItemId || null,
           quantidadeOc: item.quantidadeOc ? String(item.quantidadeOc) : null,
           statusItem,
-          itemNovo: item.itemNovo,
+          itemNovo: item.modoAlocacao === "novo",
           motivoDivergencia: item.motivoDivergencia || null,
           fotoAvariaUrl: item.fotoAvariaUrl || null,
         } as any);
@@ -2945,16 +3290,6 @@ REGRAS:
           .set({ status: allDelivered ? "entregue" : "parcial" } as any)
           .where(and(eq(comprasOrdens.id, input.ordemCompraId), eq(comprasOrdens.companyId, input.companyId)));
 
-        // Rev. 4722 — o recebimento pelo Almoxarifado marcava a OC como entregue SEM
-        // passar pela integração financeira (só atualizarStatusOrdem criava o título).
-        // Resultado: OCs entregues que nunca apareciam no Contas a Pagar. Self-heal
-        // garante o título (a_pagar) respeitando as exclusões (FD, cartão, total 0).
-        try {
-          const { garantirEntryDaOC } = await import("../services/purchaseFinancialBridge");
-          await garantirEntryDaOC(input.ordemCompraId, input.companyId);
-        } catch (e) {
-          console.error("[Almox→Financeiro] Falha ao garantir título da OC", input.ordemCompraId, e);
-        }
       }
 
       if (temDivergencia && divergencias.length > 0) {
@@ -2984,7 +3319,7 @@ REGRAS:
       let createdIdx = 0;
       for (const item of input.itens) {
         let iid = item.itemId;
-        if (!iid && item.itemNovo && createdIdx < createdItems.length) {
+        if (!iid && item.recebido && item.modoAlocacao === "novo" && createdIdx < createdItems.length) {
           iid = createdItems[createdIdx++];
         }
         if (iid && item.recebido && !seen.has(iid)) {
@@ -2997,22 +3332,6 @@ REGRAS:
           }
         }
       }
-      if (itemIdsParaFoto.length > 0) {
-        (async () => {
-          for (const { id, nome } of itemIdsParaFoto) {
-            try {
-              const url = await buscarFotoParaItem(nome);
-              if (url) {
-                await db.execute(sql`UPDATE almoxarifado_itens SET foto_url = ${url} WHERE id = ${id}`);
-                console.log(`[autoFoto] Entrada: ${nome} → foto atualizada`);
-              }
-            } catch (e) {
-              console.warn(`[autoFoto] Erro background para item ${id}:`, e);
-            }
-          }
-        })();
-      }
-
       return {
         success: true,
         recebimentoId: recebimento.id,
@@ -3021,7 +3340,36 @@ REGRAS:
         itensNovosCriados: createdItems.length,
         temDivergencia,
         divergencias,
+        itemIdsParaFoto,
       };
+      });
+
+      // Integrações externas só rodam depois do commit do recebimento.
+      if (input.ordemCompraId) {
+        try {
+          const { garantirEntryDaOC } = await import("../services/purchaseFinancialBridge");
+          await garantirEntryDaOC(input.ordemCompraId, input.companyId);
+        } catch (e) {
+          console.error("[Almox→Financeiro] Falha ao garantir título da OC", input.ordemCompraId, e);
+        }
+      }
+      if (txResult.itemIdsParaFoto.length > 0) {
+        (async () => {
+          for (const { id, nome } of txResult.itemIdsParaFoto) {
+            try {
+              const url = await buscarFotoParaItem(nome);
+              if (url) {
+                await rootDb.execute(sql`UPDATE almoxarifado_itens SET foto_url = ${url} WHERE id = ${id}`);
+                console.log(`[autoFoto] Entrada: ${nome} → foto atualizada`);
+              }
+            } catch (e) {
+              console.warn(`[autoFoto] Erro background para item ${id}:`, e);
+            }
+          }
+        })();
+      }
+      const { itemIdsParaFoto: _itemIdsParaFoto, ...result } = txResult;
+      return result;
     }),
 
   listRecebimentos: protectedProcedure

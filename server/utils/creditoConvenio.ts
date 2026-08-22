@@ -71,7 +71,7 @@ export async function montarContextoCredito(db: any, params: {
   const competencia = params.competencia || competenciaDaData(hojeBrasilia());
   const limite = num(params.parceiro.limiteMensalPorColaborador);
   const carenciaDias = params.parceiro.carenciaDias == null ? 30 : Number(params.parceiro.carenciaDias) || 0;
-  const travarDebito = params.parceiro.travarDebitoAnterior == null ? true : Number(params.parceiro.travarDebitoAnterior) === 1;
+  const travarDebito = params.parceiro.travarDebitoAnterior == null ? false : Number(params.parceiro.travarDebitoAnterior) === 1;
 
   const usadoPorEmp = new Map<number, number>();
   const devedoresCompAnterior = new Set<number>();

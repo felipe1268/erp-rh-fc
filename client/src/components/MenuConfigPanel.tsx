@@ -73,7 +73,7 @@ const PATH_ICON_MAP: Record<string, any> = {
   "/controle-documentos?tab=atestados": ClipboardPlus,
   "/controle-documentos?tab=advertencias": ShieldAlert,
   "/aviso-previo": AlertTriangle, "/ferias": Palmtree, "/seguro-vida": ShieldCheck,
-  "/modulo-pj": FileSignature, "/pj-medicoes": FileSpreadsheet,
+  "/modulo-pj": FileSignature,
   "/relatorios/raio-x": UserSearch,
   "/dashboards": BarChart3, "/dashboards/funcionarios": Users,
   "/dashboards/cartao-ponto": Clock, "/dashboards/folha-pagamento": Wallet,
@@ -109,6 +109,7 @@ const MODULE_DISPLAY_ORDER: ModuleId[] = [
   "terceiros", "parceiros",
   "gestao-documentos", "operacional", "frotas",
   "comunicados-internos", "curriculos", "oraculo",
+  "gestao-interna",
   "juridico", "admin",
 ];
 

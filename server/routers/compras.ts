@@ -1,17 +1,25 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure, adminProcedure } from "../_core/trpc";
-import { getDb, getCompaniesForUser, getEffectiveAllowedObraIds, getUserCompanyLinks, createAuditLog, getAlmoxAllowedObraIdSet } from "../db";
+import { getDb, getCompaniesForUser, getEffectiveAllowedObraIds, getUserCompanyLinks, createAuditLog, getAlmoxAllowedObraIdSet, userCanAccessObra } from "../db";
 import { assertAiModuleEnabled, isAiModuleEnabled } from "../_core/aiConfig";
 import { triggerFinancialSync } from "../services/financialEventTrigger";
-import { criarParcelasFinanceiras } from "../services/purchaseFinancialBridge";
+import { cancelarLancamentosRecorrentesOC, criarParcelasFinanceiras, garantirEntryDaOC, prepararReedicaoLancamentosOC, sincronizarLancamentosRecorrentesOC } from "../services/purchaseFinancialBridge";
 import { getTipoPagamentoInfo } from "../../shared/paymentConditions";
-import { normalizarTexto } from "../../shared/textNormalization";
+import { dataIsoReal, gerarVencimentosRecorrenciaMensal } from "../../shared/ocRecorrencia";
+import { normalizarTexto, tituloMaiusculo } from "../../shared/textNormalization";
 import { upperCaseEmpresa } from "../../shared/normalizeNomeEmpresa";
 import { invokeLLM, invokeAnthropicVision } from "../_core/llm";
 import { storagePut } from "../storage";
 import { enviarConviteAssinatura } from "../services/integrasignEmail";
 import { resolveSocioAdministradorSigner, resolveGestorObraSigner } from "../services/signatariosContrato";
+import {
+  aggregatePurchaseHistory,
+  calculateBudgetDeficit,
+  isPurchaseHistoryEligible,
+  purchaseBudgetKey,
+  type PurchaseHistoryRow,
+} from "../purchaseBudgetSummary";
 
 const classificacaoProgress = new Map<string, { etapa: string; loteAtual: number; totalLotes: number; itensProcessados: number; totalItens: number; startedAt: number }>();
 function classifKey(orcId: number, compId: number) { return `${compId}-${orcId}`; }
@@ -100,9 +108,9 @@ function getClientIp(ctx: any): string | null {
 import { classificarNaturezaItemAlmox } from "../../shared/naturezaItemAlmox";
 export { classificarNaturezaItemAlmox };
 import crypto from "crypto";
-import { eq, and, desc, asc, ilike, or, sql, gte, lte, inArray, notInArray, isNull } from "drizzle-orm";
+import { eq, and, desc, asc, ilike, or, sql, gte, gt, lt, lte, inArray, notInArray, isNull } from "drizzle-orm";
 import {
-  fornecedores, avaliacoesFornecedor, almoxarifadoItens, almoxarifadoMovimentacoes,
+  fornecedores, companies, avaliacoesFornecedor, almoxarifadoItens, almoxarifadoMovimentacoes,
   almoxarifadoCategorias, almoxarifadoUnidades, almoxarifadoRecebimentos,
   almoxarifadoAuditoria, almoxarifadoBaias,
   obraResponsaveisEstoque,
@@ -110,7 +118,7 @@ import {
   comprasCotacoes, comprasCotacoesItens,
   comprasCotacaoFornecedores, comprasCotacaoRespostas,
   comprasCotacaoPropostas, comprasCondicoesPagamento,
-  comprasOrdens, comprasOrdensItens, comprasEntregasProgramadas,
+  comprasOrdens, comprasOrdensItens, comprasEntregasProgramadas, comprasOcEpiImportacoes,
   comprasRiscoDebitos,
   comprasReservasSaldo, comprasReservasLog,
   users,
@@ -127,9 +135,408 @@ import {
   ocNumberConfig, pjContracts, pjDocumentos, bdiFd, fdAjustes, medicaoFdRegistros, medicaoContratos,
   integrasignEnvelopes, integrasignSignatarios, integrasignAuditLog,
   terceiroContratos, terceiroContratoItens, empresasTerceiras,
-  disciplinaClassificacoes, disciplinaCorrecoes,
+  disciplinaClassificacoes, disciplinaCorrecoes, epis, epiEstoqueObra, epiTransferencias, epiDeliveries, epiEstoqueAjustes,
 } from "../../drizzle/schema";
+import { agruparImportacoesEpiParaEstorno } from "../utils/ocEpiEstorno";
 const n = (v: any) => parseFloat(v ?? "0") || 0;
+
+function scoreSimilaridadeEpi(descricaoOc: string, nomeEpi: string) {
+  const tokens = (value: string) => new Set(
+    value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+      .split(/[^a-z0-9]+/).filter(token => token.length >= 3)
+  );
+  const origem = tokens(descricaoOc);
+  const alvo = tokens(nomeEpi);
+  if (origem.size === 0 || alvo.size === 0) return 0;
+  let comuns = 0;
+  origem.forEach(token => { if (alvo.has(token)) comuns++; });
+  const base = comuns / Math.max(origem.size, alvo.size);
+  const textoOc = descricaoOc.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const textoEpi = nomeEpi.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  return Math.round((base + (textoOc.includes(textoEpi) || textoEpi.includes(textoOc) ? 0.25 : 0)) * 100);
+}
+
+async function assertDestinoEstoqueEpi(ctx: any, db: any, companyId: number, obraId: number | null) {
+  if (obraId) {
+    const [obra] = await db.select({ id: obras.id }).from(obras)
+      .where(and(eq(obras.id, obraId), eq(obras.companyId, companyId)));
+    if (!obra) throw new TRPCError({ code: "FORBIDDEN", message: "A obra da OC não pertence à empresa." });
+    if (!await userCanAccessObra(ctx.user.id, ctx.user.role, obraId)) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Você não tem permissão para receber EPI nesta obra." });
+    }
+    return;
+  }
+  const allowedObras = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+  if (allowedObras !== null && allowedObras.length === 0) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Você não tem permissão para receber EPI no Almoxarifado Central." });
+  }
+}
+
+// Rev. 5200 — Instrumentação de caminho lento para a lista de Cotações (task #195).
+// Só emite log quando o total ultrapassa o limiar; os filtros vão hasheados/redigidos
+// (sem texto de busca, sem dados pessoais) para não vazar PII nos logs.
+const COTACOES_SLOW_MS = 800;
+function hashCotacoesFiltros(input: Record<string, any>): string {
+  // Hash estável e curto dos filtros que afetam o plano de consulta.
+  // search vira apenas presença (bool) para não registrar termo digitado.
+  const shape = {
+    companyId: input.companyId ?? null,
+    status: input.status ?? null,
+    solicitacaoId: input.solicitacaoId ?? null,
+    obraId: input.obraId ?? null,
+    tipo: input.tipo ?? null,
+    hasSearch: !!(input.search && String(input.search).trim()),
+    hasDataInicio: !!input.dataInicio,
+    hasDataFim: !!input.dataFim,
+    sortKey: input.sortKey ?? null,
+    sortDir: input.sortDir ?? null,
+    page: input.page ?? null,
+    pageSize: input.pageSize ?? null,
+  };
+  const str = JSON.stringify(shape);
+  let h = 5381;
+  for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(16);
+}
+function logCotacoesSlow(stage: string, totalMs: number, timings: Record<string, number>, meta: Record<string, any>) {
+  if (totalMs < COTACOES_SLOW_MS) return;
+  console.warn(`[compras.cotacoes.slow] stage=${stage} totalMs=${totalMs} timings=${JSON.stringify(timings)} meta=${JSON.stringify(meta)}`);
+}
+
+function resolveFinancialMetaUnit(input: {
+  tipo: "material" | "servico" | "pacote" | "equipamento";
+  incluirEquipamentos: boolean;
+  isInsumoDeComposicao: boolean;
+  metaFromSC: number;
+  metaTotal: number;
+  metaMat: number;
+  metaMdo: number;
+  metaEquip: number;
+  custoTotal: number;
+  incluirAjudante: boolean;
+  metaMdoProfissional: number;
+  metaMdoAjudante: number;
+}) {
+  let metaTotal = input.metaTotal;
+  let metaMat = input.metaMat;
+  let metaMdo = input.metaMdo;
+  let metaEquip = input.metaEquip;
+  if (input.isInsumoDeComposicao && input.tipo === "equipamento") {
+    metaTotal = metaEquip;
+    metaMat = 0;
+    metaMdo = 0;
+  } else if (input.isInsumoDeComposicao && input.metaFromSC > 0) {
+    const effectiveMetaRate = input.custoTotal > 0 ? (1 - input.metaTotal / input.custoTotal) : 0;
+    const puComMeta = effectiveMetaRate > 0
+      ? Math.round(input.metaFromSC * (1 - effectiveMetaRate) * 100) / 100
+      : Math.round(input.metaFromSC * 100) / 100;
+    metaTotal = puComMeta;
+    metaMat = input.tipo === "servico" ? 0 : puComMeta;
+    metaMdo = input.tipo === "servico" ? puComMeta : 0;
+    metaEquip = 0;
+  }
+  let metaUnitario: number;
+  if (input.isInsumoDeComposicao && input.tipo === "equipamento") {
+    metaUnitario = metaEquip;
+  } else if (input.isInsumoDeComposicao && input.metaFromSC > 0) {
+    metaUnitario = metaTotal;
+  } else if (input.tipo === "pacote") {
+    metaUnitario = !input.incluirEquipamentos && metaEquip > 0
+      ? (metaTotal > 0 ? metaTotal - metaEquip : metaMat + metaMdo)
+      : (metaTotal > 0 ? metaTotal : metaMat + metaMdo + metaEquip);
+  } else if (input.tipo === "equipamento" && metaEquip > 0) {
+    metaUnitario = metaEquip;
+  } else if (input.tipo === "servico" && metaMdo > 0) {
+    if (!input.incluirAjudante && input.metaMdoProfissional > 0) {
+      const totalMdo = input.metaMdoProfissional + input.metaMdoAjudante;
+      metaUnitario = totalMdo > 0 ? metaMdo * (input.metaMdoProfissional / totalMdo) : metaMdo;
+    } else {
+      metaUnitario = metaMdo;
+    }
+  } else if (input.tipo === "material" && metaMat > 0) {
+    metaUnitario = metaMat;
+  } else {
+    metaUnitario = metaTotal;
+  }
+  return { metaUnitario, metaTotal, metaMat, metaMdo, metaEquip };
+}
+
+type CotacaoAward = { itemId: number; fornecedorId: number };
+
+async function calcularDeficitFinanceiroCotacaoServidor(
+  db: any,
+  cot: typeof comprasCotacoes.$inferSelect,
+  awards: CotacaoAward[],
+) {
+  if (awards.length === 0) return { metaOriginal: 0, comprasAnteriores: 0, cotacaoAtual: 0, saldo: 0, deficit: 0 };
+  const itemIds = [...new Set(awards.map((award) => award.itemId))];
+  const linhas = await db.select({
+    cotacaoItemId: comprasCotacoesItens.id,
+    solicitacaoItemId: comprasCotacoesItens.solicitacaoItemId,
+    quantidadeCotacao: comprasCotacoesItens.quantidade,
+    orcamentoItemId: comprasSolicitacoesItens.orcamentoItemId,
+    insumoCodigo: comprasSolicitacoesItens.insumoCodigo,
+    precoMeta: comprasSolicitacoesItens.precoMeta,
+    coeficiente: comprasSolicitacoesItens.coeficiente,
+    quantidadeOrcada: orcamentoItens.quantidade,
+    metaUnitMat: orcamentoItens.metaUnitMat,
+    metaUnitMdo: orcamentoItens.metaUnitMdo,
+    metaUnitEquip: orcamentoItens.metaUnitEquip,
+    metaUnitTotal: orcamentoItens.metaUnitTotal,
+    custoUnitMat: orcamentoItens.custoUnitMat,
+    custoUnitMdo: orcamentoItens.custoUnitMdo,
+    custoUnitEquip: orcamentoItens.custoUnitEquip,
+    custoUnitTotal: orcamentoItens.custoUnitTotal,
+    orcamentoId: orcamentoItens.orcamentoId,
+    incluirAjudante: comprasSolicitacoesItens.incluirAjudante,
+    metaMdoProfissional: comprasSolicitacoesItens.metaMdoProfissional,
+    metaMdoAjudante: comprasSolicitacoesItens.metaMdoAjudante,
+  })
+    .from(comprasCotacoesItens)
+    .leftJoin(comprasSolicitacoesItens, eq(comprasSolicitacoesItens.id, comprasCotacoesItens.solicitacaoItemId))
+    .leftJoin(orcamentoItens, eq(orcamentoItens.id, comprasSolicitacoesItens.orcamentoItemId))
+    .where(and(
+      eq(comprasCotacoesItens.cotacaoId, cot.id),
+      inArray(comprasCotacoesItens.id, itemIds),
+    ));
+
+  const respostas = await db.select({
+    itemId: comprasCotacaoRespostas.itemId,
+    fornecedorId: comprasCotacaoRespostas.fornecedorId,
+    total: comprasCotacaoRespostas.total,
+  }).from(comprasCotacaoRespostas).where(and(
+    eq(comprasCotacaoRespostas.cotacaoId, cot.id),
+    inArray(comprasCotacaoRespostas.itemId, itemIds),
+  ));
+  const respostaMap = new Map(respostas.map((row: any) => [`${row.itemId}:${row.fornecedorId}`, n(row.total)]));
+
+  const fornecedorIds = [...new Set(awards.map((award) => award.fornecedorId))];
+  const participantes = fornecedorIds.length > 0
+    ? await db.select({
+        fornecedorId: comprasCotacaoFornecedores.fornecedorId,
+        freteTipo: comprasCotacaoFornecedores.freteTipo,
+        valorFrete: comprasCotacaoFornecedores.valorFrete,
+      }).from(comprasCotacaoFornecedores).where(and(
+        eq(comprasCotacaoFornecedores.cotacaoId, cot.id),
+        inArray(comprasCotacaoFornecedores.fornecedorId, fornecedorIds),
+      ))
+    : [];
+
+  const scItemIds = linhas.map((line: any) => line.solicitacaoItemId).filter(Boolean) as number[];
+  const orcItemIds = linhas.map((line: any) => line.orcamentoItemId).filter(Boolean) as number[];
+  const insumoCodigos = [...new Set(linhas.map((line: any) => String(line.insumoCodigo ?? "").trim()).filter(Boolean))] as string[];
+  let historyRows: PurchaseHistoryRow[] = [];
+  if (scItemIds.length > 0 || orcItemIds.length > 0 || insumoCodigos.length > 0) {
+    historyRows = await db.select({
+      ocItemId: comprasOrdensItens.id,
+      ocId: comprasOrdens.id,
+      ocNumero: comprasOrdens.numeroOc,
+      ocStatus: comprasOrdens.status,
+      cotacaoId: comprasOrdens.cotacaoId,
+      scId: comprasSolicitacoes.id,
+      scNumero: comprasSolicitacoes.numeroSc,
+      scStatus: comprasSolicitacoes.status,
+      scItemId: comprasSolicitacoesItens.id,
+      orcamentoItemId: comprasSolicitacoesItens.orcamentoItemId,
+      insumoCodigo: comprasSolicitacoesItens.insumoCodigo,
+      quantidade: comprasOrdensItens.quantidade,
+      valor: comprasOrdensItens.total,
+      quantidadeSolicitada: comprasSolicitacoesItens.quantidade,
+      quantidadeAtendida: comprasSolicitacoesItens.quantidadeAtendida,
+      statusItem: comprasSolicitacoesItens.statusItem,
+    })
+      .from(comprasOrdensItens)
+      .innerJoin(comprasOrdens, eq(comprasOrdens.id, comprasOrdensItens.ordemId))
+      .leftJoin(comprasSolicitacoesItens, eq(comprasSolicitacoesItens.id, comprasOrdensItens.solicitacaoItemId))
+      .leftJoin(comprasSolicitacoes, eq(comprasSolicitacoes.id, comprasSolicitacoesItens.solicitacaoId))
+      .where(and(
+        eq(comprasOrdens.companyId, cot.companyId),
+        cot.obraId == null ? isNull(comprasOrdens.obraId) : eq(comprasOrdens.obraId, cot.obraId),
+        or(
+          orcItemIds.length > 0 ? inArray(comprasSolicitacoesItens.orcamentoItemId, orcItemIds) : sql`false`,
+          insumoCodigos.length > 0 ? inArray(comprasSolicitacoesItens.insumoCodigo, insumoCodigos) : sql`false`,
+          scItemIds.length > 0 ? inArray(comprasSolicitacoesItens.id, scItemIds) : sql`false`,
+        ),
+      )) as PurchaseHistoryRow[];
+  }
+  const historyMap = aggregatePurchaseHistory(historyRows, cot.id);
+  const historyWithCurrentQuoteMap = aggregatePurchaseHistory(historyRows);
+  const [scTipo] = cot.solicitacaoId
+    ? await db.select({
+        tipo: comprasSolicitacoes.tipo,
+        incluirEquipamentos: comprasSolicitacoes.incluirEquipamentos,
+      }).from(comprasSolicitacoes).where(and(
+        eq(comprasSolicitacoes.id, cot.solicitacaoId),
+        eq(comprasSolicitacoes.companyId, cot.companyId),
+      )).limit(1)
+    : [];
+  const tipoEfetivo = (
+    cot.tipo === "material" && ["servico", "pacote", "equipamento"].includes(scTipo?.tipo ?? "")
+      ? scTipo?.tipo
+      : cot.tipo
+  ) as "material" | "servico" | "pacote" | "equipamento";
+  const incluirEquipamentos = scTipo?.incluirEquipamentos ?? false;
+  const orcamentoIds = [...new Set(linhas.map((line: any) => line.orcamentoId).filter(Boolean))] as number[];
+  const metaPercentuais = orcamentoIds.length > 0
+    ? await db.select({ id: orcamentos.id, metaPercentual: orcamentos.metaPercentual })
+        .from(orcamentos).where(inArray(orcamentos.id, orcamentoIds))
+    : [];
+  const metaPercentualPorOrcamento = new Map(metaPercentuais.map((row: any) => [row.id, n(row.metaPercentual)]));
+  const isPacote = tipoEfetivo === "pacote";
+  const groups = new Map<string, {
+    meta: number;
+    comprasAnteriores: number;
+    comprometidoNestaCotacao: number;
+    historyKeys: Set<string>;
+  }>();
+  for (const line of linhas as any[]) {
+    const key = isPacote && line.orcamentoItemId
+      ? `pacote-orc:${line.orcamentoItemId}`
+      : purchaseBudgetKey({
+          orcamentoItemId: line.orcamentoItemId,
+          insumoCodigo: line.insumoCodigo,
+          solicitacaoItemId: line.solicitacaoItemId,
+          cotacaoItemId: line.cotacaoItemId,
+        });
+    const coeficiente = n(line.coeficiente);
+    const isInsumoDeComposicao = !!(line.insumoCodigo && coeficiente > 0);
+    const qtdOrcada = line.orcamentoItemId
+      ? n(line.quantidadeOrcada) * (!isPacote && tipoEfetivo !== "equipamento" && isInsumoDeComposicao ? coeficiente : 1)
+      : n(line.quantidadeCotacao);
+    const metaPerc = metaPercentualPorOrcamento.get(line.orcamentoId) ?? 0;
+    const metaTotal = n(line.metaUnitTotal) || n(line.custoUnitTotal) * (1 - metaPerc);
+    const metaMat = n(line.metaUnitMat) || n(line.custoUnitMat) * (1 - metaPerc);
+    const metaMdo = n(line.metaUnitMdo) || n(line.custoUnitMdo) * (1 - metaPerc);
+    const metaEquip = n(line.metaUnitEquip) || n(line.custoUnitEquip) * (1 - metaPerc);
+    const resolvedMeta = resolveFinancialMetaUnit({
+      tipo: tipoEfetivo,
+      incluirEquipamentos,
+      isInsumoDeComposicao,
+      metaFromSC: n(line.precoMeta),
+      metaTotal,
+      metaMat,
+      metaMdo,
+      metaEquip,
+      custoTotal: n(line.custoUnitTotal),
+      incluirAjudante: line.incluirAjudante ?? true,
+      metaMdoProfissional: n(line.metaMdoProfissional),
+      metaMdoAjudante: n(line.metaMdoAjudante),
+    });
+    const metaUnit = isPacote ? metaTotal : resolvedMeta.metaUnitario;
+    const historyKey = purchaseBudgetKey({
+      orcamentoItemId: line.orcamentoItemId,
+      insumoCodigo: line.insumoCodigo,
+      solicitacaoItemId: line.solicitacaoItemId,
+      cotacaoItemId: line.cotacaoItemId,
+    });
+    const previous = historyMap.get(historyKey)?.valor ?? 0;
+    const withCurrentQuote = historyWithCurrentQuoteMap.get(historyKey)?.valor ?? 0;
+    const currentQuoteCommitted = Math.max(0, withCurrentQuote - previous);
+    const existing = groups.get(key);
+    const meta = Math.round(metaUnit * qtdOrcada * 100) / 100;
+    if (existing) {
+      existing.meta = Math.max(existing.meta, meta);
+      if (!existing.historyKeys.has(historyKey)) {
+        existing.comprasAnteriores += previous;
+        existing.comprometidoNestaCotacao += currentQuoteCommitted;
+        existing.historyKeys.add(historyKey);
+      }
+    } else {
+      groups.set(key, {
+        meta,
+        comprasAnteriores: previous,
+        comprometidoNestaCotacao: currentQuoteCommitted,
+        historyKeys: new Set([historyKey]),
+      });
+    }
+  }
+
+  let cotacaoAtual = awards.reduce(
+    (sum, award) => sum + (respostaMap.get(`${award.itemId}:${award.fornecedorId}`) ?? 0),
+    0,
+  );
+  for (const participant of participantes as any[]) {
+    if ((participant.freteTipo ?? "cif") === "fob") cotacaoAtual += n(participant.valorFrete);
+  }
+  cotacaoAtual += [...groups.values()].reduce((sum, group) => sum + group.comprometidoNestaCotacao, 0);
+  const freteJaComprometidoNestaCotacao = (await db.select({
+    frete: comprasOrdens.frete,
+    status: comprasOrdens.status,
+  }).from(comprasOrdens).where(eq(comprasOrdens.cotacaoId, cot.id)))
+    .filter((row: any) => isPurchaseHistoryEligible({
+      ocStatus: row.status,
+      scStatus: null,
+      cotacaoId: null,
+    }))
+    .reduce((sum: number, row: any) => sum + n(row.frete), 0);
+  cotacaoAtual += freteJaComprometidoNestaCotacao;
+  const metaOriginal = [...groups.values()].reduce((sum, group) => sum + group.meta, 0);
+  const comprasAnteriores = [...groups.values()].reduce(
+    (sum, group) => sum + (group.meta > 0 ? group.comprasAnteriores : 0),
+    0,
+  );
+  const calculado = calculateBudgetDeficit({ metaOriginal, comprasAnteriores, cotacaoAtual });
+  const coberturaRegistrada = (await db.select({ valor: comprasRiscoDebitos.valor })
+    .from(comprasRiscoDebitos)
+    .where(eq(comprasRiscoDebitos.cotacaoId, cot.id)))
+    .reduce((sum: number, row: any) => sum + n(row.valor), 0);
+  const deficit = Math.max(0, Math.round((calculado.deficit - coberturaRegistrada) * 100) / 100);
+  return {
+    metaOriginal,
+    comprasAnteriores,
+    cotacaoAtual,
+    saldo: calculado.saldo,
+    deficitBruto: calculado.deficit,
+    coberturaRegistrada,
+    deficit,
+  };
+}
+
+function logComprasPerf(label: string, startedAt: number, details: Record<string, number | string> = {}) {
+  const elapsedMs = Date.now() - startedAt;
+  const suffix = Object.entries(details).map(([key, value]) => `${key}=${value}`).join(" ");
+  console.info(`[ComprasPerf] ${label} ${elapsedMs}ms${suffix ? ` ${suffix}` : ""}`);
+}
+
+function validarPeriodoRecorrenciaOC(
+  recorrente?: boolean,
+  dataInicio?: string | null,
+  dataFim?: string | null,
+  permitirIncompleto = false,
+) {
+  if (!recorrente) return;
+  if (permitirIncompleto && (!dataInicio || !dataFim)) return;
+  if (!dataInicio || !dataFim || !dataIsoReal(dataInicio) || !dataIsoReal(dataFim)) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "Informe as datas inicial e final da recorrência." });
+  }
+  if (dataFim < dataInicio) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "A data final da recorrência não pode ser anterior à data inicial." });
+  }
+  const vencimentos = gerarVencimentosRecorrenciaMensal(dataInicio, dataFim);
+  if (vencimentos.length === 0) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "O período informado não contém nenhum vencimento mensal." });
+  }
+  const [anoInicio, mesInicio] = dataInicio.split("-").map(Number);
+  const [anoFim, mesFim] = dataFim.split("-").map(Number);
+  const mesesCalendario = (anoFim - anoInicio) * 12 + mesFim - mesInicio + 1;
+  if (mesesCalendario > 120) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "O período recorrente pode ter no máximo 120 meses." });
+  }
+}
+
+function validarCompatibilidadeRecorrenciaOC(
+  recorrente: boolean | undefined,
+  modalidadeFd: string | null | undefined,
+  formaPagamento: string | null | undefined,
+) {
+  if (!recorrente) return;
+  if (modalidadeFd && modalidadeFd !== "normal") {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "Lançamento recorrente não pode ser usado com Faturamento Direto." });
+  }
+  if (formaPagamento === "cartao" || formaPagamento === "cartao_credito") {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "Lançamento recorrente não pode ser usado com Cartão de Crédito." });
+  }
+}
 
 // Rev. 1607 — Classificador IA do tipo de controle do item de almoxarifado.
 // Decide se o item é de "estoque" (controle normal de saldo) ou "aplicacao_direta"
@@ -320,9 +727,38 @@ export async function criarItemAlmoxarifadoComCodigo(
   db: any,
   companyId: number,
   values: Record<string, any>,
+  options: { rejeitarEquivalente?: boolean } = {},
 ): Promise<any> {
   return await db.transaction(async (tx: any) => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(${companyId}::int, 1010::int)`);
+    if (options.rejeitarEquivalente) {
+      const { materiaisEquivalentes } = await import("../utils/recebimentoAlmox");
+      const destinoObra = values.obraId ?? null;
+      const candidatos = await tx
+        .select({
+          id: almoxarifadoItens.id,
+          nome: almoxarifadoItens.nome,
+          unidade: almoxarifadoItens.unidade,
+          ativo: almoxarifadoItens.ativo,
+        })
+        .from(almoxarifadoItens)
+        .where(and(
+          eq(almoxarifadoItens.companyId, companyId),
+          destinoObra == null
+            ? isNull(almoxarifadoItens.obraId)
+            : eq(almoxarifadoItens.obraId, Number(destinoObra)),
+          isNull(almoxarifadoItens.equipamentoVinculadoTipo),
+        ));
+      const equivalente = candidatos.find((item: any) =>
+        materiaisEquivalentes(item.nome, item.unidade, values.nome, values.unidade)
+      );
+      if (equivalente) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: `Já existe o item "${equivalente.nome}" neste destino (cadastro #${equivalente.id}${equivalente.ativo ? "" : ", inativo"}). Escolha “Item já cadastrado” em vez de criar outro.`,
+        });
+      }
+    }
     let codigoInterno = values.codigoInterno;
     if (!codigoInterno) {
       const maxRow: any = await tx.execute(sql`
@@ -969,7 +1405,19 @@ async function _registrarLogReserva(opts: {
  *  - Usuário com vínculos em `user_companies` → enforça membership real.
  *  - Usuário SEM nenhum vínculo (controle por grupo/módulo) → libera.
  */
-async function _assertCompanyAccess(ctxUser: any, companyId: number) {
+// Rev. 5012 — valida data ISO estrita (YYYY-MM-DD e data de calendário real).
+// "" → "" (limpa a coluna); inválida → BAD_REQUEST (evita datas impossíveis
+// que passariam no regex e fariam o contrato cair silenciosamente no cronograma).
+function _validarDataISO(v: string | undefined | null): string {
+  const s = String(v ?? "").trim();
+  if (!s) return "";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) throw new TRPCError({ code: "BAD_REQUEST", message: `Data inválida: ${s}` });
+  const d = new Date(`${s}T12:00:00Z`);
+  if (isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== s) throw new TRPCError({ code: "BAD_REQUEST", message: `Data inválida: ${s}` });
+  return s;
+}
+
+export async function _assertCompanyAccess(ctxUser: any, companyId: number) {
   if (!ctxUser?.id) throw new TRPCError({ code: "UNAUTHORIZED", message: "Sessão inválida." });
   if (ctxUser.role === "admin" || ctxUser.role === "admin_master") return;
   const links = await getUserCompanyLinks(ctxUser.id);
@@ -977,6 +1425,14 @@ async function _assertCompanyAccess(ctxUser: any, companyId: number) {
   if (allowedIds.length === 0) return;
   if (!allowedIds.includes(companyId)) {
     throw new TRPCError({ code: "FORBIDDEN", message: `Sem acesso a esta empresa. (user=${ctxUser.id} role=${ctxUser.role} req=${companyId})` });
+  }
+}
+
+async function _assertObraReadAccess(ctxUser: any, obraId: number | null | undefined) {
+  const allowed = await getEffectiveAllowedObraIds(ctxUser.id, ctxUser.role);
+  if (allowed === null) return;
+  if (obraId == null || !allowed.includes(Number(obraId))) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta obra." });
   }
 }
 
@@ -1020,6 +1476,9 @@ async function _criarOuAtualizarReserva(opts: {
       valorDi08Reservado:     String(opts.valorDi08.toFixed(2)),
       valorEconomiaReservada: String(opts.valorEconomia.toFixed(2)),
       ordemId:                opts.ordemId ?? existing.ordemId ?? null,
+      // Rev. 5137 — motivo acompanha o valor atualizado (auditoria: reserva de R$ 23,8M
+      // ficou com motivo "R$ 1,00" porque só o INSERT gravava o motivo)
+      motivo:                 opts.motivo ?? existing.motivo ?? null,
       atualizadoEm:           new Date().toISOString(),
     } as any).where(eq(comprasReservasSaldo.id, existing.id));
     await _registrarLogReserva({
@@ -1843,6 +2302,11 @@ export const comprasRouter = router({
       if (cicloFormaPagamento !== undefined) cicloPayload.cicloFormaPagamento = cicloFormaPagamento;
       if (cicloDataReferencia !== undefined) cicloPayload.cicloDataReferencia = cicloDataReferencia;
       if (regrasProdutoJson !== undefined) cicloPayload.regrasProdutoJson = regrasProdutoJson;
+      // Rev. 4997 — sync dados bancários → empresas_terceiras (contrato de terceiros lê de lá)
+      if (rest.banco !== undefined) cicloPayload.banco = rest.banco;
+      if (rest.agencia !== undefined) cicloPayload.agencia = rest.agencia;
+      if (rest.conta !== undefined) cicloPayload.conta = rest.conta;
+      if (rest.pix !== undefined) cicloPayload.pixChave = rest.pix;
       if (Object.keys(cicloPayload).length > 0) {
         const [existsTerceira] = await db
           .select({ id: empresasTerceiras.id })
@@ -2255,6 +2719,7 @@ export const comprasRouter = router({
 
       const conditions: any[] = [
         eq(almoxarifadoItens.companyId, input.companyId),
+        isNull(almoxarifadoItens.equipamentoVinculadoTipo),
         // Rev. 4522 — "Itens Zerados": inclui ativo=false (obras), filtra qty<=0.
         // Modo padrão: só ativo=true.
         ...(input.somenteZerados
@@ -2309,12 +2774,12 @@ export const comprasRouter = router({
     .input(z.object({
       companyId:             z.number(),
       obraId:                z.number().nullable().optional(),
-      nome:                  z.string().min(1),
-      unidade:               z.string().default("un"),
-      categoria:             z.string().nullable().optional(),
+      nome:                  z.string().trim().min(1).max(200),
+      unidade:               z.string().trim().min(1, "Unidade é obrigatória").max(20).default("un"),
+      categoria:             z.string().trim().min(1, "Categoria é obrigatória").max(80).nullable().optional(),
       codigoInterno:         z.string().nullable().optional(),
-      quantidadeAtual:       z.number().optional(),
-      quantidadeMinima:      z.number().optional(),
+      quantidadeAtual:       z.number().int().nonnegative().optional(),
+      quantidadeMinima:      z.number().int().nonnegative().optional(),
       observacoes:           z.string().nullable().optional(),
       // Rev. 4011 — Especificação técnica separada do nome.
       especificacao:         z.string().nullable().optional(),
@@ -2494,7 +2959,7 @@ export const comprasRouter = router({
       unidade:               z.string().optional(),
       categoria:             z.string().optional(),
       codigoInterno:         z.string().optional(),
-      quantidadeMinima:      z.number().optional(),
+      quantidadeMinima:      z.number().int().nonnegative().optional(),
       observacoes:           z.string().optional(),
       // Rev. 4011 — Especificação técnica separada do nome.
       especificacao:         z.string().nullable().optional(),
@@ -2507,7 +2972,7 @@ export const comprasRouter = router({
       valorLocacaoMensal:    z.number().nullable().optional(),
       diasAlertaLocacao:     z.number().nullable().optional(),
       observacoesLocacao:    z.string().nullable().optional(),
-      quantidadeAtual:       z.number().nullable().optional(),
+      quantidadeAtual:       z.number().int().nonnegative().nullable().optional(),
       // Rev. 2388 — Auditoria obrigatória SE quantidadeAtual está mudando vs DB.
       // Rev. 2400 — `justificativa` agora é opcional; validação min10 aplicada
       // condicionalmente conforme `companies.almoxarifado_exige_justificativa`.
@@ -3092,6 +3557,7 @@ export const comprasRouter = router({
       const conds: any[] = [
         eq(almoxarifadoItens.companyId, input.companyId),
         eq(almoxarifadoItens.ativo, true),
+        isNull(almoxarifadoItens.equipamentoVinculadoTipo),
       ];
       // Rev. 4539 — VISIBILIDADE GLOBAL (leitura): consolidado sem filtro de
       // obras permitidas — quem tem acesso ao módulo vê tudo da empresa.
@@ -3589,7 +4055,7 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       companyId:   z.number(),
       itemId:      z.number(),
       tipo:        z.enum(["entrada", "saida", "ajuste"]),
-      quantidade:  z.number().positive(),
+      quantidade:  z.number().int().positive(),
       obraId:      z.number().optional(),
       obraNome:    z.string().optional(),
       motivo:      z.string().optional(),
@@ -4497,7 +4963,7 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       itens: z.array(z.object({
         descricao: z.string(),
         unidade: z.string().optional(),
-        quantidade: z.number(),
+        quantidade: z.number().int().positive(),
         observacoes: z.string().optional(),
         orcamentoItemId: z.number().optional(),
         eapCodigo: z.string().optional(),
@@ -4677,7 +5143,7 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
             const [cotAuto] = await tx.insert(comprasCotacoes).values({
               companyId: input.companyId,
               numeroCotacao,
-              descricao: normalizarTexto(input.titulo) ?? numeroSc,
+              descricao: tituloMaiusculo(input.titulo) ?? numeroSc,
               prioridade: input.prioridade ?? "normal",
               tipo: tipoSC,
               obraId: input.obraId ?? null,
@@ -4921,7 +5387,7 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
               const [cotRow] = await tx.insert(comprasCotacoes).values({
                 companyId: sc.companyId,
                 numeroCotacao: numeroCotacaoTx,
-                descricao: sc.titulo || sc.departamento || "Cotação automática",
+                descricao: tituloMaiusculo(sc.titulo || sc.departamento || "Cotação automática"),
                 prioridade: sc.prioridade ?? "normal",
                 obraId: sc.obraId ?? null,
                 solicitacaoId: sc.id,
@@ -5141,73 +5607,478 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
   // ══════════════════════════════════════════════════════════════
 
   listarCotacoes: protectedProcedure
-    .input(z.object({ companyId: z.number(), status: z.string().optional(), solicitacaoId: z.number().optional() }))
+    .input(z.object({
+      companyId: z.number(),
+      status: z.string().optional(),
+      solicitacaoId: z.number().optional(),
+      search: z.string().max(200).optional(),
+      obraId: z.number().optional(),
+      tipo: z.enum(["material", "servico", "pacote", "equipamento"]).optional(),
+      dataInicio: z.string().optional(),
+      dataFim: z.string().optional(),
+      page: z.number().int().min(1).default(1),
+      pageSize: z.number().int().min(10).max(100).default(50),
+      sortKey: z.enum(["criadoEm", "numeroCotacao", "descricao", "obra", "fornecedor", "total", "validade", "status"]).default("criadoEm"),
+      sortDir: z.enum(["asc", "desc"]).default("desc"),
+    }))
     .query(async ({ input, ctx }) => {
-      await _assertCompanyAccess(ctx.user, input.companyId);
+      const startedAt = Date.now();
+      const timings: Record<string, number> = {};
+      const tAuth = Date.now();
+      const [, allowedObras] = await Promise.all([
+        _assertCompanyAccess(ctx.user, input.companyId),
+        getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role),
+      ]);
+      timings.authorizationMs = Date.now() - tAuth;
       const db = await getDb();
-      const rows = await db.select().from(comprasCotacoes)
-        .where(and(
-          eq(comprasCotacoes.companyId, input.companyId),
-          input.status ? eq(comprasCotacoes.status, input.status) : undefined,
-          input.solicitacaoId ? eq(comprasCotacoes.solicitacaoId, input.solicitacaoId) : undefined,
-        ))
-        .orderBy(desc(comprasCotacoes.criadoEm));
-      const scIds = [...new Set(rows.map(r => r.solicitacaoId).filter(Boolean))] as number[];
-      let scMap: Record<number, { titulo: string; tipo: string; numeroSc: string | null }> = {};
-      if (scIds.length > 0) {
-        const scs = await db.select({ id: comprasSolicitacoes.id, titulo: comprasSolicitacoes.titulo, tipo: comprasSolicitacoes.tipo, numeroSc: comprasSolicitacoes.numeroSc }).from(comprasSolicitacoes).where(inArray(comprasSolicitacoes.id, scIds));
-        for (const sc of scs) scMap[sc.id] = { titulo: sc.titulo, tipo: sc.tipo, numeroSc: sc.numeroSc };
-      }
+      const effectiveDescription = sql<string>`coalesce(${comprasSolicitacoes.titulo}, ${comprasCotacoes.descricao})`;
+      const effectiveType = sql<string>`case
+        when ${comprasSolicitacoes.tipo} in ('servico', 'pacote') and ${comprasCotacoes.tipo} = 'material'
+          then case when ${comprasSolicitacoes.tipo} = 'pacote' then 'servico' else ${comprasSolicitacoes.tipo} end
+        else coalesce(${comprasCotacoes.tipo}, 'material')
+      end`;
+      const entregaPendenteExpr = sql<boolean>`exists (
+        select 1 from compras_ordens co
+        where co.company_id = ${input.companyId}
+          and co.cotacao_id = ${comprasCotacoes.id}
+          and lower(coalesce(co.status, '')) not in ('cancelada', 'rascunho', 'entregue', 'entregue_parcial', 'concluida', 'recebido')
+          and co.data_entrega_real is null
+      )`;
 
-      // Rev. 2826 — Status de ENTREGA por cotação (read-only) para o filtro "A entregar"
-      // (OC gerada mas ainda não entregue). Cruza as OCs não-canceladas vinculadas a cada
-      // cotação; "entregue" = status em (entregue/entregue_parcial/concluida/recebido) OU
-      // dataEntregaReal preenchida. "atrasada" = pendente + dataEntregaPrevista < hoje.
-      const cotIds = rows.map(r => r.id);
-      const ocByCot: Record<number, { temOc: boolean; entregaPendente: boolean; entregaAtrasada: boolean }> = {};
-      if (cotIds.length > 0) {
-        const ocs = await db.select({
-          cotacaoId: comprasOrdens.cotacaoId,
-          status: comprasOrdens.status,
-          dataEntregaPrevista: comprasOrdens.dataEntregaPrevista,
-          dataEntregaReal: comprasOrdens.dataEntregaReal,
-        }).from(comprasOrdens).where(and(
-          eq(comprasOrdens.companyId, input.companyId),
-          inArray(comprasOrdens.cotacaoId, cotIds),
+      const sharedConditions: any[] = [eq(comprasCotacoes.companyId, input.companyId)];
+      if (allowedObras !== null) {
+        if (input.obraId != null && !allowedObras.includes(input.obraId)) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta obra." });
+        }
+        sharedConditions.push(
+          allowedObras.length > 0
+            ? inArray(comprasCotacoes.obraId, allowedObras)
+            : sql`false`,
+        );
+      }
+      if (input.solicitacaoId) sharedConditions.push(eq(comprasCotacoes.solicitacaoId, input.solicitacaoId));
+      if (input.obraId) sharedConditions.push(eq(comprasCotacoes.obraId, input.obraId));
+      if (input.dataInicio) sharedConditions.push(gte(comprasCotacoes.criadoEm, `${input.dataInicio}T00:00:00`));
+      if (input.dataFim) sharedConditions.push(lte(comprasCotacoes.criadoEm, `${input.dataFim}T23:59:59.999`));
+      const search = input.search?.trim();
+      if (search) {
+        const escaped = search.replace(/[\\%_]/g, "\\$&");
+        sharedConditions.push(or(
+          ilike(comprasCotacoes.numeroCotacao, `%${escaped}%`),
+          ilike(effectiveDescription, `%${escaped}%`),
+          ilike(comprasSolicitacoes.numeroSc, `%${escaped}%`),
         ));
-        const hoje = new Date().toISOString().slice(0, 10);
-        const ENTREGUE = new Set(["entregue", "entregue_parcial", "concluida", "recebido"]);
-        // Alinhado ao resto do módulo: rascunho/cancelada NÃO contam como OC ativa.
-        for (const o of ocs) {
-          if (o.cotacaoId == null || o.status === "cancelada" || o.status === "rascunho") continue;
-          const cur = ocByCot[o.cotacaoId] ?? { temOc: false, entregaPendente: false, entregaAtrasada: false };
-          cur.temOc = true;
-          const entregue = ENTREGUE.has(String(o.status)) || !!o.dataEntregaReal;
-          if (!entregue) {
-            cur.entregaPendente = true;
-            if (o.dataEntregaPrevista && o.dataEntregaPrevista < hoje) cur.entregaAtrasada = true;
-          }
-          ocByCot[o.cotacaoId] = cur;
-        }
       }
 
-      return rows.map(r => {
-        const sc = r.solicitacaoId ? scMap[r.solicitacaoId] : null;
-        let tipo = r.tipo;
-        if (sc && sc.tipo && (sc.tipo === "servico" || sc.tipo === "pacote") && tipo === "material") {
-          tipo = sc.tipo === "pacote" ? "servico" : sc.tipo;
-        }
-        const oc = ocByCot[r.id];
-        return {
-          ...r,
-          descricao: sc?.titulo || r.descricao,
-          numeroSc: sc?.numeroSc ?? null,
-          tipo,
-          temOc: !!oc?.temOc,
-          entregaPendente: !!oc?.entregaPendente,
-          entregaAtrasada: !!oc?.entregaAtrasada,
-        };
+      const statusCondition = input.status === "a_entregar"
+        ? entregaPendenteExpr
+        : input.status
+          ? eq(comprasCotacoes.status, input.status)
+          : undefined;
+      const typeCondition = input.tipo ? sql`${effectiveType} = ${input.tipo}` : undefined;
+      const pageConditions = [
+        ...sharedConditions,
+        ...(statusCondition ? [statusCondition] : []),
+        ...(typeCondition ? [typeCondition] : []),
+      ];
+
+      const sortExpr = input.sortKey === "criadoEm" ? comprasCotacoes.criadoEm
+        : input.sortKey === "descricao" ? effectiveDescription
+        : input.sortKey === "obra" ? sql<string>`coalesce(${obras.nome}, '')`
+        : input.sortKey === "fornecedor" ? sql<string>`coalesce(${fornecedores.nomeFantasia}, ${fornecedores.razaoSocial}, '')`
+        : input.sortKey === "total" ? comprasCotacoes.total
+        : input.sortKey === "validade" ? comprasCotacoes.dataValidade
+        : input.sortKey === "status" ? comprasCotacoes.status
+        : comprasCotacoes.numeroCotacao;
+      const ordered = input.sortDir === "asc"
+        ? sql`${sortExpr} asc nulls last`
+        : sql`${sortExpr} desc nulls last`;
+      const numeroYear = sql<number>`case
+        when ${comprasCotacoes.numeroCotacao} ~ '^COT-[0-9]{4}-[0-9]+$'
+          then split_part(${comprasCotacoes.numeroCotacao}, '-', 2)::int
+        else null
+      end`;
+      const numeroSeq = sql<number>`case
+        when ${comprasCotacoes.numeroCotacao} ~ '^COT-[0-9]{4}-[0-9]+$'
+          then split_part(${comprasCotacoes.numeroCotacao}, '-', 3)::bigint
+        else null
+      end`;
+      const numeroYearOrder = input.sortDir === "asc"
+        ? sql`${numeroYear} asc nulls last`
+        : sql`${numeroYear} desc nulls last`;
+      const numeroSeqOrder = input.sortDir === "asc"
+        ? sql`${numeroSeq} asc nulls last`
+        : sql`${numeroSeq} desc nulls last`;
+      const numeroFallbackOrder = input.sortDir === "asc"
+        ? sql`${comprasCotacoes.numeroCotacao} asc nulls last`
+        : sql`${comprasCotacoes.numeroCotacao} desc nulls last`;
+      const orderExpressions = input.sortKey === "numeroCotacao"
+        ? [numeroYearOrder, numeroSeqOrder, numeroFallbackOrder, desc(comprasCotacoes.id)]
+        : [ordered, desc(comprasCotacoes.id)];
+      const offset = (input.page - 1) * input.pageSize;
+
+      // Rev. 5200 (task #195) — caminho crítico da 1ª página só devolve as linhas
+      // visíveis. Totais globais, contagens por status/tipo/a-entregar e o
+      // enriquecimento (melhor preço × meta) saíram daqui: agora ficam em
+      // compras.resumoCotacoes e compras.enriquecerCotacoesLista, chamados
+      // depois que a tabela já pintou. Buscamos pageSize+1 para saber hasMore
+      // sem rodar um count(*) no caminho quente.
+      const tPage = Date.now();
+      const rawRows = await db.select({
+        id: comprasCotacoes.id,
+        numeroCotacao: comprasCotacoes.numeroCotacao,
+        solicitacaoId: comprasCotacoes.solicitacaoId,
+        obraId: comprasCotacoes.obraId,
+        fornecedorId: comprasCotacoes.fornecedorId,
+        descricao: effectiveDescription,
+        numeroSc: comprasSolicitacoes.numeroSc,
+        obraNome: obras.nome,
+        fornecedorNome: sql<string>`coalesce(${fornecedores.nomeFantasia}, ${fornecedores.razaoSocial}, '')`,
+        dataValidade: comprasCotacoes.dataValidade,
+        status: comprasCotacoes.status,
+        total: comprasCotacoes.total,
+        tipo: effectiveType,
+        modalidadeFd: comprasCotacoes.modalidadeFd,
+        fdPagador: comprasCotacoes.fdPagador,
+        criadoEm: comprasCotacoes.criadoEm,
+      }).from(comprasCotacoes)
+        .leftJoin(comprasSolicitacoes, eq(comprasSolicitacoes.id, comprasCotacoes.solicitacaoId))
+        .leftJoin(obras, eq(obras.id, comprasCotacoes.obraId))
+        .leftJoin(fornecedores, eq(fornecedores.id, comprasCotacoes.fornecedorId))
+        .where(and(...pageConditions))
+        .orderBy(...orderExpressions)
+        .limit(input.pageSize + 1)
+        .offset(offset);
+      timings.pageMs = Date.now() - tPage;
+
+      const hasMore = rawRows.length > input.pageSize;
+      const items = hasMore ? rawRows.slice(0, input.pageSize) : rawRows;
+
+      const serverMs = Date.now() - startedAt;
+      logCotacoesSlow("page", serverMs, timings, {
+        filtersHash: hashCotacoesFiltros(input),
+        rows: items.length,
+        page: input.page,
       });
+      return {
+        items,
+        page: input.page,
+        pageSize: input.pageSize,
+        hasMore,
+        serverMs,
+        timings,
+      };
+    }),
+
+  // Rev. 5200 (task #195) — Resumo/contagens globais da lista de Cotações.
+  // Mesmos filtros e autorização de listarCotacoes; devolve o total exato e as
+  // contagens por status/tipo/a-entregar. Roda FORA do caminho crítico da 1ª
+  // página (o front chama depois que a tabela já apareceu).
+  resumoCotacoes: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      status: z.string().optional(),
+      solicitacaoId: z.number().optional(),
+      search: z.string().max(200).optional(),
+      obraId: z.number().optional(),
+      tipo: z.enum(["material", "servico", "pacote", "equipamento"]).optional(),
+      dataInicio: z.string().optional(),
+      dataFim: z.string().optional(),
+    }))
+    .query(async ({ input, ctx }) => {
+      const startedAt = Date.now();
+      const timings: Record<string, number> = {};
+      const tAuth = Date.now();
+      const [, allowedObras] = await Promise.all([
+        _assertCompanyAccess(ctx.user, input.companyId),
+        getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role),
+      ]);
+      timings.authorizationMs = Date.now() - tAuth;
+      const db = await getDb();
+      const effectiveDescription = sql<string>`coalesce(${comprasSolicitacoes.titulo}, ${comprasCotacoes.descricao})`;
+      const effectiveType = sql<string>`case
+        when ${comprasSolicitacoes.tipo} in ('servico', 'pacote') and ${comprasCotacoes.tipo} = 'material'
+          then case when ${comprasSolicitacoes.tipo} = 'pacote' then 'servico' else ${comprasSolicitacoes.tipo} end
+        else coalesce(${comprasCotacoes.tipo}, 'material')
+      end`;
+      const entregaPendenteExpr = sql<boolean>`exists (
+        select 1 from compras_ordens co
+        where co.company_id = ${input.companyId}
+          and co.cotacao_id = ${comprasCotacoes.id}
+          and lower(coalesce(co.status, '')) not in ('cancelada', 'rascunho', 'entregue', 'entregue_parcial', 'concluida', 'recebido')
+          and co.data_entrega_real is null
+      )`;
+
+      const sharedConditions: any[] = [eq(comprasCotacoes.companyId, input.companyId)];
+      if (allowedObras !== null) {
+        if (input.obraId != null && !allowedObras.includes(input.obraId)) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta obra." });
+        }
+        sharedConditions.push(
+          allowedObras.length > 0
+            ? inArray(comprasCotacoes.obraId, allowedObras)
+            : sql`false`,
+        );
+      }
+      if (input.solicitacaoId) sharedConditions.push(eq(comprasCotacoes.solicitacaoId, input.solicitacaoId));
+      if (input.obraId) sharedConditions.push(eq(comprasCotacoes.obraId, input.obraId));
+      if (input.dataInicio) sharedConditions.push(gte(comprasCotacoes.criadoEm, `${input.dataInicio}T00:00:00`));
+      if (input.dataFim) sharedConditions.push(lte(comprasCotacoes.criadoEm, `${input.dataFim}T23:59:59.999`));
+      const search = input.search?.trim();
+      if (search) {
+        const escaped = search.replace(/[\\%_]/g, "\\$&");
+        sharedConditions.push(or(
+          ilike(comprasCotacoes.numeroCotacao, `%${escaped}%`),
+          ilike(effectiveDescription, `%${escaped}%`),
+          ilike(comprasSolicitacoes.numeroSc, `%${escaped}%`),
+        ));
+      }
+
+      const statusCondition = input.status === "a_entregar"
+        ? entregaPendenteExpr
+        : input.status
+          ? eq(comprasCotacoes.status, input.status)
+          : undefined;
+      const typeCondition = input.tipo ? sql`${effectiveType} = ${input.tipo}` : undefined;
+      const pageConditions = [
+        ...sharedConditions,
+        ...(statusCondition ? [statusCondition] : []),
+        ...(typeCondition ? [typeCondition] : []),
+      ];
+      // Universo para as contagens de badge: status ignora o filtro de status
+      // (mostra todos os status possíveis dentro do resto do recorte) e vice-versa.
+      const statusUniverseConditions = [
+        ...sharedConditions,
+        ...(typeCondition ? [typeCondition] : []),
+      ];
+      const typeUniverseConditions = [
+        ...sharedConditions,
+        ...(statusCondition ? [statusCondition] : []),
+      ];
+
+      const tSummary = Date.now();
+      const totalPromise = db.select({ total: sql<number>`count(*)::int` })
+        .from(comprasCotacoes)
+        .leftJoin(comprasSolicitacoes, eq(comprasSolicitacoes.id, comprasCotacoes.solicitacaoId))
+        .where(and(...pageConditions));
+      const statusCountsPromise = db.select({
+        status: comprasCotacoes.status,
+        total: sql<number>`count(*)::int`,
+      }).from(comprasCotacoes)
+        .leftJoin(comprasSolicitacoes, eq(comprasSolicitacoes.id, comprasCotacoes.solicitacaoId))
+        .where(and(...statusUniverseConditions))
+        .groupBy(comprasCotacoes.status);
+      const typeCountsPromise = db.select({
+        tipo: effectiveType,
+        total: sql<number>`count(*)::int`,
+      }).from(comprasCotacoes)
+        .leftJoin(comprasSolicitacoes, eq(comprasSolicitacoes.id, comprasCotacoes.solicitacaoId))
+        .where(and(...typeUniverseConditions))
+        .groupBy(effectiveType);
+      const aEntregarPromise = db.select({ total: sql<number>`count(*)::int` })
+        .from(comprasCotacoes)
+        .leftJoin(comprasSolicitacoes, eq(comprasSolicitacoes.id, comprasCotacoes.solicitacaoId))
+        .where(and(...statusUniverseConditions, entregaPendenteExpr));
+
+      const [totalRows, statusCountRows, typeCountRows, aEntregarRows] = await Promise.all([
+        totalPromise,
+        statusCountsPromise,
+        typeCountsPromise,
+        aEntregarPromise,
+      ]);
+      timings.summaryMs = Date.now() - tSummary;
+      const total = Number(totalRows[0]?.total ?? 0);
+
+      const countsPorStatus: Record<string, number> = {};
+      for (const row of statusCountRows) countsPorStatus[String(row.status ?? "pendente")] = Number(row.total ?? 0);
+      const countsPorTipo: Record<string, number> = {};
+      for (const row of typeCountRows) countsPorTipo[String(row.tipo ?? "material")] = Number(row.total ?? 0);
+
+      const serverMs = Date.now() - startedAt;
+      logCotacoesSlow("summary", serverMs, timings, {
+        filtersHash: hashCotacoesFiltros(input),
+        total,
+      });
+      return {
+        total,
+        counts: {
+          porStatus: countsPorStatus,
+          aEntregar: Number(aEntregarRows[0]?.total ?? 0),
+          todosStatus: statusCountRows.reduce((sum, row) => sum + Number(row.total ?? 0), 0),
+          porTipo: countsPorTipo,
+          todosTipo: typeCountRows.reduce((sum, row) => sum + Number(row.total ?? 0), 0),
+        },
+        serverMs,
+        timings,
+      };
+    }),
+
+  // Rev. 5200 (task #195) — Enriquecimento (melhor preço × meta) só das linhas
+  // visíveis. Recebe os IDs da página atual (cap 100), mas NUNCA confia neles:
+  // reintersecta com os IDs que o usuário realmente pode ver (mesma regra de
+  // company + obras permitidas de listarCotacoes) antes de ler fornecedores/itens.
+  enriquecerCotacoesLista: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      cotacaoIds: z.array(z.number().int()).max(100),
+    }))
+    .query(async ({ input, ctx }) => {
+      const startedAt = Date.now();
+      const timings: Record<string, number> = {};
+      const tAuth = Date.now();
+      const [, allowedObras] = await Promise.all([
+        _assertCompanyAccess(ctx.user, input.companyId),
+        getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role),
+      ]);
+      timings.authorizationMs = Date.now() - tAuth;
+      const db = await getDb();
+
+      const uniqueIds = Array.from(new Set(input.cotacaoIds.filter(id => Number.isInteger(id) && id > 0)));
+      if (uniqueIds.length === 0) {
+        return { items: {} as Record<number, { metaTotal: number; melhorPreco: number }>, serverMs: Date.now() - startedAt, timings };
+      }
+
+      // Deriva no servidor quais dos IDs pedidos o usuário pode enxergar:
+      // company própria + (quando restrito) obras permitidas. IDs de fora do
+      // recorte são simplesmente ignorados — nunca vazam melhor preço/meta.
+      const idConditions: any[] = [
+        eq(comprasCotacoes.companyId, input.companyId),
+        inArray(comprasCotacoes.id, uniqueIds),
+      ];
+      if (allowedObras !== null) {
+        idConditions.push(
+          allowedObras.length > 0
+            ? inArray(comprasCotacoes.obraId, allowedObras)
+            : sql`false`,
+        );
+      }
+      const tAllowed = Date.now();
+      const permittedRows = await db.select({
+        id: comprasCotacoes.id,
+        tipo: sql<string>`case
+          when ${comprasSolicitacoes.tipo} in ('servico', 'pacote') and ${comprasCotacoes.tipo} = 'material'
+            then case when ${comprasSolicitacoes.tipo} = 'pacote' then 'servico' else ${comprasSolicitacoes.tipo} end
+          else coalesce(${comprasCotacoes.tipo}, 'material')
+        end`,
+      }).from(comprasCotacoes)
+        .leftJoin(comprasSolicitacoes, eq(comprasSolicitacoes.id, comprasCotacoes.solicitacaoId))
+        .where(and(...idConditions));
+      timings.permittedIdsMs = Date.now() - tAllowed;
+
+      const permittedIds = permittedRows.map(r => r.id);
+      const melhorPreco: Record<number, number> = {};
+      const metaTotal: Record<number, number> = {};
+      if (permittedIds.length === 0) {
+        return { items: {} as Record<number, { metaTotal: number; melhorPreco: number }>, serverMs: Date.now() - startedAt, timings };
+      }
+      const cotTipo: Record<number, string> = {};
+      for (const r of permittedRows) cotTipo[r.id] = String(r.tipo ?? "material");
+
+      const tEnrich = Date.now();
+      const [forns, itens] = await Promise.all([
+        db.select({
+          cotacaoId: comprasCotacaoFornecedores.cotacaoId,
+          totalOrcado: comprasCotacaoFornecedores.totalOrcado,
+        }).from(comprasCotacaoFornecedores)
+          .where(inArray(comprasCotacaoFornecedores.cotacaoId, permittedIds)),
+        db.select({
+          cotacaoId: comprasCotacoesItens.cotacaoId,
+          quantidade: comprasCotacoesItens.quantidade,
+          solicitacaoItemId: comprasCotacoesItens.solicitacaoItemId,
+          pausado: comprasCotacoesItens.pausado,
+          precoMeta: comprasSolicitacoesItens.precoMeta,
+          orcamentoItemId: comprasSolicitacoesItens.orcamentoItemId,
+          metaUnitTotal: orcamentoItens.metaUnitTotal,
+          metaUnitMat: orcamentoItens.metaUnitMat,
+          metaUnitMdo: orcamentoItens.metaUnitMdo,
+          metaUnitEquip: orcamentoItens.metaUnitEquip,
+          unidadeOrcamento: orcamentoItens.unidade,
+        }).from(comprasCotacoesItens)
+          .leftJoin(comprasSolicitacoesItens, eq(comprasSolicitacoesItens.id, comprasCotacoesItens.solicitacaoItemId))
+          .leftJoin(orcamentoItens, eq(orcamentoItens.id, comprasSolicitacoesItens.orcamentoItemId))
+          .where(inArray(comprasCotacoesItens.cotacaoId, permittedIds)),
+      ]);
+      timings.enrichmentMs = Date.now() - tEnrich;
+
+      // Rev. 5100 — Meta × Melhor preço na lista (análise diária de cotações).
+      // melhorPreco = menor totalOrcado (>0) entre os fornecedores participantes.
+      // metaTotal = Σ qtd_item × meta unitária (prioridade: precoMeta da SC →
+      // metaUnitTotal do orçamento, pulando verba agregada/compartilhada — mesma
+      // regra do comparativo de OCs). Sem varredura de composição (perf da lista).
+      for (const f of forns) {
+        const t = n(f.totalOrcado);
+        if (t > 0 && (melhorPreco[f.cotacaoId] === undefined || t < melhorPreco[f.cotacaoId])) melhorPreco[f.cotacaoId] = t;
+      }
+
+      const scItemMeta: Record<number, { precoMeta: number; orcId: number | null }> = {};
+      const orcCount: Record<number, number> = {};
+      const orcMeta: Record<number, { total: number; mat: number; mdo: number; equip: number; unidade: string }> = {};
+      for (const item of itens) {
+        if (!item.solicitacaoItemId || scItemMeta[item.solicitacaoItemId]) continue;
+        scItemMeta[item.solicitacaoItemId] = {
+          precoMeta: n(item.precoMeta),
+          orcId: item.orcamentoItemId ?? null,
+        };
+        if (item.orcamentoItemId) {
+          orcCount[item.orcamentoItemId] = (orcCount[item.orcamentoItemId] ?? 0) + 1;
+          orcMeta[item.orcamentoItemId] = {
+            total: n(item.metaUnitTotal),
+            mat: n(item.metaUnitMat),
+            mdo: n(item.metaUnitMdo),
+            equip: n(item.metaUnitEquip),
+            unidade: String(item.unidadeOrcamento ?? "").toLowerCase().trim(),
+          };
+        }
+      }
+      // Rev. 5101 — a meta respeita o TIPO da cotação (mesma regra do mapa):
+      // MDO só compara com meta de mão de obra, material só com meta de material.
+      const UNID_AGREGADA = new Set(["vb", "verba", "gl", "global", "cj", "conjunto", "und. global"]);
+      const metaPorCot: Record<number, number> = {};
+      for (const it of itens) {
+        if (it.pausado) continue;
+        const sm = it.solicitacaoItemId ? scItemMeta[it.solicitacaoItemId] : undefined;
+        if (!sm) continue;
+        const tipo = cotTipo[it.cotacaoId] ?? "material";
+        const om = sm.orcId ? orcMeta[sm.orcId] : undefined;
+        // Guards obrigatórios: item de VERBA (vb/gl/cj) tem metaUnit = verba INTEIRA — multiplicar
+        // pela qtd de peças infla milhões; orçamento-item compartilhado por várias SCs duplica a verba.
+        const guardOk = !!om && !UNID_AGREGADA.has(om.unidade) && (orcCount[sm.orcId!] ?? 0) <= 1;
+        let metaUnit = 0;
+        if (guardOk && om) {
+          // fatia por tipo (espelha getMapa): servico→MDO, equipamento→EQUIP, pacote→TOTAL, material→MAT
+          if (tipo === "servico") metaUnit = om.mdo;
+          else if (tipo === "equipamento") metaUnit = om.equip > 0 ? om.equip : 0;
+          else if (tipo === "pacote") metaUnit = om.total > 0 ? om.total : om.mat + om.mdo + om.equip;
+          else metaUnit = om.mat > 0 ? om.mat : (om.mdo > 0 || om.equip > 0 ? 0 : om.total);
+        }
+        // precoMeta da SC só como fallback e só para material/pacote (em MDO ele
+        // costuma ser o preço cheio do serviço, o que misturava material na meta).
+        if (metaUnit <= 0 && sm.precoMeta > 0 && (tipo === "material" || tipo === "pacote")) metaUnit = sm.precoMeta;
+        if (metaUnit <= 0) continue;
+        metaPorCot[it.cotacaoId] = (metaPorCot[it.cotacaoId] ?? 0) + metaUnit * n(it.quantidade);
+      }
+      for (const id of permittedIds) {
+        metaTotal[id] = Math.round((metaPorCot[id] ?? 0) * 100) / 100;
+        if (melhorPreco[id] === undefined) melhorPreco[id] = 0;
+      }
+
+      // Resposta chaveada por id de cotação: { [id]: { metaTotal, melhorPreco } }.
+      // O front mescla direto na linha (…c, …e) — mesmos campos que a lista antiga
+      // já trazia (metaTotal/melhorPreco), agora só das linhas visíveis autorizadas.
+      const itemsOut: Record<number, { metaTotal: number; melhorPreco: number }> = {};
+      for (const id of permittedIds) {
+        itemsOut[id] = {
+          metaTotal: metaTotal[id] ?? 0,
+          melhorPreco: melhorPreco[id] ?? 0,
+        };
+      }
+
+      const serverMs = Date.now() - startedAt;
+      logCotacoesSlow("enrichment", serverMs, timings, {
+        requestedIds: uniqueIds.length,
+        permittedIds: permittedIds.length,
+      });
+      return { items: itemsOut, serverMs, timings };
     }),
 
   getCotacao: protectedProcedure
@@ -5216,48 +6087,33 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       const db = await getDb();
       const [cot] = await db.select().from(comprasCotacoes).where(eq(comprasCotacoes.id, input.id));
       if (!cot) throw new TRPCError({ code: "NOT_FOUND" });
-      await _assertCompanyAccess(ctx.user, cot.companyId);
-      const itens = await db.select().from(comprasCotacoesItens).where(eq(comprasCotacoesItens.cotacaoId, input.id));
-
-      // Rev. 4013 — tipo de contrato da obra, para exibir a seleção de
-      // regime de custo (cliente/empresa-sem-risco/empresa-com-risco) só
-      // quando fizer sentido (obras "Fornecimento de MDO").
-      let obraTipoContrato: string | null = null;
-      if (cot.obraId) {
-        const [ob] = await db.select({ tipoContrato: obras.tipoContrato }).from(obras).where(eq(obras.id, cot.obraId));
-        obraTipoContrato = ob?.tipoContrato ?? null;
-      }
-
-      // Rastreabilidade: SC vinculada
-      let scInfo: { numeroSc: string | null; criadoPorNome: string | null; aprovadorNome: string | null; aprovadoEm: string | null } | null = null;
-      if (cot.solicitacaoId) {
-        const [sc] = await db.select({
+      await Promise.all([
+        _assertCompanyAccess(ctx.user, cot.companyId),
+        _assertObraReadAccess(ctx.user, cot.obraId),
+      ]);
+      // Rev. 5145 — leituras independentes do detalhe básico em paralelo.
+      // O Mapa/histórico permanece em getMapaCotacao e só é chamado na aba Mapa.
+      const [itens, obraRows, scRows, ordensVinculadas, fornecedorRows, respostas] = await Promise.all([
+        db.select().from(comprasCotacoesItens).where(eq(comprasCotacoesItens.cotacaoId, input.id)),
+        cot.obraId
+          ? db.select({ tipoContrato: obras.tipoContrato }).from(obras).where(eq(obras.id, cot.obraId))
+          : Promise.resolve([]),
+        cot.solicitacaoId
+          ? db.select({
           numeroSc: comprasSolicitacoes.numeroSc,
           criadoPorNome: comprasSolicitacoes.criadoPorNome,
           aprovadorNome: comprasSolicitacoes.aprovadorNome,
           aprovadorId: comprasSolicitacoes.aprovadorId,
           aprovadoEm: comprasSolicitacoes.aprovadoEm,
-        }).from(comprasSolicitacoes).where(eq(comprasSolicitacoes.id, cot.solicitacaoId));
-        if (sc) {
-          let aprovNome = sc.aprovadorNome;
-          if (!aprovNome && sc.aprovadorId) {
-            const [u] = await db.select({ nome: users.name }).from(users).where(eq(users.id, sc.aprovadorId));
-            aprovNome = u?.nome ?? null;
-          }
-          scInfo = { numeroSc: sc.numeroSc, criadoPorNome: sc.criadoPorNome, aprovadorNome: aprovNome, aprovadoEm: sc.aprovadoEm };
-        }
-      }
-
-      // Rev. 4017 — Item 8: rastreio inverso — OCs geradas a partir desta cotação
-      const ordensVinculadas = await db.select({
-        id: comprasOrdens.id,
-        numeroOc: comprasOrdens.numeroOc,
-        status: comprasOrdens.status,
-      }).from(comprasOrdens).where(eq(comprasOrdens.cotacaoId, input.id));
-
-      let fornecedorContato: { contatoNome: string | null; telefone: string | null; contatoCelular: string | null; contatoEmail: string | null; email: string | null; nomeFantasia: string | null; razaoSocial: string | null } | null = null;
-      if (cot.fornecedorId) {
-        const [f] = await db.select({
+          }).from(comprasSolicitacoes).where(eq(comprasSolicitacoes.id, cot.solicitacaoId))
+          : Promise.resolve([]),
+        db.select({
+          id: comprasOrdens.id,
+          numeroOc: comprasOrdens.numeroOc,
+          status: comprasOrdens.status,
+        }).from(comprasOrdens).where(eq(comprasOrdens.cotacaoId, input.id)),
+        cot.fornecedorId
+          ? db.select({
           contatoNome: fornecedores.contatoNome,
           telefone: fornecedores.telefone,
           contatoCelular: fornecedores.contatoCelular,
@@ -5265,36 +6121,44 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
           email: fornecedores.email,
           nomeFantasia: fornecedores.nomeFantasia,
           razaoSocial: fornecedores.razaoSocial,
-        }).from(fornecedores).where(eq(fornecedores.id, cot.fornecedorId));
-        fornecedorContato = f ?? null;
-      }
-
-      // Se há um fornecedor vencedor selecionado, enriquecer os itens com preços reais do Mapa
-      if (cot.fornecedorId) {
-        const respostas = await db.select().from(comprasCotacaoRespostas).where(
-          and(
+          }).from(fornecedores).where(eq(fornecedores.id, cot.fornecedorId))
+          : Promise.resolve([]),
+        cot.fornecedorId
+          ? db.select().from(comprasCotacaoRespostas).where(and(
             eq(comprasCotacaoRespostas.cotacaoId, input.id),
             eq(comprasCotacaoRespostas.fornecedorId, cot.fornecedorId),
-          )
-        );
-        if (respostas.length > 0) {
-          const respostaByItemId = new Map(respostas.map(r => [r.itemId, r]));
-          const itensEnriquecidos = itens.map(it => {
+          ))
+          : Promise.resolve([]),
+      ]);
+
+      const obraTipoContrato = obraRows[0]?.tipoContrato ?? null;
+      const fornecedorContato = fornecedorRows[0] ?? null;
+      const sc = scRows[0];
+      let scInfo: { numeroSc: string | null; criadoPorNome: string | null; aprovadorNome: string | null; aprovadoEm: string | null } | null = null;
+      if (sc) {
+        let aprovNome = sc.aprovadorNome;
+        if (!aprovNome && sc.aprovadorId) {
+          const [u] = await db.select({ nome: users.name }).from(users).where(eq(users.id, sc.aprovadorId));
+          aprovNome = u?.nome ?? null;
+        }
+        scInfo = { numeroSc: sc.numeroSc, criadoPorNome: sc.criadoPorNome, aprovadorNome: aprovNome, aprovadoEm: sc.aprovadoEm };
+      }
+
+      const respostaByItemId = new Map(respostas.map(r => [r.itemId, r]));
+      const itensEnriquecidos = respostas.length > 0
+        ? itens.map(it => {
             const r = respostaByItemId.get(it.id);
             if (!r) return it;
             return {
               ...it,
               precoUnitario: r.precoUnitario ?? it.precoUnitario,
-              descontoPct:   r.descontoPct   ?? it.descontoPct,
-              quantidade:    r.quantidade    ?? it.quantidade,
-              total:         r.total         ?? it.total,
+              descontoPct: r.descontoPct ?? it.descontoPct,
+              quantidade: r.quantidade ?? it.quantidade,
+              total: r.total ?? it.total,
             };
-          });
-          return { ...cot, itens: itensEnriquecidos, fornecedorContato, scInfo, obraTipoContrato, ordensVinculadas };
-        }
-      }
-
-      return { ...cot, itens, fornecedorContato, scInfo, obraTipoContrato, ordensVinculadas };
+          })
+        : itens;
+      return { ...cot, itens: itensEnriquecidos, fornecedorContato, scInfo, obraTipoContrato, ordensVinculadas };
     }),
 
   criarCotacao: protectedProcedure
@@ -5318,7 +6182,7 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         solicitacaoItemId: z.number().nullable().optional(),
         descricao: z.string(),
         unidade: z.string().optional(),
-        quantidade: z.number(),
+        quantidade: z.number().int().positive(),
         precoUnitario: z.number(),
         descontoPct: z.number().optional(),
         somenteMo: z.boolean().optional(),
@@ -5421,7 +6285,7 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         const [cotRow] = await tx.insert(comprasCotacoes).values({
           companyId: input.companyId,
           numeroCotacao,
-          descricao: normalizarTexto(input.descricao),
+          descricao: tituloMaiusculo(input.descricao),
           prioridade: input.prioridade ?? "normal",
           tipo: tipoFinal,
           obraId: input.obraId ?? null,
@@ -5474,7 +6338,7 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       // cotação (default = quantidade total do item, mantendo compat com o
       // comportamento antigo de "mover item inteiro"). `itemIds` legado ainda
       // é aceito (equivale a mover 100% da quantidade de cada item).
-      itens: z.array(z.object({ id: z.number(), quantidade: z.number().positive() })).min(1).optional(),
+      itens: z.array(z.object({ id: z.number(), quantidade: z.number().int().positive() })).min(1).optional(),
       itemIds: z.array(z.number()).min(1).optional(),
       descricao: z.string().optional(),
       userId: z.number().optional(),
@@ -5554,7 +6418,7 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
           companyId: cot.companyId,
           numeroCotacao,
           divididaDeId: cot.id,
-          descricao: normalizarTexto(input.descricao) ?? cot.descricao,
+          descricao: tituloMaiusculo(input.descricao) ?? cot.descricao,
           prioridade: cot.prioridade ?? "normal",
           tipo: cot.tipo ?? "material",
           obraId: cot.obraId ?? null,
@@ -5663,6 +6527,8 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
               valorFrete: f.valorFrete ?? "0",
               transportadora: f.transportadora,
               moduloMedicao: f.moduloMedicao,
+              mobilizacaoDataInicio: (f as any).mobilizacaoDataInicio ?? null,
+              duracaoContratoDias: (f as any).duracaoContratoDias ?? null,
               isEstoque: f.isEstoque ?? false,
               almoxarifadoOrigemId: f.almoxarifadoOrigemId,
             })) as any
@@ -5832,7 +6698,7 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         const [nova] = await tx.insert(comprasCotacoes).values({
           companyId: sc.companyId,
           numeroCotacao,
-          descricao: sc.titulo || sc.numeroSc,
+          descricao: tituloMaiusculo(sc.titulo || sc.numeroSc),
           prioridade: sc.prioridade ?? "normal",
           tipo: (sc.tipo as string) ?? "material",
           obraId: sc.obraId ?? null,
@@ -6033,37 +6899,103 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       const db = await getDb();
       const [cot] = await db.select().from(comprasCotacoes).where(eq(comprasCotacoes.id, input.cotacaoId));
       if (!cot) throw new TRPCError({ code: "NOT_FOUND" });
-      await _assertCompanyAccess(ctx.user, cot.companyId);
-      const itens = await db.select().from(comprasCotacoesItens).where(eq(comprasCotacoesItens.cotacaoId, input.cotacaoId));
-      const participantes = await db.select().from(comprasCotacaoFornecedores).where(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId));
-      const respostas = await db.select().from(comprasCotacaoRespostas).where(eq(comprasCotacaoRespostas.cotacaoId, input.cotacaoId));
+      await Promise.all([
+        _assertCompanyAccess(ctx.user, cot.companyId),
+        _assertObraReadAccess(ctx.user, cot.obraId),
+      ]);
+      const [itens, participantes, respostas] = await Promise.all([
+        db.select().from(comprasCotacoesItens).where(eq(comprasCotacoesItens.cotacaoId, input.cotacaoId)),
+        db.select().from(comprasCotacaoFornecedores).where(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId)),
+        db.select().from(comprasCotacaoRespostas).where(eq(comprasCotacaoRespostas.cotacaoId, input.cotacaoId)),
+      ]);
       const fornIds = participantes.map(p => p.fornecedorId);
-      const forns = fornIds.length > 0 ? await db.select().from(fornecedores).where(inArray(fornecedores.id, fornIds)) : [];
 
       // Buscar metaUnitario via SC item → orcamento item → orcamento.metaPercentual
       // Calcula ao vivo: custoUnitTotal × (1 − metaPercentual), igual ao EAP faz
       const scItemIds = itens.map(i => i.solicitacaoItemId).filter(Boolean) as number[];
-      let scItens: any[] = [];
-      if (scItemIds.length > 0) {
-        scItens = await db.select({
-          id: comprasSolicitacoesItens.id,
-          orcamentoItemId: comprasSolicitacoesItens.orcamentoItemId,
-          eapCodigo: comprasSolicitacoesItens.eapCodigo,
-          insumoCodigo: comprasSolicitacoesItens.insumoCodigo,
-          composicaoCodigo: comprasSolicitacoesItens.composicaoCodigo,
-          origemEap: comprasSolicitacoesItens.origemEap,
-          solicitacaoId: comprasSolicitacoesItens.solicitacaoId,
-          precoMeta: comprasSolicitacoesItens.precoMeta,
-          coeficiente: comprasSolicitacoesItens.coeficiente,
-          semVerba: comprasSolicitacoesItens.semVerba,
-          motivoSemVerba: comprasSolicitacoesItens.motivoSemVerba,
-          incluirAjudante: comprasSolicitacoesItens.incluirAjudante,
-          metaMdoProfissional: comprasSolicitacoesItens.metaMdoProfissional,
-          metaMdoAjudante: comprasSolicitacoesItens.metaMdoAjudante,
-          somenteMo: comprasSolicitacoesItens.somenteMo,
-        }).from(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.id, scItemIds));
-      }
+      const [forns, scItens, companyRows] = await Promise.all([
+        fornIds.length > 0
+          ? db.select().from(fornecedores).where(inArray(fornecedores.id, fornIds))
+          : Promise.resolve([]),
+        scItemIds.length > 0
+          ? db.select({
+              id: comprasSolicitacoesItens.id,
+              orcamentoItemId: comprasSolicitacoesItens.orcamentoItemId,
+              eapCodigo: comprasSolicitacoesItens.eapCodigo,
+              insumoCodigo: comprasSolicitacoesItens.insumoCodigo,
+              composicaoCodigo: comprasSolicitacoesItens.composicaoCodigo,
+              origemEap: comprasSolicitacoesItens.origemEap,
+              solicitacaoId: comprasSolicitacoesItens.solicitacaoId,
+              precoMeta: comprasSolicitacoesItens.precoMeta,
+              coeficiente: comprasSolicitacoesItens.coeficiente,
+              semVerba: comprasSolicitacoesItens.semVerba,
+              motivoSemVerba: comprasSolicitacoesItens.motivoSemVerba,
+              incluirAjudante: comprasSolicitacoesItens.incluirAjudante,
+              metaMdoProfissional: comprasSolicitacoesItens.metaMdoProfissional,
+              metaMdoAjudante: comprasSolicitacoesItens.metaMdoAjudante,
+              somenteMo: comprasSolicitacoesItens.somenteMo,
+            }).from(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.id, scItemIds))
+          : Promise.resolve([]),
+        db.select({
+          nomeFantasia: companies.nomeFantasia,
+          razaoSocial: companies.razaoSocial,
+        }).from(companies).where(eq(companies.id, cot.companyId)).limit(1),
+      ]);
+      const fornecedorInternoNome = companyRows[0]?.nomeFantasia || companyRows[0]?.razaoSocial || "Empresa";
       const orcItemIds = scItens.map(s => s.orcamentoItemId).filter(Boolean) as number[];
+      const insumoCodigosCotacao = [...new Set(
+        scItens.map(s => String(s.insumoCodigo ?? "").trim()).filter(Boolean),
+      )];
+
+      // Compras anteriores comprometem a meta original. A própria cotação é
+      // excluída para a OC recém-gerada não ser contada junto com sua proposta.
+      // O valor do item da OC é autoritativo (não recompomos preço × quantidade).
+      let historicoComprasMap = new Map<string, ReturnType<typeof aggregatePurchaseHistory> extends Map<string, infer T> ? T : never>();
+      if (orcItemIds.length > 0 || insumoCodigosCotacao.length > 0 || scItemIds.length > 0) {
+        const historicoRows = await db.select({
+          ocItemId: comprasOrdensItens.id,
+          ocId: comprasOrdens.id,
+          ocNumero: comprasOrdens.numeroOc,
+          ocStatus: comprasOrdens.status,
+          cotacaoId: comprasOrdens.cotacaoId,
+          scId: comprasSolicitacoes.id,
+          scNumero: comprasSolicitacoes.numeroSc,
+          scStatus: comprasSolicitacoes.status,
+          scItemId: comprasSolicitacoesItens.id,
+          orcamentoItemId: comprasSolicitacoesItens.orcamentoItemId,
+          insumoCodigo: comprasSolicitacoesItens.insumoCodigo,
+          quantidade: comprasOrdensItens.quantidade,
+          valor: comprasOrdensItens.total,
+          quantidadeSolicitada: comprasSolicitacoesItens.quantidade,
+          quantidadeAtendida: comprasSolicitacoesItens.quantidadeAtendida,
+          statusItem: comprasSolicitacoesItens.statusItem,
+        })
+          .from(comprasOrdensItens)
+          .innerJoin(comprasOrdens, eq(comprasOrdens.id, comprasOrdensItens.ordemId))
+          .leftJoin(comprasSolicitacoesItens, eq(comprasSolicitacoesItens.id, comprasOrdensItens.solicitacaoItemId))
+          .leftJoin(comprasSolicitacoes, eq(comprasSolicitacoes.id, comprasSolicitacoesItens.solicitacaoId))
+          .where(and(
+            eq(comprasOrdens.companyId, cot.companyId),
+            cot.obraId == null
+              ? isNull(comprasOrdens.obraId)
+              : eq(comprasOrdens.obraId, cot.obraId),
+            sql`lower(coalesce(${comprasOrdens.status}, '')) not in ('cancelada', 'cancelado', 'recusada', 'recusado')`,
+            sql`${comprasOrdens.cotacaoId} is distinct from ${input.cotacaoId}`,
+            sql`lower(coalesce(${comprasSolicitacoes.status}, '')) not in ('cancelada', 'cancelado', 'recusada', 'recusado')`,
+            or(
+              orcItemIds.length > 0
+                ? inArray(comprasSolicitacoesItens.orcamentoItemId, orcItemIds)
+                : sql`false`,
+              insumoCodigosCotacao.length > 0
+                ? inArray(comprasSolicitacoesItens.insumoCodigo, insumoCodigosCotacao)
+                : sql`false`,
+              scItemIds.length > 0
+                ? inArray(comprasSolicitacoesItens.id, scItemIds)
+                : sql`false`,
+            ),
+          ));
+        historicoComprasMap = aggregatePurchaseHistory(historicoRows as PurchaseHistoryRow[], input.cotacaoId);
+      }
       let orcItensData: any[] = [];
       if (orcItemIds.length > 0) {
         orcItensData = await db.select({
@@ -6385,7 +7317,6 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       }
 
       const tipoEfetivo = tipoEfetivoEarly;
-      const isCotacaoMdo = isCotacaoMdoEarly;
       const itensComMeta = itens.map(it => {
         const orcId = it.solicitacaoItemId ? scItemToOrcItem[it.solicitacaoItemId] : undefined;
         const trace = it.solicitacaoItemId ? scItemToTraceability[it.solicitacaoItemId] : undefined;
@@ -6394,75 +7325,28 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         const isInsumoDeComposicao = !!(insCode && coef > 0);
         const metaFromSC = it.solicitacaoItemId ? (scItemToPrecoMeta[it.solicitacaoItemId] ?? 0) : 0;
 
-        let metaUnitarioTotal: number;
-        let metaUnitarioMat: number;
-        let metaUnitarioMdo: number;
-        let metaUnitarioEquip: number;
-
-        if (isInsumoDeComposicao && tipoEfetivo === 'equipamento' && orcId) {
-          const metaFromOrcEquip = orcItemToMetaEquip[orcId] ?? 0;
-          metaUnitarioMat = 0;
-          metaUnitarioMdo = 0;
-          metaUnitarioEquip = metaFromOrcEquip;
-          metaUnitarioTotal = metaFromOrcEquip;
-        } else if (isInsumoDeComposicao && metaFromSC > 0 && orcId) {
-          const custoTotalComp = orcItemToCustoTotal[orcId] ?? 0;
-          const metaTotalComp = orcItemToMeta[orcId] ?? 0;
-          const effectiveMetaRate = custoTotalComp > 0 ? (1 - metaTotalComp / custoTotalComp) : 0;
-          const puComMeta = effectiveMetaRate > 0
-            ? Math.round(metaFromSC * (1 - effectiveMetaRate) * 100) / 100
-            : Math.round(metaFromSC * 100) / 100;
-
-          if (tipoEfetivo === 'servico') {
-            metaUnitarioMat = 0;
-            metaUnitarioMdo = puComMeta;
-            metaUnitarioEquip = 0;
-          } else {
-            metaUnitarioMat = puComMeta;
-            metaUnitarioMdo = 0;
-            metaUnitarioEquip = 0;
-          }
-          metaUnitarioTotal = puComMeta;
-        } else {
-          const metaFromOrcTotal = orcId ? (orcItemToMeta[orcId] ?? 0) : 0;
-          const metaFromOrcMat = orcId ? (orcItemToMetaMat[orcId] ?? 0) : 0;
-          const metaFromOrcMdo = orcId ? (orcItemToMetaMdo[orcId] ?? 0) : 0;
-          const metaFromOrcEquip = orcId ? (orcItemToMetaEquip[orcId] ?? 0) : 0;
-          metaUnitarioTotal = metaFromOrcTotal > 0 ? metaFromOrcTotal : metaFromSC;
-          metaUnitarioMat = metaFromOrcMat;
-          metaUnitarioMdo = metaFromOrcMdo;
-          metaUnitarioEquip = metaFromOrcEquip;
-        }
-
         const incluirAjud = it.solicitacaoItemId ? (scItemToIncluirAjudante[it.solicitacaoItemId] ?? true) : true;
         const metaMdoProf = it.solicitacaoItemId ? (scItemToMetaMdoProf[it.solicitacaoItemId] ?? 0) : 0;
         const metaMdoAjud = it.solicitacaoItemId ? (scItemToMetaMdoAjud[it.solicitacaoItemId] ?? 0) : 0;
-
-        let metaUnitario: number;
-        if (isInsumoDeComposicao && tipoEfetivo === 'equipamento' && orcId) {
-          metaUnitario = metaUnitarioEquip;
-        } else if (isInsumoDeComposicao && metaFromSC > 0 && orcId) {
-          metaUnitario = metaUnitarioTotal;
-        } else if (tipoEfetivo === 'pacote') {
-          if (!incluirEquipamentosMapa && metaUnitarioEquip > 0) {
-            metaUnitario = metaUnitarioTotal > 0 ? (metaUnitarioTotal - metaUnitarioEquip) : (metaUnitarioMat + metaUnitarioMdo);
-          } else {
-            metaUnitario = metaUnitarioTotal > 0 ? metaUnitarioTotal : (metaUnitarioMat + metaUnitarioMdo + metaUnitarioEquip);
-          }
-        } else if (tipoEfetivo === 'equipamento' && metaUnitarioEquip > 0) {
-          metaUnitario = metaUnitarioEquip;
-        } else if (tipoEfetivo === 'servico' && metaUnitarioMdo > 0) {
-          if (!incluirAjud && metaMdoProf > 0) {
-            const totalMdoCusto = metaMdoProf + metaMdoAjud;
-            metaUnitario = totalMdoCusto > 0 ? metaUnitarioMdo * (metaMdoProf / totalMdoCusto) : metaUnitarioMdo;
-          } else {
-            metaUnitario = metaUnitarioMdo;
-          }
-        } else if (!isCotacaoMdo && tipoEfetivo !== 'equipamento' && metaUnitarioMat > 0) {
-          metaUnitario = metaUnitarioMat;
-        } else {
-          metaUnitario = metaUnitarioTotal;
-        }
+        const resolvedMeta = resolveFinancialMetaUnit({
+          tipo: tipoEfetivo,
+          incluirEquipamentos: incluirEquipamentosMapa,
+          isInsumoDeComposicao: isInsumoDeComposicao && !!orcId,
+          metaFromSC,
+          metaTotal: orcId ? (orcItemToMeta[orcId] ?? metaFromSC) : metaFromSC,
+          metaMat: orcId ? (orcItemToMetaMat[orcId] ?? 0) : 0,
+          metaMdo: orcId ? (orcItemToMetaMdo[orcId] ?? 0) : 0,
+          metaEquip: orcId ? (orcItemToMetaEquip[orcId] ?? 0) : 0,
+          custoTotal: orcId ? (orcItemToCustoTotal[orcId] ?? 0) : 0,
+          incluirAjudante: incluirAjud,
+          metaMdoProfissional: metaMdoProf,
+          metaMdoAjudante: metaMdoAjud,
+        });
+        const metaUnitario = resolvedMeta.metaUnitario;
+        const metaUnitarioTotal = resolvedMeta.metaTotal;
+        const metaUnitarioMat = resolvedMeta.metaMat;
+        const metaUnitarioMdo = resolvedMeta.metaMdo;
+        const metaUnitarioEquip = resolvedMeta.metaEquip;
 
         const eapPath = orcId ? (orcItemToPath[orcId] ?? "") : "";
         const scNumero = trace?.solicitacaoId ? (scMap[trace.solicitacaoId] ?? "") : "";
@@ -6516,14 +7400,30 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         // Rev. 2956 — item vinculado a uma linha de orçamento (orcId) NUNCA é "avulso";
         // sanitiza flag estagnado motivoSemVerba='avulso' (read-only).
         const avulsoStaleCot = (it as any).motivoSemVerba === "avulso" && orcId != null;
-        return { ...it, metaUnitario, metaUnitarioTotal, metaUnitarioMat, metaUnitarioMdo, metaUnitarioEquip, metaQtd, eapPath, parentEapDescricao, parentEapCodigo, scNumero, eapCodigo: trace?.eapCodigo ?? "", origemEap: trace?.origemEap ?? false, insumoCodigo: insCode, qtdOrcada, qtdTotalSolicitada, qtdComprada, qtdEstaSC, qtdSaldo, fonteVinculo, semVerba: avulsoStaleCot ? false : ((it as any).semVerba ?? false), motivoSemVerba: avulsoStaleCot ? null : ((it as any).motivoSemVerba ?? null), incluirAjudante: incluirAjud, metaMdoProfissional: metaMdoProf, metaMdoAjudante: metaMdoAjud, composicaoInsumos: composicaoInsumosList, composicaoCodigo: compCode, composicaoDescricao: compInfo?.descricao ?? "", composicaoUnidade: compInfo?.unidade ?? "", composicaoQtdOrcada: compInfo?.qtdOrcada ?? 0, composicaoMetaTotal: compInfo?.metaTotal ?? 0, composicaoEapCodigo: compInfo?.eapCodigo ?? "" };
+        const chaveFinanceira = purchaseBudgetKey({
+          orcamentoItemId: orcId,
+          insumoCodigo: insCode,
+          solicitacaoItemId: it.solicitacaoItemId,
+          cotacaoItemId: it.id,
+        });
+        const historicoCompras = historicoComprasMap.get(chaveFinanceira);
+        const metaFinanceiraTotal = vinculado
+          ? Math.round(metaUnitario * qtdOrcada * 100) / 100
+          : Math.round(metaUnitario * qtdEstaSC * 100) / 100;
+        const compraStatus = !historicoCompras || historicoCompras.quantidade <= 0
+          ? "sem_compra"
+          : (qtdOrcada > 0 && historicoCompras.quantidade >= qtdOrcada - Math.max(qtdOrcada * 0.001, 0.01)
+            ? "total"
+            : "parcial");
+        return { ...it, metaUnitario, metaUnitarioTotal, metaUnitarioMat, metaUnitarioMdo, metaUnitarioEquip, metaQtd, metaFinanceiraTotal, chaveFinanceira, valorComprometidoAnterior: historicoCompras?.valor ?? 0, quantidadeCompradaAnterior: historicoCompras?.quantidade ?? 0, comprasAnteriores: historicoCompras?.referencias ?? [], compraStatus, eapPath, parentEapDescricao, parentEapCodigo, scNumero, eapCodigo: trace?.eapCodigo ?? "", origemEap: trace?.origemEap ?? false, insumoCodigo: insCode, qtdOrcada, qtdTotalSolicitada, qtdComprada, qtdEstaSC, qtdSaldo, fonteVinculo, semVerba: avulsoStaleCot ? false : ((it as any).semVerba ?? false), motivoSemVerba: avulsoStaleCot ? null : ((it as any).motivoSemVerba ?? null), incluirAjudante: incluirAjud, metaMdoProfissional: metaMdoProf, metaMdoAjudante: metaMdoAjud, composicaoInsumos: composicaoInsumosList, composicaoCodigo: compCode, composicaoDescricao: compInfo?.descricao ?? "", composicaoUnidade: compInfo?.unidade ?? "", composicaoQtdOrcada: compInfo?.qtdOrcada ?? 0, composicaoMetaTotal: compInfo?.metaTotal ?? 0, composicaoEapCodigo: compInfo?.eapCodigo ?? "" };
       });
 
-      const respostaMap: Record<string, { precoUnitario: string; descontoPct: string; total: string; quantidade: string; totalMat: string | null; totalMdo: string | null }> = {};
+      const respostaMap: Record<string, { precoUnitario: string; descontoPct: string; total: string; quantidade: string; totalMat: string | null; totalMdo: string | null; almoxarifadoItemId: number | null }> = {};
       for (const r of respostas) respostaMap[`${r.itemId}_${r.fornecedorId}`] = {
         precoUnitario: r.precoUnitario ?? "0", descontoPct: r.descontoPct ?? "0", total: r.total ?? "0",
         quantidade: r.quantidade ?? "0",
         totalMat: (r as any).totalMat ?? null, totalMdo: (r as any).totalMdo ?? null,
+        almoxarifadoItemId: (r as any).almoxarifadoItemId ?? null,
       };
       // Rev. 4285 — acumular em centavos inteiros para evitar drift de ponto flutuante
       // ao somar N itens (comportamento idêntico ao salvarRespostasLote).
@@ -6542,7 +7442,10 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       try {
         const ocsAtivas = await db.select({ id: comprasOrdens.id })
           .from(comprasOrdens)
-          .where(and(eq(comprasOrdens.cotacaoId, input.cotacaoId), sql`${comprasOrdens.status} != 'cancelada'`));
+          .where(and(
+            eq(comprasOrdens.cotacaoId, input.cotacaoId),
+            sql`lower(coalesce(${comprasOrdens.status}, '')) not in ('cancelada', 'cancelado', 'recusada', 'recusado', 'rejeitada', 'rejeitado', 'devolvida', 'devolvido', 'estornada', 'estornado')`,
+          ));
         if (ocsAtivas.length > 0) {
           const ocItensAtivos = await db.select({ cotacaoItemId: comprasOrdensItens.cotacaoItemId })
             .from(comprasOrdensItens)
@@ -6556,7 +7459,7 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         }
       } catch (_) { /* coluna ainda não existe — retorna lista vazia */ }
 
-      return { cotacao: cot, tipoEfetivo, incluirEquipamentos: incluirEquipamentosMapa, itens: itensComMeta, participantes: participantes.map(p => ({ ...p, fornecedor: forns.find(f => f.id === p.fornecedorId) })), respostaMap, totaisPorFornecedor, itensJaEmOC };
+      return { cotacao: cot, tipoEfetivo, incluirEquipamentos: incluirEquipamentosMapa, itens: itensComMeta, participantes: participantes.map(p => ({ ...p, fornecedor: forns.find(f => f.id === p.fornecedorId), fornecedorInternoNome: p.isEstoque ? fornecedorInternoNome : null })), respostaMap, totaisPorFornecedor, itensJaEmOC };
     }),
 
   // Rev. 4245 — Editar, excluir e incluir itens diretamente na cotação
@@ -6576,7 +7479,10 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       if (!cot) throw new TRPCError({ code: "NOT_FOUND" });
       await _assertCompanyAccess(ctx.user, cot.companyId);
       if (cot.status === "aprovada") throw new TRPCError({ code: "BAD_REQUEST", message: "Cotação aprovada não pode ser editada." });
-      const qtd = parseFloat(input.quantidade.replace(",", ".")) || 1;
+      const qtd = Number(input.quantidade.replace(",", "."));
+      if (!Number.isInteger(qtd) || qtd <= 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "A quantidade deve ser um número inteiro maior que zero." });
+      }
       await db.update(comprasCotacoesItens).set({
         descricao: input.descricao.trim(),
         unidade: input.unidade?.trim() || "un",
@@ -6707,7 +7613,10 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       if (!cot) throw new TRPCError({ code: "NOT_FOUND" });
       await _assertCompanyAccess(ctx.user, cot.companyId);
       if (cot.status === "aprovada") throw new TRPCError({ code: "BAD_REQUEST", message: "Cotação aprovada não pode ser editada." });
-      const qtd = parseFloat(input.quantidade.replace(",", ".")) || 1;
+      const qtd = Number(input.quantidade.replace(",", "."));
+      if (!Number.isInteger(qtd) || qtd <= 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "A quantidade deve ser um número inteiro maior que zero." });
+      }
       const descricao = input.descricao.trim();
       const unidade = input.unidade?.trim() || "un";
       const tag = `Adicionado na Cot. ${cot.numeroCotacao ?? `#${input.cotacaoId}`} por ${ctx.user.name ?? "usuário"}`;
@@ -6753,6 +7662,7 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         companyId: comprasCotacoes.companyId,
         obraId: comprasCotacoes.obraId,
         solicitacaoId: comprasCotacoes.solicitacaoId,
+        tipo: comprasCotacoes.tipo,
       }).from(comprasCotacoes).where(eq(comprasCotacoes.id, input.cotacaoId));
       if (!cot) throw new TRPCError({ code: "NOT_FOUND" });
       await _assertCompanyAccess(ctx.user, cot.companyId);
@@ -6773,6 +7683,9 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         unidade: orcamentoItens.unidade,
         quantidade: orcamentoItens.quantidade,
         metaUnitTotal: orcamentoItens.metaUnitTotal,
+        metaUnitMat: orcamentoItens.metaUnitMat,
+        metaUnitMdo: orcamentoItens.metaUnitMdo,
+        metaUnitEquip: orcamentoItens.metaUnitEquip,
         servicoCodigo: orcamentoItens.servicoCodigo,
       }).from(orcamentoItens)
         .where(and(
@@ -6793,7 +7706,76 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
           .where(inArray(comprasSolicitacoesItens.id, scItemIds));
         scItens.forEach(s => { if (s.orcamentoItemId) jaEmCotacaoOrcIds.add(s.orcamentoItemId); });
       }
-      return itens.map(it => ({ ...it, jaEmCotacao: jaEmCotacaoOrcIds.has(it.id) }));
+      // Rev. 5071 — fase de compra por item do orçamento (poka-yoke visual no picker):
+      // contratado (cotação aprovada) > cotacao (em cotação pendente) > solicitacao (só na SC) > livre.
+      const fases: Record<number, { fase: string; scId: number | null; scNumero: string | null; cotId: number | null; cotNumero: string | null }> = {};
+      const allItemIds = itens.map((i: any) => i.id);
+      if (allItemIds.length > 0) {
+        const scRows = await db.select({
+          scItemId: comprasSolicitacoesItens.id,
+          orcamentoItemId: comprasSolicitacoesItens.orcamentoItemId,
+          scId: comprasSolicitacoes.id,
+          scNumero: comprasSolicitacoes.numeroSc,
+        }).from(comprasSolicitacoesItens)
+          .innerJoin(comprasSolicitacoes, eq(comprasSolicitacoesItens.solicitacaoId, comprasSolicitacoes.id))
+          .where(and(
+            inArray(comprasSolicitacoesItens.orcamentoItemId, allItemIds),
+            eq(comprasSolicitacoes.companyId, cot.companyId),
+            sql`${comprasSolicitacoes.status} NOT IN ('cancelada', 'recusada')`
+          ));
+        const scItemIdList = scRows.map((r: any) => r.scItemId);
+        const cotByScItem = new Map<number, any>();
+        if (scItemIdList.length > 0) {
+          const cotRows = await db.select({
+            solicitacaoItemId: comprasCotacoesItens.solicitacaoItemId,
+            cotId: comprasCotacoes.id,
+            cotNumero: comprasCotacoes.numeroCotacao,
+            cotStatus: comprasCotacoes.status,
+          }).from(comprasCotacoesItens)
+            .innerJoin(comprasCotacoes, eq(comprasCotacoesItens.cotacaoId, comprasCotacoes.id))
+            .where(and(
+              inArray(comprasCotacoesItens.solicitacaoItemId, scItemIdList),
+              sql`${comprasCotacoes.status} NOT IN ('cancelada', 'recusada')`
+            ));
+          for (const r of cotRows as any[]) {
+            if (r.solicitacaoItemId == null) continue;
+            const prev = cotByScItem.get(r.solicitacaoItemId);
+            // aprovada ganha de pendente
+            if (!prev || (r.cotStatus === 'aprovada' && prev.cotStatus !== 'aprovada')) cotByScItem.set(r.solicitacaoItemId, r);
+          }
+        }
+        const rank: Record<string, number> = { contratado: 3, cotacao: 2, solicitacao: 1 };
+        for (const r of scRows as any[]) {
+          if (!r.orcamentoItemId) continue;
+          const c = cotByScItem.get(r.scItemId);
+          const fase = c ? (c.cotStatus === 'aprovada' ? 'contratado' : 'cotacao') : 'solicitacao';
+          const prev = fases[r.orcamentoItemId];
+          if (!prev || rank[fase] > rank[prev.fase]) {
+            fases[r.orcamentoItemId] = { fase, scId: r.scId, scNumero: r.scNumero, cotId: c?.cotId ?? null, cotNumero: c?.cotNumero ?? null };
+          }
+        }
+      }
+      // Rev. 5072 — meta escopada pelo tipo da cotação (não atrelar custos fora do escopo):
+      // servico → só MDO; material/pecas_veiculo → só MAT; equipamento → só EQUIP; pacote → total.
+      // Fallback: itens antigos sem decomposição (mat/mdo/equip todos nulos) usam o total.
+      const tipoCot = (cot as any).tipo ?? "material";
+      const num = (v: any) => { const n = parseFloat(v ?? ""); return isNaN(n) ? null : n; };
+      return itens.map((it: any) => {
+        const mat = num(it.metaUnitMat), mdo = num(it.metaUnitMdo), equip = num(it.metaUnitEquip);
+        const temDecomposicao = mat != null || mdo != null || equip != null;
+        let metaEscopo: number | null;
+        if (!temDecomposicao || tipoCot === "pacote") metaEscopo = num(it.metaUnitTotal);
+        else if (tipoCot === "servico") metaEscopo = mdo ?? 0;
+        else if (tipoCot === "equipamento") metaEscopo = equip ?? 0;
+        else metaEscopo = mat ?? 0; // material / pecas_veiculo
+        return {
+          ...it,
+          metaUnitTotal: metaEscopo != null ? String(metaEscopo) : it.metaUnitTotal,
+          metaEscopoTipo: temDecomposicao ? tipoCot : "pacote",
+          jaEmCotacao: jaEmCotacaoOrcIds.has(it.id),
+          ...(fases[it.id] ?? { fase: null, scId: null, scNumero: null, cotId: null, cotNumero: null }),
+        };
+      });
     }),
 
   // Rev. 4250/4251 — Adiciona em lote itens selecionados da EAP à cotação
@@ -6830,7 +7812,11 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         for (const it of input.itens) {
           const descricao = it.descricao.trim();
           const unidade = it.unidade?.trim() || "un";
-          const quantidade = String(parseFloat(it.quantidade.replace(",", ".")) || 1);
+           const quantidadeNumero = Number(it.quantidade.replace(",", "."));
+           if (!Number.isInteger(quantidadeNumero) || quantidadeNumero <= 0) {
+             throw new TRPCError({ code: "BAD_REQUEST", message: `A quantidade de "${descricao}" deve ser um número inteiro maior que zero.` });
+           }
+           const quantidade = String(quantidadeNumero);
           let solicitacaoItemId: number | null = null;
           if (cot.solicitacaoId) {
             // Rev. 4493+ — gravar orcamentoItemId, eapCodigo e precoMeta para vínculo completo ao orçamento.
@@ -7043,13 +8029,20 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
           cotacaoId: input.cotacaoId,
           fornecedorId: 0,
           itemId: it.id,
+          almoxarifadoItemId: match?.id ?? null,
           quantidade: String(qty),
           precoUnitario: String(preco),
           descontoPct: "0",
           total: String(total.toFixed(2)),
         } as any).onConflictDoUpdate({
           target: [comprasCotacaoRespostas.cotacaoId, comprasCotacaoRespostas.fornecedorId, comprasCotacaoRespostas.itemId],
-          set: { quantidade: String(qty), precoUnitario: String(preco), descontoPct: "0", total: String(total.toFixed(2)) },
+          set: {
+            almoxarifadoItemId: match?.id ?? null,
+            quantidade: String(qty),
+            precoUnitario: String(preco),
+            descontoPct: "0",
+            total: String(total.toFixed(2)),
+          },
         });
       }
 
@@ -7073,6 +8066,9 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       valorFrete: z.number().optional(),
       transportadora: z.string().optional(),
       moduloMedicao: z.enum(["medicao_mensal", "medicao_avanco", "medicao_etapa", "empreitada", "administracao"]).optional(),
+      // Rev. 5012 — prazo do contrato (Condições): início da mobilização + duração
+      mobilizacaoDataInicio: z.string().optional(),
+      duracaoContratoDias: z.number().int().min(0).optional(),
       respostas: z.array(z.object({
         itemId: z.number(),
         precoUnitario: z.number(),
@@ -7135,6 +8131,9 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         valorFrete: String(valorFrete.toFixed(2)),
         transportadora: input.transportadora ?? null,
         moduloMedicao: input.moduloMedicao ?? null,
+        // Rev. 5012 — só toca nas colunas quando o campo veio no payload (undefined = preserva)
+        mobilizacaoDataInicio: input.mobilizacaoDataInicio !== undefined ? (_validarDataISO(input.mobilizacaoDataInicio) || null) : undefined,
+        duracaoContratoDias: input.duracaoContratoDias !== undefined ? (input.duracaoContratoDias || null) : undefined,
       } as any)
         .where(and(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId), eq(comprasCotacaoFornecedores.fornecedorId, input.fornecedorId)));
       return { ok: true, total: totalComFrete };
@@ -7198,6 +8197,9 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       prazoEntregaDias: z.number().optional(),
       observacoes: z.string().optional(),
       moduloMedicao: z.string().optional(),
+      // Rev. 5012 — prazo do contrato definido nas Condições (medição/MDO)
+      mobilizacaoDataInicio: z.string().optional(),
+      duracaoContratoDias: z.number().int().min(0).optional(),
       // Rev. 4019 — cartão FC escolhido (sugerido ou sobreposto pelo usuário) quando
       // formaPagamento="cartao"; guardado já na Cotação p/ herdar na OC gerada e permitir
       // o match automático item-da-fatura↔OC na conciliação do cartão.
@@ -7229,6 +8231,8 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       if (input.prazoEntregaDias !== undefined) updateData.prazoEntregaDias = input.prazoEntregaDias;
       if (input.observacoes !== undefined) updateData.observacoes = input.observacoes;
       if (input.moduloMedicao !== undefined) updateData.moduloMedicao = input.moduloMedicao || null;
+      if (input.mobilizacaoDataInicio !== undefined) updateData.mobilizacaoDataInicio = _validarDataISO(input.mobilizacaoDataInicio) || null;
+      if (input.duracaoContratoDias !== undefined) updateData.duracaoContratoDias = input.duracaoContratoDias || null;
       if (input.cartaoId !== undefined) updateData.cartaoId = input.cartaoId;
       if (input.excecaoManual !== undefined) updateData.excecaoManual = input.excecaoManual;
       // Rev. 4284 — adiantamento e retenção
@@ -7262,8 +8266,13 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       const db = await getDb();
       const [cotAcc] = await db.select({ companyId: comprasCotacoes.companyId }).from(comprasCotacoes).where(eq(comprasCotacoes.id, input.cotacaoId));
       if (cotAcc) await _assertCompanyAccess(ctx.user, cotAcc.companyId);
+      // Rev. 5008 — anti stored-XSS (code review): só aceitar URLs http(s) ou
+      // caminhos internos (/uploads/...). Bloqueia javascript: e afins.
+      // Rev. 5053 — string vazia = REMOVER a proposta anexada (wizard do contrato).
+      const urlOk = input.arquivoUrl === "" || /^https?:\/\//i.test(input.arquivoUrl) || input.arquivoUrl.startsWith("/");
+      if (!urlOk) throw new Error("URL inválida: use um link http(s) ou um arquivo enviado pelo sistema.");
       await db.update(comprasCotacaoFornecedores)
-        .set({ arquivoUrl: input.arquivoUrl, arquivoNome: input.arquivoNome })
+        .set({ arquivoUrl: input.arquivoUrl || null, arquivoNome: input.arquivoUrl ? input.arquivoNome : null })
         .where(and(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId), eq(comprasCotacaoFornecedores.fornecedorId, input.fornecedorId)));
       return { ok: true };
     }),
@@ -7280,6 +8289,15 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
     .mutation(async ({ input, ctx }) => {
       await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
+      // Rev. 5053 (code review): validar que a cotação pertence à empresa
+      // informada E que o fornecedor participa dela — sem isso, um usuário de
+      // outra empresa poderia sobrescrever a proposta alheia (IDOR).
+      const [cotOwn] = await db.select({ id: comprasCotacoes.id }).from(comprasCotacoes)
+        .where(and(eq(comprasCotacoes.id, input.cotacaoId), eq(comprasCotacoes.companyId, input.companyId)));
+      if (!cotOwn) throw new Error("Cotação não encontrada nesta empresa.");
+      const [fornPart] = await db.select({ id: comprasCotacaoFornecedores.id }).from(comprasCotacaoFornecedores)
+        .where(and(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId), eq(comprasCotacaoFornecedores.fornecedorId, input.fornecedorId)));
+      if (!fornPart) throw new Error("Fornecedor não participa desta cotação.");
       const buffer = Buffer.from(input.fileBase64, 'base64');
       const ext = input.fileName.split('.').pop() || 'pdf';
       const randomSuffix = Math.random().toString(36).substring(2, 10);
@@ -7786,6 +8804,69 @@ Formato de resposta:
       })();
 
       return { jobId };
+    }),
+
+  // Rev. 5138 — memória de cálculo do card "DI-08 Orçado": quebra POR OBRA
+  // (orçado no BDI, débitos e reservas ativas), p/ o pop-up dos indicadores.
+  getRealocacaoDi08PorObra: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
+      const db = await getDb();
+      // latest orçamento por obra (mesma regra do calcularSaldosRealocacaoGeral)
+      const orcs = await db.select({ id: orcamentos.id, obraId: orcamentos.obraId })
+        .from(orcamentos)
+        .where(and(eq(orcamentos.companyId, input.companyId), isNull(orcamentos.deletedAt)))
+        .orderBy(desc(orcamentos.createdAt), desc(orcamentos.id));
+      const latestPerObra = new Map<number, number>();
+      for (const o of orcs) {
+        if (o.obraId && !latestPerObra.has(o.obraId)) latestPerObra.set(o.obraId, o.id);
+      }
+      const latestOrcIds = [...latestPerObra.values()];
+      const orcToObra = new Map<number, number>();
+      for (const [obraId, orcId] of latestPerObra) orcToObra.set(orcId, obraId);
+
+      const porObra = new Map<number, { di08Total: number; di08Usado: number; reservado: number }>();
+      const bump = (obraId: number, campo: "di08Total" | "di08Usado" | "reservado", v: number) => {
+        const cur = porObra.get(obraId) ?? { di08Total: 0, di08Usado: 0, reservado: 0 };
+        cur[campo] += v;
+        porObra.set(obraId, cur);
+      };
+
+      if (latestOrcIds.length > 0) {
+        const bdis = await db.select({ orcamentoId: orcamentoBdi.orcamentoId, valorAbsoluto: orcamentoBdi.valorAbsoluto })
+          .from(orcamentoBdi)
+          .where(and(inArray(orcamentoBdi.orcamentoId, latestOrcIds), eq(orcamentoBdi.codigo, "DI-08")));
+        for (const b of bdis) {
+          const obraId = orcToObra.get(b.orcamentoId);
+          if (obraId) bump(obraId, "di08Total", n(b.valorAbsoluto));
+        }
+      }
+
+      const debs = await db.select({ obraId: comprasRiscoDebitos.obraId, valor: comprasRiscoDebitos.valor })
+        .from(comprasRiscoDebitos)
+        .where(eq(comprasRiscoDebitos.companyId, input.companyId));
+      for (const d of debs) { if (d.obraId) bump(d.obraId, "di08Usado", n(d.valor)); }
+
+      const resAtivas = await db.select({
+        obraId: comprasReservasSaldo.obraId,
+        di08: comprasReservasSaldo.valorDi08Reservado,
+        eco: comprasReservasSaldo.valorEconomiaReservada,
+      }).from(comprasReservasSaldo)
+        .where(and(eq(comprasReservasSaldo.companyId, input.companyId), eq(comprasReservasSaldo.status, "ativa")));
+      for (const r of resAtivas) { if (r.obraId) bump(r.obraId, "reservado", n(r.di08) + n(r.eco)); }
+
+      const obraIds = [...porObra.keys()];
+      const nomes = obraIds.length > 0
+        ? await db.select({ id: obras.id, nome: obras.nome }).from(obras).where(inArray(obras.id, obraIds))
+        : [];
+      const nomeMap = new Map(nomes.map(o => [o.id, o.nome]));
+
+      return obraIds.map(id => ({
+        obraId: id,
+        nome: nomeMap.get(id) ?? `Obra #${id}`,
+        ...porObra.get(id)!,
+      })).sort((a, b) => b.di08Total - a.di08Total);
     }),
 
   getSaldosRealocacaoGeral: protectedProcedure
@@ -8783,7 +9864,7 @@ Formato de resposta:
       justificativa: z.string().min(5, "Justificativa deve ter ao menos 5 caracteres"),
       itensSemVerba: z.array(z.object({
         descricao: z.string(),
-        quantidade: z.number(),
+        quantidade: z.number().int().positive(),
         unidade: z.string(),
         valorTotal: z.number(),
       })),
@@ -8823,10 +9904,15 @@ Formato de resposta:
       const db = await getDb();
       const [cot] = await db.select().from(comprasCotacoes).where(eq(comprasCotacoes.id, input.cotacaoId));
       if (!cot) throw new TRPCError({ code: "NOT_FOUND", message: "Cotação não encontrada" });
+      if (cot.companyId !== input.companyId) throw new TRPCError({ code: "NOT_FOUND", message: "Cotação não encontrada nesta empresa." });
+      await _assertCompanyAccess(ctx.user, cot.companyId);
       if (cot.status === "aprovada") throw new TRPCError({ code: "BAD_REQUEST", message: "Esta cotação já foi aprovada e possui OC gerada." });
 
       const existingOC = await db.select({ id: comprasOrdens.id }).from(comprasOrdens)
-        .where(and(eq(comprasOrdens.cotacaoId, input.cotacaoId), sql`${comprasOrdens.status} != 'cancelada'`))
+        .where(and(
+          eq(comprasOrdens.cotacaoId, input.cotacaoId),
+          sql`lower(coalesce(${comprasOrdens.status}, '')) not in ('cancelada', 'cancelado', 'recusada', 'recusado', 'rejeitada', 'rejeitado', 'devolvida', 'devolvido', 'estornada', 'estornado')`,
+        ))
         .limit(1);
       if (existingOC.length > 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Já existe uma OC ativa para esta cotação." });
 
@@ -8842,11 +9928,15 @@ Formato de resposta:
       const itensCotacao = await db.select({ id: comprasCotacoesItens.id, quantidade: comprasCotacoesItens.quantidade })
         .from(comprasCotacoesItens).where(eq(comprasCotacoesItens.cotacaoId, input.cotacaoId));
       const totalVivoPorForn: Record<number, number> = {};
+      const fornecedoresComResposta = new Set<number>();
       for (const r of todasRespostas) {
+        fornecedoresComResposta.add(r.fornecedorId);
         const it = itensCotacao.find(i => i.id === r.itemId);
-        const qty = parseFloat(it?.quantidade ?? "1");
-        const preco = parseFloat(r.precoUnitario ?? "0");
-        if (preco > 0) totalVivoPorForn[r.fornecedorId] = (totalVivoPorForn[r.fornecedorId] ?? 0) + preco * qty;
+        const qty = n(r.quantidade) || n(it?.quantidade) || 1;
+        const totalLinha = r.total !== null && r.total !== undefined && r.total !== ""
+          ? n(r.total)
+          : (n(r.precoUnitario) * qty);
+        if (totalLinha > 0) totalVivoPorForn[r.fornecedorId] = (totalVivoPorForn[r.fornecedorId] ?? 0) + totalLinha;
       }
       // Adiciona frete FOB ao total vivo
       for (const p of todosParticipantes) {
@@ -8854,8 +9944,9 @@ Formato de resposta:
       }
 
       const getTotal = (p: typeof todosParticipantes[0]) => {
-        const stored = n(p.totalOrcado);
-        return stored > 0 ? stored : (totalVivoPorForn[p.fornecedorId] ?? 0);
+        return fornecedoresComResposta.has(p.fornecedorId)
+          ? (totalVivoPorForn[p.fornecedorId] ?? 0)
+          : n(p.totalOrcado);
       };
 
       const melhorForn = (() => {
@@ -8900,6 +9991,13 @@ Formato de resposta:
       }
 
       const itens = await db.select().from(comprasCotacoesItens).where(eq(comprasCotacoesItens.cotacaoId, input.cotacaoId));
+      const financeiroServidor = isEstoqueWinner
+        ? { deficit: 0 }
+        : await calcularDeficitFinanceiroCotacaoServidor(
+            db,
+            cot,
+            itens.map((item) => ({ itemId: item.id, fornecedorId: vencedorFornecedorId })),
+          );
 
       // VÍNCULO DE ETAPA (EAP) NA OC: o item da cotação não carrega o código da etapa; ele vive
       // no item da SC de origem (`comprasSolicitacoesItens.eapCodigo`). Mapeia scItemId→eapCodigo
@@ -8944,7 +10042,20 @@ Formato de resposta:
       // Rev. 1985 — numeração atômica via advisory lock (fix race C1)
       const numeroOc = await gerarProximoNumeroOC(input.companyId, ordemTipo as "compra" | "servico" | "pacote");
 
-      const subtotalItens = n(cot.total) - freteParaTotal;
+      // Rev. 5084 — BUG "OC zerada": o subtotal vinha de cot.total, que em algumas
+      // cotações ficou gravado como 0 (mapa respondido sem recálculo do total).
+      // Fonte primária agora é a SOMA DOS ITENS que a própria OC vai gravar
+      // (mesma regra do insert dos itens abaixo); cot.total vira só fallback.
+      const somaItensOC = itens.reduce((s, it) => {
+        const resp = precoMap.get(it.id);
+        const isPacoteCot0 = ordemTipo === "pacote" || (cot as any).tipo === "pacote";
+        const respZerado0 = !!resp && isPacoteCot0 && n(resp.quantidade) === 0 && n(resp.precoUnitario) === 0;
+        const usarResp0 = !!resp && !respZerado0;
+        const pu0 = usarResp0 ? n(resp!.precoUnitario) : (respZerado0 ? 0 : n(it.precoUnitario));
+        const qty0 = usarResp0 ? n(resp!.quantidade) : n(it.quantidade);
+        return s + (usarResp0 ? n(resp!.total) : pu0 * qty0);
+      }, 0);
+      const subtotalItens = somaItensOC > 0 ? somaItensOC : (n(cot.total) - freteParaTotal);
       const subtotal = Math.max(subtotalItens, 0);
       const totalOC = subtotal + freteParaTotal;
 
@@ -9025,8 +10136,10 @@ Formato de resposta:
                     }
                   }
                   if (estouros.length > 0) {
-                    extraAprovacaoRequerida = true;
-                    extraMotivo = `Insumos acima do orçamento:\n${estouros.join("\n")}`;
+                    // Excesso de QUANTIDADE é alerta físico, não déficit financeiro.
+                    // A realocação/reserva só é acionada pelo déficit em R$ calculado
+                    // no mapa; não marcar aprovação extra apenas por volume.
+                    extraMotivo = `Alerta de quantidade (sem bloqueio financeiro):\n${estouros.join("\n")}`;
                     // Rev. 1386 — Travamento Cirúrgico
                     if (!podeIgnorarTravamento && _isPerfilCompras(userRoleCheck)) {
                       const status = await _statusTravamentoCompras(input.companyId);
@@ -9063,6 +10176,11 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
           console.warn("[criarOrdemDeCotacao] Erro na verificação de saldo:", e?.message);
         }
       }
+      const deficitFinanceiroInformado = semRiscoOrcamentario ? 0 : financeiroServidor.deficit;
+      if (deficitFinanceiroInformado > 0) {
+        extraAprovacaoRequerida = true;
+        extraMotivo = `Déficit financeiro calculado no servidor: R$ ${deficitFinanceiroInformado.toFixed(2)}`;
+      }
 
       // Rev. 2290 — Herdar dados de locação da SC original quando o
       // engenheiro marcou "É Locação" lá (suprimentos cotou como aluguel,
@@ -9089,6 +10207,14 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         }
       }
 
+      // Atendimento pelo estoque não cria obrigação com terceiro. Ainda assim,
+      // identifica a própria empresa no cabeçalho da OC para que a operação
+      // fique claramente registrada como transferência interna.
+      const empresaInterna = isEstoqueWinner
+        ? (await db.select({ nomeFantasia: companies.nomeFantasia, razaoSocial: companies.razaoSocial })
+            .from(companies).where(eq(companies.id, input.companyId)).limit(1))[0]
+        : null;
+      const fornecedorInternoNome = empresaInterna?.nomeFantasia || empresaInterna?.razaoSocial || "Empresa";
       const [oc] = await db.insert(comprasOrdens).values({
         companyId: input.companyId,
         numeroOc,
@@ -9103,7 +10229,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         } : {}),
         fornecedorId: isEstoqueWinner ? null : (vencedorFornecedorId ?? null),
         fornecedorNome: isEstoqueWinner
-          ? "Estoque (Almoxarifado)"
+          ? `${fornecedorInternoNome} — Estoque interno`
           : (vencedorFornecedorId ? (await db.select({ nome: fornecedores.nomeFantasia, razao: fornecedores.razaoSocial }).from(fornecedores).where(eq(fornecedores.id, vencedorFornecedorId))).map(f => f.nome || f.razao || null)[0] ?? null : null),
         criadoPorId: input.userId ?? null,
         criadoPorNome: input.userName ?? null,
@@ -9114,8 +10240,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         // pra auditoria/histórico (sem gate).
         status: input.comoRascunho ? "rascunho" : "aprovada",
         aprovacaoStatus: input.comoRascunho ? "aguardando" : "aprovado",
-        aprovacaoExtraRequerida: extraAprovacaoRequerida,
-        aprovacaoExtraMotivo: extraAprovacaoRequerida ? extraMotivo : null,
+          aprovacaoExtraRequerida: extraAprovacaoRequerida,
+          aprovacaoExtraMotivo: extraMotivo || null,
         subtotal: String(subtotal.toFixed(2)),
         frete: String(freteValor.toFixed(2)),
         freteTipo: freteTipoOC,
@@ -9150,7 +10276,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
           ? [{ url: (fornInfo as any).arquivoUrl, nome: (fornInfo as any).arquivoNome || "Proposta do fornecedor", tipo: "proposta", ts: Date.now() }]
           : [],
         dataEntregaPrevista: dataEntregaPrevista,
-        pendenteCoberturaOrcamentaria: itens.some(it => (it as any).semVerba === true),
+        pendenteCoberturaOrcamentaria: itens.some(it => (it as any).semVerba === true) || deficitFinanceiroInformado > 0,
         regimeCusto: regimeCustoCot,
         ...((cot as any).modalidadeFd && (cot as any).modalidadeFd !== "normal" ? {
           modalidadeFd: (cot as any).modalidadeFd === "fd_fc" ? "fd_terceiro" : (cot as any).modalidadeFd,
@@ -9281,8 +10407,19 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
           const resp = precoMap.get(it.id);
           const qty = resp ? n(resp.quantidade) : n(it.quantidade);
           if (qty <= 0) continue;
-          const almoxIt = findAlmox(it.descricao, it.solicitacaoItemId ?? null);
-          if (!almoxIt) { erros.push(`"${it.descricao}" sem correspondência no almoxarifado`); continue; }
+          // A escolha feita no picker é soberana. Cotações antigas sem vínculo
+          // continuam no match legado, mas uma seleção explícita jamais pode
+          // trocar silenciosamente para outro item só porque o nome é parecido.
+          const almoxSelecionadoId = (resp as any)?.almoxarifadoItemId ?? null;
+          const almoxIt = almoxSelecionadoId
+            ? almoxList.find(a => a.id === almoxSelecionadoId) ?? null
+            : findAlmox(it.descricao, it.solicitacaoItemId ?? null);
+          if (!almoxIt) {
+            erros.push(almoxSelecionadoId
+              ? `"${it.descricao}" foi selecionado em outro almoxarifado; escolha a origem correspondente`
+              : `"${it.descricao}" sem correspondência no almoxarifado`);
+            continue;
+          }
           const saldoAtual = n(almoxIt.quantidadeAtual);
           if (saldoAtual + 1e-6 < qty) { erros.push(`"${it.descricao}": saldo ${saldoAtual} < pedido ${qty}`); continue; }
           const preco = n(almoxIt.valorUnitario);
@@ -9536,11 +10673,52 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       const db = await getDb();
       const [cot] = await db.select().from(comprasCotacoes).where(eq(comprasCotacoes.id, input.cotacaoId));
       if (!cot) throw new TRPCError({ code: "NOT_FOUND", message: "Cotação não encontrada" });
+      if (cot.companyId !== input.companyId) throw new TRPCError({ code: "NOT_FOUND", message: "Cotação não encontrada nesta empresa." });
       if (!["pendente", "aprovada"].includes(cot.status)) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Esta cotação não pode receber novas OCs neste status." });
       }
 
       const todosItens = await db.select().from(comprasCotacoesItens).where(eq(comprasCotacoesItens.cotacaoId, input.cotacaoId));
+      const awardItemIds = input.itensPorFornecedor.flatMap((grupo) => grupo.itemIds);
+      if (new Set(awardItemIds).size !== awardItemIds.length) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Cada item da cotação pode ser atribuído a apenas um fornecedor por fechamento." });
+      }
+      const cotacaoItemIdSet = new Set(todosItens.map((item) => item.id));
+      if (awardItemIds.some((itemId) => !cotacaoItemIdSet.has(itemId))) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Há item informado que não pertence a esta cotação." });
+      }
+      const respostasDosPremios = awardItemIds.length > 0
+        ? await db.select({
+            itemId: comprasCotacaoRespostas.itemId,
+            fornecedorId: comprasCotacaoRespostas.fornecedorId,
+            total: comprasCotacaoRespostas.total,
+          }).from(comprasCotacaoRespostas).where(and(
+            eq(comprasCotacaoRespostas.cotacaoId, input.cotacaoId),
+            inArray(comprasCotacaoRespostas.itemId, awardItemIds),
+          ))
+        : [];
+      const respostasValidas = new Set(
+        respostasDosPremios
+          .filter((resposta) => resposta.total !== null && resposta.total !== undefined && resposta.total !== "")
+          .map((resposta) => `${resposta.itemId}:${resposta.fornecedorId}`),
+      );
+      const premioSemResposta = input.itensPorFornecedor
+        .flatMap((grupo) => grupo.itemIds.map((itemId) => ({ itemId, fornecedorId: grupo.fornecedorId })))
+        .find((premio) => !respostasValidas.has(`${premio.itemId}:${premio.fornecedorId}`));
+      if (premioSemResposta) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "O fornecedor escolhido não possui resposta total salva para um dos itens. Preencha e salve o valor no Mapa de Cotação antes de gerar a OC.",
+        });
+      }
+      const financeiroServidor = await calcularDeficitFinanceiroCotacaoServidor(
+        db,
+        cot,
+        input.itensPorFornecedor.flatMap((grupo) =>
+          grupo.itemIds.map((itemId) => ({ itemId, fornecedorId: grupo.fornecedorId })),
+        ),
+      );
+      let deficitFinanceiroAindaNaoRegistrado = financeiroServidor.deficit;
 
       // VÍNCULO DE ETAPA (EAP) NA OC: item da cotação não carrega o código da etapa; ele vive no
       // item da SC (`comprasSolicitacoesItens.eapCodigo`). Mapeia scItemId→eapCodigo p/ gravar em
@@ -9615,9 +10793,10 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
           const resp = precoMap.get(it.id);
           const pu = resp ? n(resp.precoUnitario) : n(it.precoUnitario);
           const qty = resp ? n(resp.quantidade) : n(it.quantidade);
-          subtotal += pu * qty;
+          subtotal += resp ? n(resp.total) : (pu * qty);
         }
         const totalOC = subtotal + freteParaTotal;
+        const deficitFinanceiroDestaOc = deficitFinanceiroAindaNaoRegistrado;
 
         let dataEntregaPrevista: string | null = null;
         if (prazoEntregaDias && Number(prazoEntregaDias) > 0) {
@@ -9647,7 +10826,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
           tipo: ordemTipoFinal,
           status: input.comoRascunho ? "rascunho" : "aprovada",
           aprovacaoStatus: input.comoRascunho ? "aguardando" : "aprovado",
-          aprovacaoExtraRequerida: false,
+          aprovacaoExtraRequerida: deficitFinanceiroDestaOc > 0,
           subtotal: String(subtotal.toFixed(2)),
           frete: String(freteValor.toFixed(2)),
           freteTipo,
@@ -9662,7 +10841,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
           cartaoId: cartaoIdPag,
           numeroParcelas,
           dataEntregaPrevista,
-          pendenteCoberturaOrcamentaria: false,
+          pendenteCoberturaOrcamentaria: deficitFinanceiroDestaOc > 0,
           ...(input.autorizacaoSemVerba ? {
             aprovacaoExtraAdminId: input.autorizacaoSemVerba.adminId,
             aprovacaoExtraAdminNome: input.autorizacaoSemVerba.adminNome,
@@ -9670,7 +10849,11 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
             aprovacaoExtraMotivo: "Compra sem verba orçamentária autorizada pelo admin",
             aprovacaoExtraEm: new Date().toISOString(),
           } : {}),
+          ...(!input.autorizacaoSemVerba && deficitFinanceiroDestaOc > 0 ? {
+            aprovacaoExtraMotivo: `Déficit financeiro calculado no servidor para este fechamento: R$ ${deficitFinanceiroDestaOc.toFixed(2)}`,
+          } : {}),
         } as any).returning();
+        if (deficitFinanceiroDestaOc > 0) deficitFinanceiroAindaNaoRegistrado = 0;
 
         if (itensGrupo.length > 0) {
           await db.insert(comprasOrdensItens).values(
@@ -9678,7 +10861,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
               const resp = precoMap.get(it.id);
               const pu = resp ? n(resp.precoUnitario) : n(it.precoUnitario);
               const qty = resp ? n(resp.quantidade) : n(it.quantidade);
-              const tot = pu * qty;
+              const tot = resp ? n(resp.total) : (pu * qty);
               return {
                 ordemId: oc.id,
                 solicitacaoItemId: it.solicitacaoItemId ?? null,
@@ -9730,7 +10913,10 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         // Verificar se TODOS os itens da cotação agora têm OC (pode ter sido gerada em rodadas anteriores)
         const ocsExistentes = await db.select({ id: comprasOrdens.id })
           .from(comprasOrdens)
-          .where(and(eq(comprasOrdens.cotacaoId, input.cotacaoId), sql`${comprasOrdens.status} != 'rascunho'`));
+          .where(and(
+            eq(comprasOrdens.cotacaoId, input.cotacaoId),
+            sql`lower(coalesce(${comprasOrdens.status}, '')) not in ('rascunho', 'cancelada', 'cancelado', 'recusada', 'recusado', 'rejeitada', 'rejeitado', 'devolvida', 'devolvido', 'estornada', 'estornado')`,
+          ));
         const ocItemsCobertos = ocsExistentes.length > 0
           ? await db.select({ cotacaoItemId: comprasOrdensItens.cotacaoItemId })
               .from(comprasOrdensItens)
@@ -9881,6 +11067,9 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       cartaoId: z.number().int().nullable().optional(),
       condicaoPagamento: z.string().min(1, "Condição de pagamento é obrigatória"),
       numeroParcelas: z.number().int().min(1).max(60).optional(),
+      lancamentoRecorrente: z.boolean().optional(),
+      recorrenciaDataInicio: z.string().optional(),
+      recorrenciaDataFim: z.string().optional(),
       parcelasJson: z.array(z.object({
         numero: z.number(),
         vencimento: z.string().optional(),
@@ -9895,14 +11084,14 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       impostos: z.number().optional(),
       desconto: z.number().optional(),
       modalidadeFd: z.enum(["normal", "fd_cliente", "fd_fc"]).optional(),
-      tipoOc: z.enum(["compra", "locacao", "servico"]).optional(),
+      tipoOc: z.enum(["compra", "locacao", "servico", "epi"]).optional(),
       userId: z.number().optional(),
       userName: z.string().optional(),
       anexos: z.array(z.object({ url: z.string(), nome: z.string(), tipo: z.string(), ts: z.number() })).optional(),
       itens: z.array(z.object({
         descricao: z.string(),
         unidade: z.string().optional(),
-        quantidade: z.number(),
+        quantidade: z.number().int().positive(),
         precoUnitario: z.number(),
         insumoCodigo: z.string().optional(),
       })),
@@ -9911,6 +11100,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       await _assertCompanyAccess(ctx.user, input.companyId);
       if (!input.condicaoPagamento?.trim()) throw new TRPCError({ code: "BAD_REQUEST", message: "Condição de pagamento é obrigatória para gerar OC." });
       if (!input.prazoEntregaDias && !input.dataEntregaPrevista) throw new TRPCError({ code: "BAD_REQUEST", message: "Prazo de entrega é obrigatório para gerar OC." });
+      validarPeriodoRecorrenciaOC(input.lancamentoRecorrente, input.recorrenciaDataInicio, input.recorrenciaDataFim);
+      validarCompatibilidadeRecorrenciaOC(input.lancamentoRecorrente, input.modalidadeFd, input.formaPagamento);
       const db = await getDb();
       // Rev. 2483 — usa gerador atômico único (advisory lock + ocNumberConfig.proximoNumero
       // persistido). Antes: COUNT(*)+1 racy + bypass do contador → duplicava com OCs
@@ -9942,8 +11133,11 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         formaPagamento: input.formaPagamento ?? null,
         contaBancariaId: input.contaBancariaId ?? null,
         cartaoId: input.cartaoId ?? null,
-        numeroParcelas: input.numeroParcelas ?? 1,
-        parcelasJson: input.parcelasJson ? (input.parcelasJson as any) : null,
+        numeroParcelas: input.lancamentoRecorrente ? 1 : (input.numeroParcelas ?? 1),
+        parcelasJson: input.lancamentoRecorrente ? null : (input.parcelasJson ? (input.parcelasJson as any) : null),
+        lancamentoRecorrente: !!input.lancamentoRecorrente,
+        recorrenciaDataInicio: input.lancamentoRecorrente ? input.recorrenciaDataInicio : null,
+        recorrenciaDataFim: input.lancamentoRecorrente ? input.recorrenciaDataFim : null,
         observacoes: input.observacoes,
         condicaoPagamento: input.condicaoPagamento,
         anexos: input.anexos ? (input.anexos as any) : null,
@@ -9960,6 +11154,10 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         modalidadeFd: input.modalidadeFd ?? "normal",
         fdPagador: input.modalidadeFd === "fd_cliente" ? "cliente" : input.modalidadeFd === "fd_fc" ? "fc" : null,
         tipo: input.tipoOc ?? "compra",
+        // A tela de Equipamentos Locados usa esta flag para identificar OCs que
+        // precisam do recebimento físico. Mantê-la alinhada ao tipo evita que
+        // uma OC de "Aluguel/Locação" fique invisível nesse fluxo.
+        isLocacao: input.tipoOc === "locacao",
       } as any).returning();
       if (input.itens.length > 0) {
         await db.insert(comprasOrdensItens).values(
@@ -9991,6 +11189,9 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       cartaoId: z.number().int().nullable().optional(),
       condicaoPagamento: z.string().optional(),
       numeroParcelas: z.number().optional(),
+      lancamentoRecorrente: z.boolean().optional(),
+      recorrenciaDataInicio: z.string().optional(),
+      recorrenciaDataFim: z.string().optional(),
       parcelasJson: z.array(z.object({ numero: z.number(), vencimento: z.string().optional(), valor: z.number() })).optional(),
       dataEntregaPrevista: z.string().nullable().optional(),
       dataVencimento: z.string().nullable().optional(),
@@ -10000,13 +11201,14 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       impostos: z.number().optional(),
       desconto: z.number().optional(),
       modalidadeFd: z.enum(["normal", "fd_cliente", "fd_fc"]).optional(),
+      tipoOc: z.enum(["compra", "locacao", "servico", "epi"]).optional(),
       userId: z.number().optional(),
       userName: z.string().optional(),
       anexos: z.array(z.object({ url: z.string(), nome: z.string(), tipo: z.string(), ts: z.number() })).optional(),
       itens: z.array(z.object({
         descricao: z.string(),
         unidade: z.string().optional(),
-        quantidade: z.number(),
+        quantidade: z.number().int().positive(),
         precoUnitario: z.number(),
         insumoCodigo: z.string().optional(),
       })).optional(),
@@ -10021,6 +11223,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       const impostos = n(input.impostos);
       const desconto = n(input.desconto);
       const total = subtotal + frete + outrasDespesas + impostos - desconto;
+      validarPeriodoRecorrenciaOC(input.lancamentoRecorrente, input.recorrenciaDataInicio, input.recorrenciaDataFim, true);
       let fornecedorNome: string | null = null;
       if (input.fornecedorId) {
         const [f] = await db.select({ nomeFantasia: fornecedores.nomeFantasia, razaoSocial: fornecedores.razaoSocial })
@@ -10036,8 +11239,11 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         contaBancariaId: input.contaBancariaId ?? null,
         cartaoId: input.cartaoId ?? null,
         condicaoPagamento: input.condicaoPagamento ?? "",
-        numeroParcelas: input.numeroParcelas ?? 1,
-        parcelasJson: input.parcelasJson ? (input.parcelasJson as any) : null,
+        numeroParcelas: input.lancamentoRecorrente ? 1 : (input.numeroParcelas ?? 1),
+        parcelasJson: input.lancamentoRecorrente ? null : (input.parcelasJson ? (input.parcelasJson as any) : null),
+        lancamentoRecorrente: !!input.lancamentoRecorrente,
+        recorrenciaDataInicio: input.lancamentoRecorrente ? input.recorrenciaDataInicio : null,
+        recorrenciaDataFim: input.lancamentoRecorrente ? input.recorrenciaDataFim : null,
         dataEntregaPrevista: input.dataEntregaPrevista ?? null,
         dataVencimento: input.dataVencimento ?? null,
         observacoes: input.observacoes ?? null,
@@ -10050,29 +11256,63 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         anexos: input.anexos ? (input.anexos as any) : null,
         modalidadeFd: input.modalidadeFd ?? "normal",
         fdPagador: input.modalidadeFd === "fd_cliente" ? "cliente" : input.modalidadeFd === "fd_fc" ? "fc" : null,
+        tipo: input.tipoOc ?? "compra",
         atualizadoEm: new Date().toISOString(),
       };
       if (input.id) {
-        const [existing] = await db.select({ id: comprasOrdens.id, status: comprasOrdens.status })
+        const [existing] = await db.select({
+          id: comprasOrdens.id,
+          status: comprasOrdens.status,
+          lancamentoRecorrente: comprasOrdens.lancamentoRecorrente,
+        })
           .from(comprasOrdens).where(and(eq(comprasOrdens.id, input.id), eq(comprasOrdens.companyId, input.companyId)));
         if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "OC não encontrada." });
-        if (existing.status === "cancelada" || existing.status === "entregue") throw new TRPCError({ code: "FORBIDDEN", message: "OC cancelada ou entregue não pode ser editada." });
-        await db.update(comprasOrdens).set({ ...dadosUpdate, status: "rascunho" } as any).where(eq(comprasOrdens.id, input.id));
-        if (input.itens !== undefined) {
-          await db.delete(comprasOrdensItens).where(eq(comprasOrdensItens.ordemId, input.id));
-          const validos = input.itens.filter(i => i.descricao?.trim());
-          if (validos.length > 0) {
-            await db.insert(comprasOrdensItens).values(validos.map(it => ({
-              ordemId: input.id!,
-              descricao: normalizarTexto(it.descricao),
-              unidade: it.unidade ?? "un",
-              quantidade: String(it.quantidade),
-              precoUnitario: String(it.precoUnitario),
-              total: String((n(it.quantidade) * n(it.precoUnitario)).toFixed(2)),
-              insumoCodigo: it.insumoCodigo ?? null,
-            })));
-          }
+        if (["cancelada", "recusada", "entregue", "entregue_parcial"].includes(String(existing.status))) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "OC cancelada, recusada ou entregue não pode ser editada." });
         }
+        await db.transaction(async (tx: any) => {
+          const envolveRecorrencia = existing.status !== "rascunho"
+            && (!!existing.lancamentoRecorrente || !!input.lancamentoRecorrente);
+          if (envolveRecorrencia) {
+            await tx.execute(sql`SELECT pg_advisory_xact_lock(477002, ${input.id!})`);
+          }
+          const atualizadas = await tx.update(comprasOrdens)
+            .set({ ...dadosUpdate, status: "rascunho" } as any)
+            .where(and(
+              eq(comprasOrdens.id, input.id!),
+              eq(comprasOrdens.companyId, input.companyId),
+              sql`${comprasOrdens.status} NOT IN ('cancelada','recusada','entregue','entregue_parcial')`,
+            ))
+            .returning({ id: comprasOrdens.id });
+          if (atualizadas.length === 0) {
+            throw new TRPCError({ code: "FORBIDDEN", message: "A OC mudou para um estado que não permite edição." });
+          }
+          if (input.itens !== undefined) {
+            await tx.delete(comprasOrdensItens).where(eq(comprasOrdensItens.ordemId, input.id!));
+            const validos = input.itens.filter(i => i.descricao?.trim());
+            if (validos.length > 0) {
+              await tx.insert(comprasOrdensItens).values(validos.map(it => ({
+                ordemId: input.id!,
+                descricao: normalizarTexto(it.descricao),
+                unidade: it.unidade ?? "un",
+                quantidade: String(it.quantidade),
+                precoUnitario: String(it.precoUnitario),
+                total: String((n(it.quantidade) * n(it.precoUnitario)).toFixed(2)),
+                insumoCodigo: it.insumoCodigo ?? null,
+              })));
+            }
+          }
+          if (envolveRecorrencia) {
+            const preparado = await prepararReedicaoLancamentosOC(tx, input.id!, input.companyId);
+            const mudouModalidade = !!existing.lancamentoRecorrente !== !!input.lancamentoRecorrente;
+            if (mudouModalidade && preparado.protegidos > 0) {
+              throw new TRPCError({
+                code: "BAD_REQUEST",
+                message: "Não é possível ativar ou desativar a recorrência porque esta OC já possui pagamento. Os pagamentos existentes foram preservados.",
+              });
+            }
+          }
+        });
         return { id: input.id };
       } else {
         // Rev. 2483 — Rascunho usa timestamp+random (não-sequencial, sem colisão e
@@ -10115,6 +11355,9 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       cartaoId: z.number().int().nullable().optional(),
       condicaoPagamento: z.string().optional(),
       numeroParcelas: z.number().optional(),
+      lancamentoRecorrente: z.boolean().optional(),
+      recorrenciaDataInicio: z.string().optional(),
+      recorrenciaDataFim: z.string().optional(),
       parcelasJson: z.array(z.object({ numero: z.number(), vencimento: z.string().optional(), valor: z.number() })).optional(),
       dataEntregaPrevista: z.string().nullable().optional(),
       dataVencimento: z.string().nullable().optional(),
@@ -10124,13 +11367,14 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       impostos: z.number().optional(),
       desconto: z.number().optional(),
       modalidadeFd: z.enum(["normal", "fd_cliente", "fd_fc"]).optional(),
+      tipoOc: z.enum(["compra", "locacao", "servico", "epi"]).optional(),
       userId: z.number().optional(),
       userName: z.string().optional(),
       anexos: z.array(z.object({ url: z.string(), nome: z.string(), tipo: z.string(), ts: z.number() })).optional(),
       itens: z.array(z.object({
         descricao: z.string(),
         unidade: z.string().optional(),
-        quantidade: z.number(),
+        quantidade: z.number().int().positive(),
         precoUnitario: z.number(),
         insumoCodigo: z.string().optional(),
       })).optional(),
@@ -10142,11 +11386,19 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       const [oc] = await db.select().from(comprasOrdens)
         .where(and(eq(comprasOrdens.id, input.id), eq(comprasOrdens.companyId, input.companyId)));
       if (!oc) throw new TRPCError({ code: "NOT_FOUND" });
-      if (oc.status === "cancelada" || oc.status === "entregue") throw new TRPCError({ code: "FORBIDDEN", message: "OC cancelada ou entregue não pode ser editada." });
+      if (["cancelada", "recusada", "entregue", "entregue_parcial"].includes(String(oc.status))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "OC cancelada, recusada ou entregue não pode ser editada." });
+      }
       const obraIdFinal = input.obraId ?? oc.obraId;
       const condPagFinal = input.condicaoPagamento ?? oc.condicaoPagamento ?? "";
-      if (!obraIdFinal) throw new TRPCError({ code: "BAD_REQUEST", message: "Selecione a Obra antes de confirmar a OC." });
+      const tipoOcFinal = input.tipoOc ?? (oc as any).tipo ?? "compra";
+      if (!obraIdFinal && tipoOcFinal !== "epi") throw new TRPCError({ code: "BAD_REQUEST", message: "Selecione a Obra antes de confirmar a OC." });
       if (!condPagFinal.trim()) throw new TRPCError({ code: "BAD_REQUEST", message: "Informe a Condição de Pagamento antes de confirmar a OC." });
+      const recorrenteFinal = input.lancamentoRecorrente ?? (oc as any).lancamentoRecorrente ?? false;
+      const recorrenciaInicioFinal = input.recorrenciaDataInicio ?? (oc as any).recorrenciaDataInicio ?? null;
+      const recorrenciaFimFinal = input.recorrenciaDataFim ?? (oc as any).recorrenciaDataFim ?? null;
+      validarPeriodoRecorrenciaOC(recorrenteFinal, recorrenciaInicioFinal, recorrenciaFimFinal);
+      validarCompatibilidadeRecorrenciaOC(recorrenteFinal, input.modalidadeFd ?? (oc as any).modalidadeFd, input.formaPagamento ?? (oc as any).formaPagamento);
       // Generate new OC number only if coming from rascunho; otherwise preserve existing number
       let numeroOc = oc.numeroOc ?? "";
       if (oc.status === "rascunho") {
@@ -10167,48 +11419,78 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         fornecedorNome = f?.nomeFantasia || f?.razaoSocial || null;
       }
       const fdModalidade = input.modalidadeFd ?? (oc as any).modalidadeFd ?? "normal";
-      await db.update(comprasOrdens).set({
-        status: "pendente",
-        numeroOc,
-        obraId: obraIdFinal,
-        fornecedorId: fornIdFinal,
-        fornecedorNome,
-        numeroNf: input.numeroNf ?? oc.numeroNf ?? null,
-        formaPagamento: input.formaPagamento ?? (oc as any).formaPagamento ?? null,
-        contaBancariaId: input.contaBancariaId ?? (oc as any).contaBancariaId ?? null,
-        cartaoId: input.cartaoId !== undefined ? input.cartaoId : (oc as any).cartaoId ?? null,
-        condicaoPagamento: condPagFinal,
-        numeroParcelas: input.numeroParcelas ?? oc.numeroParcelas ?? 1,
-        parcelasJson: input.parcelasJson ? (input.parcelasJson as any) : (oc as any).parcelasJson,
-        dataEntregaPrevista: input.dataEntregaPrevista ?? oc.dataEntregaPrevista ?? null,
-        dataVencimento: input.dataVencimento ?? (oc as any).dataVencimento ?? null,
-        observacoes: input.observacoes ?? oc.observacoes ?? null,
-        frete: String(frete.toFixed(2)),
-        outrasDespesas: String(outrasDespesas.toFixed(2)),
-        impostos: String(impostos.toFixed(2)),
-        desconto: String(desconto.toFixed(2)),
-        subtotal: String((input.itens !== undefined ? subtotal : n(oc.subtotal)).toFixed(2)),
-        total: String(total.toFixed(2)),
-        anexos: input.anexos ? (input.anexos as any) : (oc as any).anexos,
-        modalidadeFd: fdModalidade,
-        fdPagador: fdModalidade === "fd_cliente" ? "cliente" : fdModalidade === "fd_fc" ? "fc" : null,
-        atualizadoEm: new Date().toISOString(),
-      } as any).where(eq(comprasOrdens.id, input.id));
-      if (input.itens !== undefined) {
-        await db.delete(comprasOrdensItens).where(eq(comprasOrdensItens.ordemId, input.id));
-        const validos = input.itens.filter(i => i.descricao?.trim());
-        if (validos.length > 0) {
-          await db.insert(comprasOrdensItens).values(validos.map(it => ({
-            ordemId: input.id,
-            descricao: normalizarTexto(it.descricao),
-            unidade: it.unidade ?? "un",
-            quantidade: String(it.quantidade),
-            precoUnitario: String(it.precoUnitario),
-            total: String((n(it.quantidade) * n(it.precoUnitario)).toFixed(2)),
-            insumoCodigo: it.insumoCodigo ?? null,
-          })));
+      await db.transaction(async (tx: any) => {
+        const envolveRecorrencia = oc.status !== "rascunho"
+          && (!!(oc as any).lancamentoRecorrente || recorrenteFinal);
+        if (envolveRecorrencia) {
+          // Ordem global de locks: advisory da OC antes do row lock da OC.
+          // O materializador usa a mesma ordem, evitando deadlock na reedição.
+          await tx.execute(sql`SELECT pg_advisory_xact_lock(477002, ${input.id})`);
         }
-      }
+        const atualizadas = await tx.update(comprasOrdens).set({
+          status: "pendente",
+          numeroOc,
+          obraId: obraIdFinal,
+          fornecedorId: fornIdFinal,
+          fornecedorNome,
+          numeroNf: input.numeroNf ?? oc.numeroNf ?? null,
+          formaPagamento: input.formaPagamento ?? (oc as any).formaPagamento ?? null,
+          contaBancariaId: input.contaBancariaId ?? (oc as any).contaBancariaId ?? null,
+          cartaoId: input.cartaoId !== undefined ? input.cartaoId : (oc as any).cartaoId ?? null,
+          condicaoPagamento: condPagFinal,
+          numeroParcelas: recorrenteFinal ? 1 : (input.numeroParcelas ?? oc.numeroParcelas ?? 1),
+          parcelasJson: recorrenteFinal ? null : (input.parcelasJson ? (input.parcelasJson as any) : (oc as any).parcelasJson),
+          lancamentoRecorrente: !!recorrenteFinal,
+          recorrenciaDataInicio: recorrenteFinal ? recorrenciaInicioFinal : null,
+          recorrenciaDataFim: recorrenteFinal ? recorrenciaFimFinal : null,
+          dataEntregaPrevista: input.dataEntregaPrevista ?? oc.dataEntregaPrevista ?? null,
+          dataVencimento: input.dataVencimento ?? (oc as any).dataVencimento ?? null,
+          observacoes: input.observacoes ?? oc.observacoes ?? null,
+          frete: String(frete.toFixed(2)),
+          outrasDespesas: String(outrasDespesas.toFixed(2)),
+          impostos: String(impostos.toFixed(2)),
+          desconto: String(desconto.toFixed(2)),
+          subtotal: String((input.itens !== undefined ? subtotal : n(oc.subtotal)).toFixed(2)),
+          total: String(total.toFixed(2)),
+          anexos: input.anexos ? (input.anexos as any) : (oc as any).anexos,
+          modalidadeFd: fdModalidade,
+          fdPagador: fdModalidade === "fd_cliente" ? "cliente" : fdModalidade === "fd_fc" ? "fc" : null,
+           tipo: tipoOcFinal,
+          atualizadoEm: new Date().toISOString(),
+        } as any).where(and(
+          eq(comprasOrdens.id, input.id),
+          eq(comprasOrdens.companyId, input.companyId),
+          sql`${comprasOrdens.status} NOT IN ('cancelada','recusada','entregue','entregue_parcial')`,
+        )).returning({ id: comprasOrdens.id });
+        if (atualizadas.length === 0) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "A OC mudou para um estado que não permite edição." });
+        }
+        if (input.itens !== undefined) {
+          await tx.delete(comprasOrdensItens).where(eq(comprasOrdensItens.ordemId, input.id));
+          const validos = input.itens.filter(i => i.descricao?.trim());
+          if (validos.length > 0) {
+            await tx.insert(comprasOrdensItens).values(validos.map(it => ({
+              ordemId: input.id,
+              descricao: normalizarTexto(it.descricao),
+              unidade: it.unidade ?? "un",
+              quantidade: String(it.quantidade),
+              precoUnitario: String(it.precoUnitario),
+              total: String((n(it.quantidade) * n(it.precoUnitario)).toFixed(2)),
+              insumoCodigo: it.insumoCodigo ?? null,
+            })));
+          }
+        }
+        if (envolveRecorrencia) {
+          const preparado = await prepararReedicaoLancamentosOC(tx, input.id, input.companyId);
+          const mudouModalidade = !!(oc as any).lancamentoRecorrente !== !!recorrenteFinal;
+          if (mudouModalidade && preparado.protegidos > 0) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Não é possível ativar ou desativar a recorrência porque esta OC já possui pagamento. Os pagamentos existentes foram preservados.",
+            });
+          }
+        }
+      });
       triggerFinancialSync(input.companyId);
       return { id: input.id, numeroOc };
     }),
@@ -10228,6 +11510,12 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       const [oc] = await db.select().from(comprasOrdens).where(eq(comprasOrdens.id, input.id));
       if (!oc) throw new TRPCError({ code: "NOT_FOUND" });
       await _assertCompanyAccess(ctx.user, oc.companyId);
+      if (oc.lancamentoRecorrente && !["rascunho", "pendente"].includes(String(oc.status))) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "OC recorrente já submetida deve ser alterada pelo fluxo Editar OC, que reconcilia os lançamentos mensais.",
+        });
+      }
       const itens = await db.select().from(comprasOrdensItens).where(eq(comprasOrdensItens.ordemId, input.id));
       const subtotal = itens.reduce((s, it) => s + n(it.total), 0);
       const frete = n(input.frete ?? oc.frete);
@@ -10235,7 +11523,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       const impostos = n(input.impostos ?? oc.impostos);
       const desconto = n(input.desconto ?? oc.desconto);
       const total = subtotal + frete + outrasDespesas + impostos - desconto;
-      await db.update(comprasOrdens).set({
+      const atualizadas = await db.update(comprasOrdens).set({
         subtotal: String(subtotal.toFixed(2)),
         frete: String(frete.toFixed(2)),
         outrasDespesas: String(outrasDespesas.toFixed(2)),
@@ -10245,8 +11533,191 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         dataEntregaPrevista: input.dataEntregaPrevista ?? oc.dataEntregaPrevista ?? undefined,
         observacoes: input.observacoes ?? oc.observacoes ?? undefined,
         atualizadoEm: new Date().toISOString(),
-      }).where(eq(comprasOrdens.id, input.id));
+      }).where(and(
+        eq(comprasOrdens.id, input.id),
+        eq(comprasOrdens.companyId, oc.companyId),
+        oc.lancamentoRecorrente
+          ? inArray(comprasOrdens.status, ["rascunho", "pendente"])
+          : sql`TRUE`,
+      )).returning({ id: comprasOrdens.id });
+      if (atualizadas.length === 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "A OC recorrente foi submetida enquanto era editada. Abra Editar OC para reconciliar os lançamentos.",
+        });
+      }
       return { ok: true, total };
+    }),
+
+  getPreviaEnvioOcEpi: protectedProcedure
+    .input(z.object({ ordemId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+      const [oc] = await db.select({
+        id: comprasOrdens.id, companyId: comprasOrdens.companyId, obraId: comprasOrdens.obraId,
+        tipo: comprasOrdens.tipo, status: comprasOrdens.status, numeroOc: comprasOrdens.numeroOc,
+      }).from(comprasOrdens).where(eq(comprasOrdens.id, input.ordemId));
+      if (!oc) throw new TRPCError({ code: "NOT_FOUND", message: "Ordem de compra não encontrada." });
+      await _assertCompanyAccess(ctx.user, oc.companyId);
+      if ((oc.tipo ?? "compra") !== "epi") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Esta OC não é do tipo EPI." });
+      }
+      const [itens, catalogo, importacoes] = await Promise.all([
+        db.select().from(comprasOrdensItens).where(eq(comprasOrdensItens.ordemId, oc.id)),
+        db.select({
+          id: epis.id, nome: epis.nome, ca: epis.ca, categoria: epis.categoria, tamanho: epis.tamanho,
+          quantidadeEstoque: epis.quantidadeEstoque,
+        }).from(epis).where(eq(epis.companyId, oc.companyId)),
+        db.select({
+          ordemItemId: comprasOcEpiImportacoes.ordemItemId, epiId: comprasOcEpiImportacoes.epiId,
+          estornadoEm: comprasOcEpiImportacoes.estornadoEm,
+        }).from(comprasOcEpiImportacoes).where(eq(comprasOcEpiImportacoes.ordemId, oc.id)),
+      ]);
+      const importacaoPorItem = new Map(importacoes.map(item => [item.ordemItemId, item]));
+      return {
+        oc: { ...oc, destino: oc.obraId ? "obra" : "central" },
+        itens: itens.map(item => {
+          const jaImportado = importacaoPorItem.get(item.id);
+          const sugestoes = catalogo
+            .map(epi => ({ ...epi, score: scoreSimilaridadeEpi(item.descricao, epi.nome) }))
+            .filter(epi => epi.score > 0)
+            .sort((a, b) => b.score - a.score || a.nome.localeCompare(b.nome))
+            .slice(0, 5);
+          return {
+            id: item.id, descricao: item.descricao, unidade: item.unidade, quantidade: Number(item.quantidade),
+            importado: !!jaImportado && !jaImportado.estornadoEm, epiImportadoId: jaImportado?.epiId ?? null,
+            sugestoes,
+          };
+        }),
+        catalogo,
+      };
+    }),
+
+  confirmarEnvioOcEpi: protectedProcedure
+    .input(z.object({
+      ordemId: z.number(),
+      dataLancamento: z.string().optional(),
+      itens: z.array(z.object({
+        ordemItemId: z.number(),
+        epiId: z.number().optional(),
+        novoEpi: z.object({
+          nome: z.string().min(1), ca: z.string().optional(),
+          categoria: z.enum(["EPI", "Uniforme", "Calcado"]).default("EPI"),
+          tamanho: z.string().optional(), fabricante: z.string().optional(),
+        }).optional(),
+      })).min(0),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      const [oc] = await db.select().from(comprasOrdens).where(eq(comprasOrdens.id, input.ordemId));
+      if (!oc) throw new TRPCError({ code: "NOT_FOUND", message: "Ordem de compra não encontrada." });
+      await _assertCompanyAccess(ctx.user, oc.companyId);
+      if ((oc.tipo ?? "compra") !== "epi") throw new TRPCError({ code: "BAD_REQUEST", message: "Esta OC não é do tipo EPI." });
+      if (["cancelada", "recusada"].includes(String(oc.status))) throw new TRPCError({ code: "FORBIDDEN", message: "OC cancelada ou recusada não pode ser recebida." });
+      await assertDestinoEstoqueEpi(ctx, db, oc.companyId, oc.obraId ?? null);
+
+      const resultado = await db.transaction(async (tx: any) => {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(478010, ${oc.id})`);
+        const itensOc = await tx.select().from(comprasOrdensItens).where(eq(comprasOrdensItens.ordemId, oc.id));
+        const existentes = await tx.select().from(comprasOcEpiImportacoes)
+          .where(eq(comprasOcEpiImportacoes.ordemId, oc.id));
+        if (existentes.some(item => !item.estornadoEm)) {
+          return { jaImportada: true, itens: existentes.filter(item => !item.estornadoEm).length };
+        }
+        if (itensOc.length !== input.itens.length || new Set(input.itens.map(item => item.ordemItemId)).size !== input.itens.length) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Confirme todos os itens da OC uma única vez." });
+        }
+        const itensPorId = new Map(itensOc.map(item => [item.id, item]));
+        if (input.itens.some(item => !itensPorId.has(item.ordemItemId) || (!item.epiId && !item.novoEpi))) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Cada item deve apontar para um EPI do catálogo ou criar um novo." });
+        }
+        if (existentes.length > 0) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Esta OC foi estornada. Crie uma nova OC para registrar um novo recebimento." });
+        }
+
+        const importacoes: any[] = [];
+        for (const escolha of input.itens) {
+          const itemOc = itensPorId.get(escolha.ordemItemId)!;
+          const quantidade = Number(itemOc.quantidade);
+          if (!Number.isInteger(quantidade) || quantidade <= 0) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: `O item "${itemOc.descricao}" precisa ter quantidade inteira positiva para entrar no estoque de EPI.` });
+          }
+          let epiId = escolha.epiId;
+          if (epiId) {
+            const [epi] = await tx.select({ id: epis.id }).from(epis)
+              .where(and(eq(epis.id, epiId), eq(epis.companyId, oc.companyId)));
+            if (!epi) throw new TRPCError({ code: "FORBIDDEN", message: "O EPI selecionado não pertence à empresa da OC." });
+          } else {
+            const novo = escolha.novoEpi!;
+            const [criacao] = await tx.insert(epis).values({
+              companyId: oc.companyId, nome: novo.nome.trim(), ca: novo.ca?.trim() || null,
+              categoria: novo.categoria, tamanho: novo.tamanho?.trim() || null,
+              fabricante: novo.fabricante?.trim() || null, quantidadeEstoque: 0,
+              criadoPor: ctx.user?.name || ctx.user?.email || "Sistema",
+            } as any).returning({ id: epis.id });
+            epiId = criacao.id;
+          }
+
+          await tx.execute(sql`SELECT pg_advisory_xact_lock(478011, ${epiId})`);
+          if (oc.obraId) {
+            const [saldoObra] = await tx.select().from(epiEstoqueObra).where(and(
+              eq(epiEstoqueObra.companyId, oc.companyId), eq(epiEstoqueObra.epiId, epiId),
+              eq(epiEstoqueObra.obraId, oc.obraId),
+            ));
+            if (saldoObra) {
+              await tx.update(epiEstoqueObra).set({
+                quantidade: sql`${epiEstoqueObra.quantidade} + ${quantidade}`,
+                updatedAt: new Date().toISOString(), alteradoPor: ctx.user?.name || ctx.user?.email || "Sistema",
+              }).where(eq(epiEstoqueObra.id, saldoObra.id));
+            } else {
+              await tx.insert(epiEstoqueObra).values({
+                companyId: oc.companyId, epiId, obraId: oc.obraId, quantidade,
+                criadoPor: ctx.user?.name || ctx.user?.email || "Sistema",
+              } as any);
+            }
+            await tx.insert(epiTransferencias).values({
+              companyId: oc.companyId, epiId, quantidade, tipoOrigem: "oc_epi",
+              origemObraId: null, destinoObraId: oc.obraId, data: new Date().toISOString().slice(0, 10),
+              observacoes: `Recebimento da OC ${oc.numeroOc} no SST`, criadoPor: ctx.user?.name || ctx.user?.email || "Sistema",
+              criadoPorUserId: ctx.user?.id ?? null,
+            } as any);
+          } else {
+            await tx.update(epis).set({
+              quantidadeEstoque: sql`COALESCE(${epis.quantidadeEstoque}, 0) + ${quantidade}`,
+              updatedAt: new Date().toISOString(),
+            }).where(and(eq(epis.id, epiId), eq(epis.companyId, oc.companyId)));
+          }
+          importacoes.push({
+            companyId: oc.companyId, ordemId: oc.id, ordemItemId: itemOc.id, epiId,
+            obraId: oc.obraId ?? null, quantidade, recebidoPorId: ctx.user?.id ?? null,
+            recebidoPorNome: ctx.user?.name || ctx.user?.email || "Sistema",
+          });
+        }
+        // Marco único após TODOS os créditos: uma OC pode ter várias linhas
+        // mapeadas ao mesmo EPI, sem que um crédito legítimo seja lido como ajuste.
+        const recebidoEmDaOc = new Date();
+        for (const importacao of importacoes) importacao.recebidoEm = recebidoEmDaOc;
+        await tx.insert(comprasOcEpiImportacoes).values(importacoes);
+        await tx.update(comprasOrdensItens).set({ quantidadeEntregue: sql`${comprasOrdensItens.quantidade}` })
+          .where(eq(comprasOrdensItens.ordemId, oc.id));
+        await tx.update(comprasOrdens).set({
+          status: "entregue", dataEntregaReal: new Date().toISOString().slice(0, 10), atualizadoEm: new Date().toISOString(),
+        } as any).where(and(eq(comprasOrdens.id, oc.id), eq(comprasOrdens.companyId, oc.companyId)));
+        return { jaImportada: false, itens: importacoes.length };
+      });
+
+      if (!resultado.jaImportada) {
+        if ((oc as any).lancamentoRecorrente) {
+          await sincronizarLancamentosRecorrentesOC(oc.id, oc.companyId, input.dataLancamento);
+        } else {
+          await garantirEntryDaOC(oc.id, oc.companyId, input.dataLancamento);
+          await db.update(financialEntries as any).set({ status: "a_pagar" } as any).where(and(
+            eq((financialEntries as any).companyId, oc.companyId), eq((financialEntries as any).origemModulo, "compras"),
+            eq((financialEntries as any).origemId, oc.id), eq((financialEntries as any).status, "previsto"),
+          ));
+        }
+      }
+      return { ok: true, ...resultado };
     }),
 
   atualizarStatusOrdem: protectedProcedure
@@ -10254,14 +11725,31 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
 
-      const [ocCurrent] = await db.select({ status: comprasOrdens.status, aprovacaoExtraRequerida: comprasOrdens.aprovacaoExtraRequerida, companyId: comprasOrdens.companyId }).from(comprasOrdens).where(eq(comprasOrdens.id, input.id));
-      if (ocCurrent) await _assertCompanyAccess(ctx.user, ocCurrent.companyId);
+      const [ocCurrent] = await db.select({
+        status: comprasOrdens.status,
+        aprovacaoExtraRequerida: comprasOrdens.aprovacaoExtraRequerida,
+        companyId: comprasOrdens.companyId,
+        lancamentoRecorrente: comprasOrdens.lancamentoRecorrente,
+        tipo: comprasOrdens.tipo,
+      }).from(comprasOrdens).where(eq(comprasOrdens.id, input.id));
+      if (!ocCurrent) throw new TRPCError({ code: "NOT_FOUND", message: "Ordem de compra não encontrada." });
+      await _assertCompanyAccess(ctx.user, ocCurrent.companyId);
+      if (input.status === "entregue" && (ocCurrent.tipo ?? "compra") === "epi") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Use “Enviar para SST” para receber uma OC de EPI. Isso garante o vínculo correto com o catálogo e o estoque SST." });
+      }
+      if (["cancelada", "recusada"].includes(String(ocCurrent.status)) && input.status !== ocCurrent.status) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "OC cancelada ou recusada não pode voltar para um status ativo." });
+      }
       if (ocCurrent?.status === "aguardando_aprovacao_extra" && input.status === "aprovada") {
         throw new TRPCError({ code: "FORBIDDEN", message: "Esta OC requer aprovação de administrador (compra extra-orçamento). Use o fluxo de aprovação com senha admin." });
       }
 
       const isAprovacao = input.status === "aprovada";
-      await db.update(comprasOrdens).set({
+      // Rev. 5085 — compare-and-set de status: após aguardar um UPDATE
+      // concorrente, o PostgreSQL reavalia este WHERE. Assim uma aprovação ou
+      // entrega nunca sobrescreve cancelada/recusada gravada no mesmo instante.
+      const destinoTerminal = input.status === "cancelada" || input.status === "recusada";
+      const statusAtualizado = await db.update(comprasOrdens).set({
         status: input.status,
         dataEntregaReal: input.dataEntregaReal,
         atualizadoEm: new Date().toISOString(),
@@ -10270,7 +11758,16 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
           aprovadorNome: ctx.user?.name || ctx.user?.email || null,
           aprovadoEm: new Date().toISOString(),
         } : {}),
-      } as any).where(eq(comprasOrdens.id, input.id));
+      } as any).where(and(
+        eq(comprasOrdens.id, input.id),
+        eq(comprasOrdens.companyId, ocCurrent.companyId),
+        destinoTerminal
+          ? sql`TRUE`
+          : sql`${comprasOrdens.status} NOT IN ('cancelada','recusada')`,
+      )).returning({ id: comprasOrdens.id });
+      if (statusAtualizado.length === 0) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "OC cancelada ou recusada não pode voltar para um status ativo." });
+      }
 
       // Rev. 1386 — Reservas preventivas:
       // - cancelada/recusada → libera reserva (não consumiu nada)
@@ -10295,86 +11792,44 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         }
       }
 
+      // Rev. 5085 — cancelar/recusar uma OC encerra todas as competências
+      // recorrentes ainda abertas. Pagamentos já realizados permanecem intactos.
+      if ((input.status === "cancelada" || input.status === "recusada") && ocCurrent) {
+        if (ocCurrent.lancamentoRecorrente) {
+          await cancelarLancamentosRecorrentesOC(input.id, ocCurrent.companyId, `OC ${input.status}`);
+        } else {
+          await db.update(financialEntries).set({
+            status: "cancelado",
+            motivoCancelamento: `OC ${input.status}`,
+            updatedAt: new Date().toISOString(),
+          } as any).where(and(
+            eq(financialEntries.companyId, ocCurrent.companyId),
+            eq(financialEntries.origemModulo, "compras"),
+            eq(financialEntries.origemId, input.id),
+            sql`${financialEntries.status} NOT IN ('pago','recebido','cancelado')`,
+          ));
+        }
+      }
+
       // ── Integração financeira ─────────────────────────────────────────
       if (input.status === "aprovada" || input.status === "entregue" || input.status === "entregue_parcial") {
         const [ocFin] = await db.select().from(comprasOrdens).where(eq(comprasOrdens.id, input.id));
         if (ocFin) {
-          let obraNomeFin: string | null = ocFin.obraId
-            ? (await db.select({ nome: obras.nome }).from(obras).where(eq(obras.id, ocFin.obraId)))[0]?.nome ?? null
-            : null;
-
-          const codigoConta = (ocFin as any).tipo === "servico" ? "3.2" : (ocFin as any).tipo === "locacao" ? "3.4" : "3.3";
-          const contaRows = await db.select({ id: (financialAccounts as any).id })
-            .from(financialAccounts as any)
-            .where(and(eq((financialAccounts as any).companyId, ocFin.companyId), eq((financialAccounts as any).codigo, codigoConta)))
-            .limit(1);
-          let contaId = contaRows?.[0]?.id ?? null;
-          if (!contaId) {
-            const CONTA_NAMES: Record<string, string> = { "3.2": "Despesas com Serviços", "3.3": "Despesas com Materiais", "3.4": "Despesas com Locação" };
-            const [newConta] = await db.insert(financialAccounts as any).values({
-              companyId: ocFin.companyId,
-              codigo: codigoConta,
-              nome: CONTA_NAMES[codigoConta] || `Conta ${codigoConta}`,
-              tipo: "despesa_variavel",
-              natureza: "devedora",
-              nivel: 2,
-              ativo: 1,
-            }).returning({ id: (financialAccounts as any).id });
-            contaId = newConta?.id ?? null;
-          }
-
-          const novoStatus = (input.status === "aprovada") ? "previsto" : "a_pagar";
-
-          // Rev. 4075 — FECHAMENTO POR CICLO DEVE ANCORAR NA DATA DE LANÇAMENTO NO
-          // SISTEMA (data de competência), NÃO no `dataVencimento` digitado manualmente
-          // na OC (campo historicamente com erros de digitação/preenchimento — ex.:
-          // "30/60/90 dias" calculado a partir de uma data-base errada, gerando
-          // vencimentos absurdos/anteriores à competência). `dataLancamento` permite ao
-          // comprador registrar retroativamente uma OC/nota esquecida, caindo na janela
-          // de ciclo correta em vez de "hoje". Quando o fornecedor tem ciclo de
-          // fechamento configurado (≠ avista), o vencimento manual é ignorado e a data
-          // de competência é usada como vencimento provisório — quem determina a data
-          // real de pagamento é `_agruparContasPagarPorCicloForn` (financial.ts).
-          const dataCompetenciaFin = input.dataLancamento || new Date().toISOString().split("T")[0];
-          let vencimentoFin: string | null = (ocFin as any).dataVencimento ?? (ocFin as any).dataEntregaPrevista ?? null;
-          if (ocFin.fornecedorId) {
-            const [cycleCfg] = await db.select({ cicloPagamento: (empresasTerceiras as any).cicloPagamento })
-              .from(empresasTerceiras as any)
-              .where(and(eq((empresasTerceiras as any).fornecedorId, ocFin.fornecedorId), eq((empresasTerceiras as any).companyId, ocFin.companyId)))
-              .limit(1);
-            if (cycleCfg?.cicloPagamento && cycleCfg.cicloPagamento !== "avista") {
-              vencimentoFin = dataCompetenciaFin;
+          if ((ocFin as any).lancamentoRecorrente) {
+            await sincronizarLancamentosRecorrentesOC(ocFin.id, ocFin.companyId, input.dataLancamento);
+          } else {
+            // Um único motor materializa as parcelas em todos os caminhos de aprovação.
+            // Isso mantém valores e vencimentos definidos na OC, inclusive em "Outras condições".
+            await garantirEntryDaOC(ocFin.id, ocFin.companyId, input.dataLancamento);
+            if (input.status !== "aprovada") {
+              await db.update(financialEntries as any).set({ status: "a_pagar" } as any)
+                .where(and(
+                  eq((financialEntries as any).companyId, ocFin.companyId),
+                  eq((financialEntries as any).origemModulo, "compras"),
+                  eq((financialEntries as any).origemId, ocFin.id),
+                  eq((financialEntries as any).status, "previsto"),
+                ));
             }
-          }
-
-          if (!ocFin.financialEntryId) {
-            const [entry] = await db.insert(financialEntries as any).values({
-              companyId: ocFin.companyId,
-              obraId: ocFin.obraId ?? null,
-              obraNome: obraNomeFin,
-              contaId,
-              tipo: "despesa",
-              natureza: "variavel",
-              valorPrevisto: String(ocFin.total ?? "0"),
-              dataCompetencia: dataCompetenciaFin,
-              dataVencimento: vencimentoFin,
-              status: novoStatus,
-              origemModulo: "compras",
-              origemId: ocFin.id,
-              // Rev. 4074 — fornecedorNome NUNCA era gravado no lançamento (só entrava
-              // dentro do texto de `descricao`), o que quebrava o match do agrupamento
-              // por ciclo de fechamento (_agruparContasPagarPorCicloForn lê r.fornecedorNome
-              // cru). Sem isso, títulos de fornecedor com ciclo configurado ficavam soltos
-              // em vez de consolidar (ex.: Ferragens Santa Rita).
-              fornecedorNome: ocFin.fornecedorNome ?? null,
-              descricao: `OC ${ocFin.numeroOc}${ocFin.fornecedorNome ? " — " + ocFin.fornecedorNome : ""}`,
-            } as any).returning({ id: (financialEntries as any).id });
-            if (entry?.id) {
-              await db.update(comprasOrdens).set({ financialEntryId: entry.id } as any).where(eq(comprasOrdens.id, ocFin.id));
-            }
-          } else if (input.status !== "aprovada") {
-            await db.update(financialEntries as any).set({ status: "a_pagar" } as any)
-              .where(eq((financialEntries as any).id, ocFin.financialEntryId));
           }
         }
       }
@@ -10385,7 +11840,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         if (!oc) return { ok: true, almoxarifado: false };
 
         const ocTipo = (oc as any).tipo ?? "compra";
-        if (ocTipo === "servico" || ocTipo === "pacote") {
+        if (ocTipo === "servico" || ocTipo === "pacote" || ocTipo === "epi") {
           return { ok: true, almoxarifado: false, itens: 0, motivo: `OC tipo='${ocTipo}'` };
         }
 
@@ -10594,6 +12049,108 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
 
       const usuarioNome = ctx.user?.name ?? ctx.user?.email ?? "Sistema";
       const usuarioId = ctx.user?.id ?? null;
+      const ocTipo = (oc as any).tipo ?? "compra";
+
+      // O fluxo SST tem razão próprio: só desfaz os créditos registrados para
+      // esta OC, e bloqueia o estorno se o estoque já foi consumido depois.
+      if (ocTipo === "epi") {
+        await assertDestinoEstoqueEpi(ctx, db, oc.companyId, oc.obraId ?? null);
+        await db.transaction(async (tx: any) => {
+          await tx.execute(sql`SELECT pg_advisory_xact_lock(478010, ${oc.id})`);
+          const importacoes = await tx.select().from(comprasOcEpiImportacoes).where(and(
+            eq(comprasOcEpiImportacoes.ordemId, oc.id),
+            isNull(comprasOcEpiImportacoes.estornadoEm),
+          ));
+          if (importacoes.length === 0) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "Não há recebimento SST ativo para estornar nesta OC." });
+          }
+          // A mesma OC pode ter mais de uma linha mapeada para o mesmo EPI.
+          // Estornar por destino evita que o primeiro débito pareça um ajuste
+          // posterior quando for processada a segunda linha.
+          const movimentosPorDestino = agruparImportacoesEpiParaEstorno(importacoes);
+          for (const movimento of movimentosPorDestino) {
+            await tx.execute(sql`SELECT pg_advisory_xact_lock(478011, ${movimento.epiId})`);
+            // Trava a própria posição de saldo antes de consultar o histórico:
+            // qualquer baixa concorrente fica serializada antes ou depois do estorno.
+            if (movimento.obraId) {
+              await tx.execute(sql`
+                SELECT id FROM ${epiEstoqueObra}
+                WHERE company_id = ${oc.companyId}
+                  AND epi_id = ${movimento.epiId}
+                  AND obra_id = ${movimento.obraId}
+                FOR UPDATE
+              `);
+            } else {
+              await tx.execute(sql`
+                SELECT id FROM ${epis}
+                WHERE id = ${movimento.epiId} AND company_id = ${oc.companyId}
+                FOR UPDATE
+              `);
+            }
+            // Sem lote FIFO no SST legado, o estorno precisa ser conservador:
+            // qualquer saída/ajuste posterior no MESMO destino pode ter consumido
+            // esta entrada. Bloquear evita retirar saldo trazido por outra origem.
+            const saidaPorEntrega = await tx.select({ id: epiDeliveries.id }).from(epiDeliveries).where(and(
+              eq(epiDeliveries.companyId, oc.companyId), eq(epiDeliveries.epiId, movimento.epiId),
+              isNull(epiDeliveries.deletedAt), gt(epiDeliveries.createdAt, movimento.recebidoEm),
+              movimento.obraId
+                ? and(eq(epiDeliveries.origemEntrega, "obra"), eq(epiDeliveries.obraId, movimento.obraId))
+                : eq(epiDeliveries.origemEntrega, "central"),
+            )).limit(1);
+            const saidaPorTransferencia = await tx.select({ id: epiTransferencias.id }).from(epiTransferencias).where(and(
+              eq(epiTransferencias.companyId, oc.companyId), eq(epiTransferencias.epiId, movimento.epiId),
+              gt(epiTransferencias.createdAt, movimento.recebidoEm),
+              movimento.obraId ? eq(epiTransferencias.origemObraId, movimento.obraId) : eq(epiTransferencias.tipoOrigem, "central"),
+            )).limit(1);
+            const ajusteCentral = movimento.obraId ? [] : await tx.select({ id: epiEstoqueAjustes.id }).from(epiEstoqueAjustes).where(and(
+              eq(epiEstoqueAjustes.companyId, oc.companyId), eq(epiEstoqueAjustes.epiId, movimento.epiId),
+              gt(epiEstoqueAjustes.createdAt, movimento.recebidoEm),
+            )).limit(1);
+            // A edição manual da posição de uma obra altera updatedAt, mas não tem
+            // ledger próprio. Ela também torna a proveniência do saldo inconclusiva.
+            const ajusteObraPosterior = movimento.obraId ? await tx.select({ id: epiEstoqueObra.id }).from(epiEstoqueObra).where(and(
+              eq(epiEstoqueObra.companyId, oc.companyId), eq(epiEstoqueObra.epiId, movimento.epiId),
+              eq(epiEstoqueObra.obraId, movimento.obraId), gt(epiEstoqueObra.updatedAt, movimento.recebidoEm),
+            )).limit(1) : [];
+            if (saidaPorEntrega.length || saidaPorTransferencia.length || ajusteCentral.length || ajusteObraPosterior.length) {
+              throw new TRPCError({
+                code: "CONFLICT",
+                message: "Houve movimentação posterior deste EPI no mesmo estoque. Para preservar a rastreabilidade, regularize o estoque antes de estornar a OC.",
+              });
+            }
+            if (movimento.obraId) {
+              const atualizado = await tx.update(epiEstoqueObra).set({
+                quantidade: sql`${epiEstoqueObra.quantidade} - ${movimento.quantidade}`,
+                updatedAt: new Date().toISOString(), alteradoPor: usuarioNome,
+              }).where(and(
+                eq(epiEstoqueObra.companyId, oc.companyId), eq(epiEstoqueObra.epiId, movimento.epiId),
+                eq(epiEstoqueObra.obraId, movimento.obraId),
+                sql`${epiEstoqueObra.quantidade} >= ${movimento.quantidade}`,
+              )).returning({ id: epiEstoqueObra.id });
+              if (atualizado.length === 0) {
+                throw new TRPCError({ code: "CONFLICT", message: "O estoque de EPI desta obra já foi utilizado após o recebimento. Ajuste o estoque antes de estornar a OC." });
+              }
+            } else {
+              const atualizado = await tx.update(epis).set({
+                quantidadeEstoque: sql`${epis.quantidadeEstoque} - ${movimento.quantidade}`,
+                updatedAt: new Date().toISOString(),
+              }).where(and(
+                eq(epis.id, movimento.epiId), eq(epis.companyId, oc.companyId),
+                sql`COALESCE(${epis.quantidadeEstoque}, 0) >= ${movimento.quantidade}`,
+              )).returning({ id: epis.id });
+              if (atualizado.length === 0) {
+                throw new TRPCError({ code: "CONFLICT", message: "O estoque central de EPI já foi utilizado após o recebimento. Ajuste o estoque antes de estornar a OC." });
+              }
+            }
+          }
+          await tx.update(comprasOcEpiImportacoes).set({
+            estornadoEm: new Date().toISOString(), estornadoPorId: usuarioId,
+            estornadoPorNome: usuarioNome, estornoMotivo: input.motivo.trim(),
+          }).where(and(eq(comprasOcEpiImportacoes.ordemId, oc.id), isNull(comprasOcEpiImportacoes.estornadoEm)));
+          await tx.update(comprasOrdensItens).set({ quantidadeEntregue: "0" })
+            .where(eq(comprasOrdensItens.ordemId, oc.id));
+        });
+      }
 
       // 1. Reverter status da OC para "aprovada" e limpar data de entrega real
       await db.update(comprasOrdens).set({
@@ -10612,8 +12169,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       }
 
       // 3. Reverter movimentações de almoxarifado (somente material)
-      const ocTipo = (oc as any).tipo ?? "compra";
-      if (ocTipo !== "servico" && ocTipo !== "pacote") {
+      if (ocTipo !== "servico" && ocTipo !== "pacote" && ocTipo !== "epi") {
         const itensOC = await db.select().from(comprasOrdensItens).where(eq(comprasOrdensItens.ordemId, input.id));
 
         let obraNome: string | null = null;
@@ -10819,125 +12375,229 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
   getDashboardCompras: protectedProcedure
     .input(z.object({ companyIds: z.array(z.number()).min(1) }))
     .query(async ({ input, ctx }) => {
+      const perfStartedAt = Date.now();
       const db = await getDb();
       const today = new Date().toISOString().slice(0, 10);
       const ids = input.companyIds;
-      for (const _cid of ids) await _assertCompanyAccess(ctx.user, _cid);
+      await Promise.all(ids.map(_cid => _assertCompanyAccess(ctx.user, _cid)));
 
-      const [scs, cots, ocs, forn, obrasRows] = await Promise.all([
-        db.select().from(comprasSolicitacoes).where(inArray(comprasSolicitacoes.companyId, ids)).orderBy(desc(comprasSolicitacoes.criadoEm)),
-        db.select().from(comprasCotacoes).where(inArray(comprasCotacoes.companyId, ids)).orderBy(desc(comprasCotacoes.criadoEm)),
-        db.select().from(comprasOrdens).where(inArray(comprasOrdens.companyId, ids)).orderBy(desc(comprasOrdens.criadoEm)),
-        db.select().from(fornecedores).where(and(inArray(fornecedores.companyId, ids), eq(fornecedores.ativo, true))),
-        db.select({ id: obras.id, nome: obras.nome, codigo: obras.codigo }).from(obras).where(inArray(obras.companyId, ids)),
+      const CLOSED_OC = ["entregue", "cancelada", "recebido"];
+      const idsSql = sql.join(ids.map(id => sql`${id}`), sql`, `);
+      const [
+        scKpiRows,
+        cotKpiRows,
+        ocKpiRows,
+        fornCountRows,
+        scsPendentesRows,
+        cotsPendentes,
+        ocsRecentes,
+        scsRecentesRows,
+        alertasOC,
+        alertasOCCountRows,
+        gastosResult,
+        forn,
+        obrasRows,
+        atrasadasResult,
+      ] = await Promise.all([
+        db.select({
+          scPendentes: sql<number>`COUNT(*) FILTER (WHERE ${comprasSolicitacoes.status} = 'pendente')`.mapWith(Number),
+          scAguardandoAprov: sql<number>`COUNT(*) FILTER (WHERE ${comprasSolicitacoes.aprovacaoStatus} = 'aguardando')`.mapWith(Number),
+        }).from(comprasSolicitacoes).where(inArray(comprasSolicitacoes.companyId, ids)),
+        db.select({
+          cotPendentes: sql<number>`COUNT(*) FILTER (WHERE ${comprasCotacoes.status} = 'pendente')`.mapWith(Number),
+        }).from(comprasCotacoes).where(inArray(comprasCotacoes.companyId, ids)),
+        db.select({
+          ocPendentes: sql<number>`COUNT(*) FILTER (WHERE ${comprasOrdens.status} = 'pendente')`.mapWith(Number),
+          ocAprovadas: sql<number>`COUNT(*) FILTER (WHERE ${comprasOrdens.status} = 'aprovada')`.mapWith(Number),
+          totalValorOCs: sql<number>`COALESCE(SUM(${comprasOrdens.total}) FILTER (WHERE ${comprasOrdens.status} <> 'cancelada'), 0)`.mapWith(Number),
+        }).from(comprasOrdens).where(inArray(comprasOrdens.companyId, ids)),
+        db.select({
+          total: sql<number>`COUNT(*)`.mapWith(Number),
+        }).from(fornecedores).where(and(inArray(fornecedores.companyId, ids), eq(fornecedores.ativo, true))),
+        db.select({
+          id: comprasSolicitacoes.id,
+          numeroSc: comprasSolicitacoes.numeroSc,
+          titulo: comprasSolicitacoes.titulo,
+          dataNecessidade: comprasSolicitacoes.dataNecessidade,
+          status: comprasSolicitacoes.status,
+          tipo: comprasSolicitacoes.tipo,
+          prioridade: comprasSolicitacoes.prioridade,
+          obraId: comprasSolicitacoes.obraId,
+          obraNome: obras.nome,
+          obraCodigo: obras.codigo,
+        }).from(comprasSolicitacoes)
+          .leftJoin(obras, and(
+            eq(obras.id, comprasSolicitacoes.obraId),
+            eq(obras.companyId, comprasSolicitacoes.companyId),
+          ))
+          .where(and(
+            inArray(comprasSolicitacoes.companyId, ids),
+            eq(comprasSolicitacoes.aprovacaoStatus, "aguardando"),
+            sql`${comprasSolicitacoes.status} <> 'cancelado'`,
+          ))
+          .orderBy(desc(comprasSolicitacoes.criadoEm))
+          .limit(8),
+        db.select({
+          id: comprasCotacoes.id,
+          numeroCotacao: comprasCotacoes.numeroCotacao,
+          descricao: comprasCotacoes.descricao,
+          dataValidade: comprasCotacoes.dataValidade,
+          status: comprasCotacoes.status,
+          obraId: comprasCotacoes.obraId,
+          obraNome: obras.nome,
+          obraCodigo: obras.codigo,
+        }).from(comprasCotacoes)
+          .leftJoin(obras, and(
+            eq(obras.id, comprasCotacoes.obraId),
+            eq(obras.companyId, comprasCotacoes.companyId),
+          ))
+          .where(and(inArray(comprasCotacoes.companyId, ids), eq(comprasCotacoes.status, "pendente")))
+          .orderBy(desc(comprasCotacoes.criadoEm))
+          .limit(8),
+        db.select({
+          id: comprasOrdens.id,
+          numeroOc: comprasOrdens.numeroOc,
+          fornecedorId: comprasOrdens.fornecedorId,
+          total: comprasOrdens.total,
+          dataEntregaPrevista: comprasOrdens.dataEntregaPrevista,
+          status: comprasOrdens.status,
+          obraId: comprasOrdens.obraId,
+          obraNome: obras.nome,
+          obraCodigo: obras.codigo,
+        }).from(comprasOrdens)
+          .leftJoin(obras, and(
+            eq(obras.id, comprasOrdens.obraId),
+            eq(obras.companyId, comprasOrdens.companyId),
+          ))
+          .where(inArray(comprasOrdens.companyId, ids))
+          .orderBy(desc(comprasOrdens.criadoEm))
+          .limit(8),
+        db.select({
+          id: comprasSolicitacoes.id,
+          numeroSc: comprasSolicitacoes.numeroSc,
+          titulo: comprasSolicitacoes.titulo,
+          status: comprasSolicitacoes.status,
+          obraId: comprasSolicitacoes.obraId,
+          obraNome: obras.nome,
+          obraCodigo: obras.codigo,
+        }).from(comprasSolicitacoes)
+          .leftJoin(obras, and(
+            eq(obras.id, comprasSolicitacoes.obraId),
+            eq(obras.companyId, comprasSolicitacoes.companyId),
+          ))
+          .where(inArray(comprasSolicitacoes.companyId, ids))
+          .orderBy(desc(comprasSolicitacoes.criadoEm))
+          .limit(8),
+        db.select({
+          id: comprasOrdens.id,
+          numeroOc: comprasOrdens.numeroOc,
+          dataEntregaPrevista: comprasOrdens.dataEntregaPrevista,
+          status: comprasOrdens.status,
+          fornecedorId: comprasOrdens.fornecedorId,
+          total: comprasOrdens.total,
+          obraId: comprasOrdens.obraId,
+          obraNome: obras.nome,
+          obraCodigo: obras.codigo,
+        }).from(comprasOrdens)
+          .leftJoin(obras, and(
+            eq(obras.id, comprasOrdens.obraId),
+            eq(obras.companyId, comprasOrdens.companyId),
+          ))
+          .where(and(
+            inArray(comprasOrdens.companyId, ids),
+            lte(comprasOrdens.dataEntregaPrevista, today),
+            notInArray(comprasOrdens.status, CLOSED_OC),
+          ))
+          .orderBy(asc(comprasOrdens.dataEntregaPrevista))
+          .limit(8),
+        db.select({
+          total: sql<number>`COUNT(*)`.mapWith(Number),
+        }).from(comprasOrdens)
+          .where(and(
+            inArray(comprasOrdens.companyId, ids),
+            lte(comprasOrdens.dataEntregaPrevista, today),
+            notInArray(comprasOrdens.status, CLOSED_OC),
+          )),
+        db.execute(sql`
+          SELECT to_char(date_trunc('month', created_at), 'YYYY-MM') AS mes,
+                 COALESCE(SUM(total), 0)::float8 AS valor
+          FROM compras_ordens
+          WHERE company_id IN (${idsSql})
+            AND status <> 'cancelada'
+          GROUP BY 1
+          ORDER BY 1 DESC
+          LIMIT 6
+        `),
+        db.select({
+          id: fornecedores.id,
+          nomeFantasia: fornecedores.nomeFantasia,
+          razaoSocial: fornecedores.razaoSocial,
+        }).from(fornecedores)
+          .where(and(inArray(fornecedores.companyId, ids), eq(fornecedores.ativo, true))),
+        db.select({ id: obras.id, nome: obras.nome, codigo: obras.codigo })
+          .from(obras).where(inArray(obras.companyId, ids)),
+        db.execute(sql`
+          SELECT co.obra_id AS "obraId", COUNT(*)::int AS count
+          FROM compras_ordens co
+          WHERE co.company_id IN (${idsSql})
+            AND co.obra_id IS NOT NULL
+            AND co.status NOT IN ('entregue', 'cancelada', 'recebido')
+            AND COALESCE((
+              SELECT MIN(ep.data_entrega::date)
+              FROM compras_ordens_itens oi
+              JOIN compras_entregas_programadas ep ON ep.ordem_item_id = oi.id
+              WHERE oi.ordem_id = co.id AND ep.status = 'pendente'
+            ), co.data_entrega_prevista::date) < ${today}::date
+          GROUP BY co.obra_id
+          ORDER BY count DESC
+        `),
       ]);
 
       const obraMap: Record<number, string> = {};
       obrasRows.forEach(o => { obraMap[o.id] = o.codigo ? `${o.codigo} – ${o.nome}` : o.nome; });
 
-      // KPIs
       const kpis = {
-        scPendentes:      scs.filter(r => r.status === "pendente").length,
-        scAguardandoAprov:scs.filter(r => r.aprovacaoStatus === "aguardando").length,
-        cotPendentes:     cots.filter(r => r.status === "pendente").length,
-        ocPendentes:      ocs.filter(r => r.status === "pendente").length,
-        ocAprovadas:      ocs.filter(r => r.status === "aprovada").length,
-        totalValorOCs:    ocs.filter(r => !["cancelada"].includes(r.status)).reduce((s, r) => s + n(r.total), 0),
-        fornecedoresAtivos: forn.length,
+        scPendentes: scKpiRows[0]?.scPendentes ?? 0,
+        scAguardandoAprov: scKpiRows[0]?.scAguardandoAprov ?? 0,
+        cotPendentes: cotKpiRows[0]?.cotPendentes ?? 0,
+        ocPendentes: ocKpiRows[0]?.ocPendentes ?? 0,
+        ocAprovadas: ocKpiRows[0]?.ocAprovadas ?? 0,
+        totalValorOCs: ocKpiRows[0]?.totalValorOCs ?? 0,
+        fornecedoresAtivos: fornCountRows[0]?.total ?? 0,
       };
-
-      const CLOSED_OC = ["entregue", "cancelada", "recebido"];
-      // Alertas: OCs com entrega vencida ou hoje
-      const alertasOC = ocs.filter(r =>
-        r.dataEntregaPrevista &&
-        r.dataEntregaPrevista <= today &&
-        !CLOSED_OC.includes(r.status)
-      ).map(r => ({
-        id: r.id, numeroOc: r.numeroOc, dataEntregaPrevista: r.dataEntregaPrevista,
-        status: r.status, fornecedorId: r.fornecedorId, total: r.total,
-        obraId: r.obraId,
-        obraNome: r.obraId ? (obraMap[r.obraId] ?? null) : null,
-        atrasado: r.dataEntregaPrevista! < today,
+      const obraNome = (row: { obraNome?: string | null; obraCodigo?: string | null }) =>
+        row.obraNome ? (row.obraCodigo ? `${row.obraCodigo} – ${row.obraNome}` : row.obraNome) : null;
+      const scsPendentesAprov = scsPendentesRows.map(row => ({ ...row, numero: row.numeroSc, obraNome: obraNome(row) }));
+      const scsRecentes = scsRecentesRows.map(row => ({ ...row, numero: row.numeroSc, obraNome: obraNome(row) }));
+      const ocsRecentesMapped = ocsRecentes.map(row => ({ ...row, obraNome: obraNome(row) }));
+      const cotsPendentesMapped = cotsPendentes.map(row => ({ ...row, obraNome: obraNome(row) }));
+      const alertasOCMapped = alertasOC.map(row => ({ ...row, obraNome: obraNome(row), atrasado: !!row.dataEntregaPrevista && row.dataEntregaPrevista < today }));
+      const gastosMensais = (((gastosResult as any).rows ?? gastosResult) as any[])
+        .map(row => ({ mes: String(row.mes), valor: n(row.valor) }))
+        .reverse();
+      const ocsAtrasadasPorObra = ((((atrasadasResult as any).rows ?? atrasadasResult) as any[])).map(row => ({
+        obraId: Number(row.obraId),
+        obraNome: obraMap[Number(row.obraId)] ?? `Obra #${row.obraId}`,
+        count: Number(row.count) || 0,
       }));
 
-      // SCs aguardando aprovação
-      const scsPendentesAprov = scs.filter(r => r.aprovacaoStatus === "aguardando" && r.status !== "cancelado").slice(0, 8)
-        .map(r => ({ ...r, obraNome: r.obraId ? (obraMap[r.obraId] ?? null) : null }));
-
-      // Cotações pendentes (mais antigas primeiro)
-      const cotsPendentes = cots.filter(r => r.status === "pendente").slice(0, 8)
-        .map(r => ({ ...r, obraNome: r.obraId ? (obraMap[r.obraId] ?? null) : null }));
-
-      // OCs recentes (últimas 8)
-      const ocsRecentes = ocs.slice(0, 8)
-        .map(r => ({ ...r, obraNome: r.obraId ? (obraMap[r.obraId] ?? null) : null }));
-
-      // SCs recentes (últimas 8)
-      const scsRecentes = scs.slice(0, 8)
-        .map(r => ({ ...r, obraNome: r.obraId ? (obraMap[r.obraId] ?? null) : null }));
-
-      // Gastos por mês (últimos 6 meses) — baseado na data de criação das OCs aprovadas/entregues
-      const seisM: Record<string, number> = {};
-      ocs.filter(r => !["cancelada"].includes(r.status)).forEach(r => {
-        const mes = r.criadoEm.slice(0, 7); // YYYY-MM
-        seisM[mes] = (seisM[mes] ?? 0) + n(r.total);
+      logComprasPerf("getDashboardCompras", perfStartedAt, {
+        companies: ids.length,
+        payloadRows: scsPendentesAprov.length + cotsPendentesMapped.length + ocsRecentesMapped.length + scsRecentes.length + alertasOCMapped.length,
       });
-      const gastosMensais = Object.entries(seisM).sort(([a], [b]) => a.localeCompare(b)).slice(-6).map(([mes, valor]) => ({ mes, valor }));
-
-      const hoje = today;
-      const ocsAbertas = ocs.filter(r => !CLOSED_OC.includes(r.status));
-      const ocAbertasIds = ocsAbertas.map(r => r.id);
-      let ocEntregaRefMap: Record<number, string | null> = {};
-      if (ocAbertasIds.length > 0) {
-        const ocItens = await db.select({ id: comprasOrdensItens.id, ordemId: comprasOrdensItens.ordemId })
-          .from(comprasOrdensItens).where(inArray(comprasOrdensItens.ordemId, ocAbertasIds));
-        const allItemIds = ocItens.map(i => i.id);
-        let entregasMap: Record<number, { dataEntrega: string; status: string }[]> = {};
-        if (allItemIds.length > 0) {
-          const entregas = await db.select({
-            ordemItemId: comprasEntregasProgramadas.ordemItemId,
-            dataEntrega: comprasEntregasProgramadas.dataEntrega,
-            status: comprasEntregasProgramadas.status,
-          }).from(comprasEntregasProgramadas)
-            .where(inArray(comprasEntregasProgramadas.ordemItemId, allItemIds));
-          for (const e of entregas) {
-            if (!entregasMap[e.ordemItemId]) entregasMap[e.ordemItemId] = [];
-            entregasMap[e.ordemItemId].push({ dataEntrega: e.dataEntrega, status: e.status });
-          }
-        }
-        const itemsByOrdem: Record<number, number[]> = {};
-        for (const item of ocItens) {
-          if (!itemsByOrdem[item.ordemId]) itemsByOrdem[item.ordemId] = [];
-          itemsByOrdem[item.ordemId].push(item.id);
-        }
-        for (const oc of ocsAbertas) {
-          const itemIds = itemsByOrdem[oc.id] || [];
-          let proxima: string | null = null;
-          for (const itemId of itemIds) {
-            const entregas = entregasMap[itemId] || [];
-            const pendentes = entregas.filter(e => e.status === "pendente").sort((a, b) => a.dataEntrega.localeCompare(b.dataEntrega));
-            if (pendentes.length > 0 && (!proxima || pendentes[0].dataEntrega < proxima)) {
-              proxima = pendentes[0].dataEntrega;
-            }
-          }
-          ocEntregaRefMap[oc.id] = proxima;
-        }
-      }
-
-      const atrasadasPorObra: Record<number, number> = {};
-      ocsAbertas.filter(r => r.obraId).forEach(r => {
-        const dataRef = ocEntregaRefMap[r.id] || r.dataEntregaPrevista;
-        if (dataRef && dataRef < hoje) {
-          atrasadasPorObra[r.obraId!] = (atrasadasPorObra[r.obraId!] ?? 0) + 1;
-        }
-      });
-      const ocsAtrasadasPorObra = Object.entries(atrasadasPorObra).map(([obraId, count]) => ({
-        obraId: Number(obraId),
-        obraNome: obraMap[Number(obraId)] ?? `Obra #${obraId}`,
-        count,
-      })).sort((a, b) => b.count - a.count);
-
-      return { kpis, alertasOC, scsPendentesAprov, cotsPendentes, ocsRecentes, scsRecentes, gastosMensais, fornecedores: forn, obraMap, ocsAtrasadasPorObra };
+      return {
+        kpis,
+        alertasOC: alertasOCMapped,
+        alertasOCTotal: alertasOCCountRows[0]?.total ?? 0,
+        scsPendentesAprov,
+        cotsPendentes: cotsPendentesMapped,
+        ocsRecentes: ocsRecentesMapped,
+        scsRecentes,
+        gastosMensais,
+        fornecedores: forn,
+        obraMap,
+        ocsAtrasadasPorObra,
+      };
     }),
 
   // Rev. 4726 — Dashboard Gerencial de Compras (aba "Gerencial" do Painel):
@@ -10956,9 +12616,10 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       janelaAgrupamento: z.number().int().min(3).max(60).optional(),
     }))
     .query(async ({ input, ctx }) => {
+      const perfStartedAt = Date.now();
       const db = await getDb();
       const ids = input.companyIds;
-      for (const _cid of ids) await _assertCompanyAccess(ctx.user, _cid);
+      await Promise.all(ids.map(_cid => _assertCompanyAccess(ctx.user, _cid)));
 
       const pad = (v: number) => String(v).padStart(2, "0");
       // Período selecionado [ini, fimEx) em YYYY-MM-DD (comparação por slice(0,10))
@@ -10974,12 +12635,147 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         iniPrev = `${ant.a}-${pad(ant.m)}-01`; fimPrevEx = ini;
       }
 
-      const [scsAll, cotsAll, ocsAll, obrasRows] = await Promise.all([
-        db.select().from(comprasSolicitacoes).where(inArray(comprasSolicitacoes.companyId, ids)),
-        db.select().from(comprasCotacoes).where(inArray(comprasCotacoes.companyId, ids)),
-        db.select().from(comprasOrdens).where(inArray(comprasOrdens.companyId, ids)),
+      // Rev. opt — calcular janela de datas necessária antes de carregar dados.
+      // Precisamos de: período selecionado, período comparativo anterior e ano
+      // inteiro (tendência/evolução mensal). O backlog atual (gargalo) é calculado
+      // por SQL separado — independe do período.
+      const anoIni = `${input.ano}-01-01`;
+      const anoFimEx = `${input.ano + 1}-01-01`;
+      // Janela mínima que cobre período, comparativo e ano inteiro para evolução mensal
+      const loadFrom = iniPrev < anoIni ? iniPrev : anoIni;
+      const loadTo = fimEx > anoFimEx ? fimEx : anoFimEx;
+
+      // Projetar apenas colunas usadas em SCs, cotações e OCs dentro da janela
+      const [scsAll, cotsAll, ocsAll, obrasRows, gargaloRow] = await Promise.all([
+        db.select({
+          id: comprasSolicitacoes.id,
+          status: comprasSolicitacoes.status,
+          aprovacaoStatus: comprasSolicitacoes.aprovacaoStatus,
+          obraId: comprasSolicitacoes.obraId,
+          criadoEm: comprasSolicitacoes.criadoEm,
+          tipo: comprasSolicitacoes.tipo,
+          prioridade: comprasSolicitacoes.prioridade,
+          numeroSc: comprasSolicitacoes.numeroSc,
+          criadoPorNome: comprasSolicitacoes.criadoPorNome,
+          solicitanteId: comprasSolicitacoes.solicitanteId,
+          dataNecessidade: comprasSolicitacoes.dataNecessidade,
+        }).from(comprasSolicitacoes).where(
+          and(
+            inArray(comprasSolicitacoes.companyId, ids),
+            gte(comprasSolicitacoes.criadoEm, loadFrom),
+            sql`${comprasSolicitacoes.criadoEm} < ${loadTo}`,
+          )
+        ),
+        db.select({
+          id: comprasCotacoes.id,
+          status: comprasCotacoes.status,
+          obraId: comprasCotacoes.obraId,
+          criadoEm: comprasCotacoes.criadoEm,
+          solicitacaoId: comprasCotacoes.solicitacaoId,
+          aprovadoEm: comprasCotacoes.aprovadoEm,
+        }).from(comprasCotacoes).where(
+          and(
+            inArray(comprasCotacoes.companyId, ids),
+            gte(comprasCotacoes.criadoEm, loadFrom),
+            sql`${comprasCotacoes.criadoEm} < ${loadTo}`,
+          )
+        ),
+        db.select({
+          id: comprasOrdens.id,
+          status: comprasOrdens.status,
+          aprovacaoStatus: comprasOrdens.aprovacaoStatus,
+          obraId: comprasOrdens.obraId,
+          criadoEm: comprasOrdens.criadoEm,
+          total: comprasOrdens.total,
+          numeroOc: comprasOrdens.numeroOc,
+          cotacaoId: comprasOrdens.cotacaoId,
+          solicitacaoId: comprasOrdens.solicitacaoId,
+          dataEntregaPrevista: comprasOrdens.dataEntregaPrevista,
+          criadoPorNome: comprasOrdens.criadoPorNome,
+          fornecedorNome: comprasOrdens.fornecedorNome,
+          isLocacao: comprasOrdens.isLocacao,
+        }).from(comprasOrdens).where(
+          and(
+            inArray(comprasOrdens.companyId, ids),
+            gte(comprasOrdens.criadoEm, loadFrom),
+            sql`${comprasOrdens.criadoEm} < ${loadTo}`,
+          )
+        ),
         db.select({ id: obras.id, nome: obras.nome, codigo: obras.codigo }).from(obras).where(inArray(obras.companyId, ids)),
+        // Backlog atual: contagens via SQL sem filtro de período
+        db.execute(sql`
+          SELECT
+            (SELECT COUNT(*) FROM compras_solicitacoes
+              WHERE company_id = ANY(${sql`ARRAY[${sql.join(ids.map(i => sql`${i}`), sql`, `)}]`}::int[])
+                AND aprovacao_status = 'aguardando'
+                AND status NOT IN ('cancelado','cancelada')
+                ${input.obraId != null ? sql`AND obra_id = ${input.obraId}` : sql``}
+            )::int AS scs_aguardando,
+            (SELECT COUNT(*) FROM compras_cotacoes
+              WHERE company_id = ANY(${sql`ARRAY[${sql.join(ids.map(i => sql`${i}`), sql`, `)}]`}::int[])
+                AND status = 'pendente'
+                ${input.obraId != null ? sql`AND obra_id = ${input.obraId}` : sql``}
+            )::int AS cots_abertas,
+            (SELECT COUNT(*) FROM compras_ordens
+              WHERE company_id = ANY(${sql`ARRAY[${sql.join(ids.map(i => sql`${i}`), sql`, `)}]`}::int[])
+                AND aprovacao_status = 'aguardando'
+                AND status NOT IN ('cancelada','entregue','recebido')
+                ${input.obraId != null ? sql`AND obra_id = ${input.obraId}` : sql``}
+            )::int AS ocs_aguardando
+        `),
       ]);
+
+      // O payload principal continua limitado à janela acima, mas os cálculos de
+      // lead time precisam da SC/cotação de origem mesmo quando ela nasceu antes
+      // dessa janela. Buscar somente os IDs efetivamente referenciados preserva o
+      // histórico dos cálculos sem voltar ao SELECT completo de todas as tabelas.
+      const loadedCotIds = new Set(cotsAll.map(c => c.id));
+      const referencedCotIds = Array.from(new Set(
+        ocsAll.map(o => o.cotacaoId).filter((id): id is number => id != null && !loadedCotIds.has(id)),
+      ));
+      for (let i = 0; i < referencedCotIds.length; i += 500) {
+        const chunk = referencedCotIds.slice(i, i + 500);
+        const linkedCots = await db.select({
+          id: comprasCotacoes.id,
+          status: comprasCotacoes.status,
+          obraId: comprasCotacoes.obraId,
+          criadoEm: comprasCotacoes.criadoEm,
+          solicitacaoId: comprasCotacoes.solicitacaoId,
+          aprovadoEm: comprasCotacoes.aprovadoEm,
+        }).from(comprasCotacoes).where(and(
+          inArray(comprasCotacoes.companyId, ids),
+          inArray(comprasCotacoes.id, chunk),
+        ));
+        cotsAll.push(...linkedCots);
+      }
+
+      const loadedScIds = new Set(scsAll.map(sc => sc.id));
+      const referencedScIds = Array.from(new Set(
+        [
+          ...cotsAll.map(c => c.solicitacaoId),
+          ...ocsAll.map(o => o.solicitacaoId),
+        ].filter((id): id is number => id != null && !loadedScIds.has(id)),
+      ));
+      for (let i = 0; i < referencedScIds.length; i += 500) {
+        const chunk = referencedScIds.slice(i, i + 500);
+        const linkedScs = await db.select({
+          id: comprasSolicitacoes.id,
+          status: comprasSolicitacoes.status,
+          aprovacaoStatus: comprasSolicitacoes.aprovacaoStatus,
+          obraId: comprasSolicitacoes.obraId,
+          criadoEm: comprasSolicitacoes.criadoEm,
+          tipo: comprasSolicitacoes.tipo,
+          prioridade: comprasSolicitacoes.prioridade,
+          numeroSc: comprasSolicitacoes.numeroSc,
+          criadoPorNome: comprasSolicitacoes.criadoPorNome,
+          solicitanteId: comprasSolicitacoes.solicitanteId,
+          dataNecessidade: comprasSolicitacoes.dataNecessidade,
+        }).from(comprasSolicitacoes).where(and(
+          inArray(comprasSolicitacoes.companyId, ids),
+          inArray(comprasSolicitacoes.id, chunk),
+        ));
+        scsAll.push(...linkedScs);
+      }
 
       const obraMap: Record<number, string> = {};
       obrasRows.forEach(o => { obraMap[o.id] = o.codigo ? `${o.codigo} – ${o.nome}` : o.nome; });
@@ -11764,7 +13560,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
 
       // 2) Tendência mensal (ano do período, respeitando filtro de obra):
       //    antecedência mediana, % SC com data de necessidade, % OC no susto
-      const anoIni = `${input.ano}-01-01`, anoFimEx = `${input.ano + 1}-01-01`;
+      // anoIni / anoFimEx já declarados acima (janela de carregamento de dados)
       const tendencia: { mes: number; scs: number; pctComNecessidade: number | null; antecedenciaMediana: number | null; pctSusto: number | null; ocs: number }[] = [];
       for (let m = 1; m <= 12; m++) {
         const mi = `${input.ano}-${pad(m)}-01`;
@@ -11880,11 +13676,12 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       // Rev. 4746: foto também no bloco "Planejamento por Solicitante"
       planejamento.forEach((p: any) => { p.fotoUrl = resolverFoto(p.nome); });
 
-      // Gargalo atual (independe do período): quantas paradas em cada etapa hoje
+      // Gargalo atual (independe do período): valores vindos do SQL separado
+      const gargaloData = ((gargaloRow as any).rows ?? gargaloRow)?.[0] ?? {};
       const gargalo = {
-        scsAguardandoAprov: scsAll.filter(r => r.aprovacaoStatus === "aguardando" && !isCancel(r.status) && obraOk(r.obraId)).length,
-        cotacoesAbertas: cotsAll.filter(r => r.status === "pendente" && obraOk(r.obraId)).length,
-        ocsAguardandoAprov: ocsAll.filter(r => r.aprovacaoStatus === "aguardando" && !isCancel(r.status) && !["entregue", "recebido"].includes(r.status) && obraOk(r.obraId)).length,
+        scsAguardandoAprov: Number(gargaloData.scs_aguardando ?? 0),
+        cotacoesAbertas: Number(gargaloData.cots_abertas ?? 0),
+        ocsAguardandoAprov: Number(gargaloData.ocs_aguardando ?? 0),
       };
 
       // Rev. 4758 — Evolução Mensal (tabela comparativa mês a mês do ano):
@@ -11959,13 +13756,19 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         : null;
       const evolucaoMensal = { meses: evolucaoMeses, scoreAtual, ideal: 85 };
 
-      return {
+      const response = {
         kpis, seriePorDia, rankingSolicitantes, rankingMateriais, porTipo, rankingObras,
         leadTime, gargalo, obras: obrasRows,
         quandoPedem: { porDiaSemana, porHora },
         planejamento, rankingUrgencia,
         perdaAgrupamento, recorrencia, horizonte, gestao, evolucaoMensal,
       };
+      logComprasPerf("getDashboardGerencial", perfStartedAt, {
+        companies: ids.length,
+        periodRows: scs.length + cots.length + ocs.length,
+        linkedHistoryRows: referencedCotIds.length + referencedScIds.length,
+      });
+      return response;
     }),
 
   // Rev. 4758 — análise por IA da evolução mensal de compras (gerada sob demanda)
@@ -12003,47 +13806,100 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
   getComprasBadgeCounts: protectedProcedure
     .input(z.object({ companyIds: z.array(z.number()).min(1) }))
     .query(async ({ input, ctx }) => {
+      const perfStartedAt = Date.now();
       const db = await getDb();
       const ids = input.companyIds;
-      for (const _cid of ids) await _assertCompanyAccess(ctx.user, _cid);
+      await Promise.all(ids.map(_cid => _assertCompanyAccess(ctx.user, _cid)));
       const hoje = new Date().toISOString().slice(0, 10);
-
-      const [scs, ocs] = await Promise.all([
-        db.select({
-          aprovacaoStatus: comprasSolicitacoes.aprovacaoStatus,
-          status: comprasSolicitacoes.status,
-          tipo: comprasSolicitacoes.tipo,
-        }).from(comprasSolicitacoes).where(inArray(comprasSolicitacoes.companyId, ids)),
-        db.select({
-          status: comprasOrdens.status,
-          dataEntregaPrevista: comprasOrdens.dataEntregaPrevista,
-        }).from(comprasOrdens).where(inArray(comprasOrdens.companyId, ids)),
-      ]);
-
-      const aprovacoesPendentes = scs.filter(r => r.aprovacaoStatus === "aguardando" && r.status !== "cancelado").length;
-      const emergenciais = scs.filter(r => r.aprovacaoStatus === "aguardando" && r.status !== "cancelado" && r.tipo === "emergencial").length;
-      const ocsAtrasadas = ocs.filter(r => r.dataEntregaPrevista && r.dataEntregaPrevista < hoje && !["entregue", "cancelada", "recebido"].includes(r.status)).length;
-
-      return { aprovacoesPendentes, emergenciais, ocsAtrasadas };
+      const idsSql = sql.join(ids.map(id => sql`${id}`), sql`, `);
+      const badgeResult = await db.execute(sql`
+        SELECT
+          (
+            SELECT COUNT(*)
+            FROM compras_solicitacoes
+            WHERE company_id IN (${idsSql})
+              AND aprovacao_status = 'aguardando'
+              AND status <> 'cancelado'
+          )::int AS "aprovacoesPendentes",
+          (
+            SELECT COUNT(*)
+            FROM compras_solicitacoes
+            WHERE company_id IN (${idsSql})
+              AND aprovacao_status = 'aguardando'
+              AND status <> 'cancelado'
+              AND tipo = 'emergencial'
+          )::int AS "emergenciais",
+          (
+            SELECT COUNT(*)
+            FROM compras_ordens
+            WHERE company_id IN (${idsSql})
+              AND data_entrega_prevista < ${hoje}
+              AND status NOT IN ('entregue', 'cancelada', 'recebido')
+          )::int AS "ocsAtrasadas",
+          (
+            SELECT COUNT(*)
+            FROM purchase_accounts_payable
+            WHERE company_id IN (${idsSql})
+              AND status = 'liberado'
+              AND data_vencimento < ${hoje}
+          )::int AS "pagamentosVencidos",
+          (
+            SELECT COUNT(DISTINCT sc.id)
+            FROM compras_solicitacoes sc
+            INNER JOIN compras_solicitacoes_itens sci ON sci.solicitacao_id = sc.id
+            WHERE sc.company_id IN (${idsSql})
+              AND sc.status IN ('pendente', 'em_cotacao')
+              AND sci.orcamento_item_id IS NULL
+          )::int AS "scsSemCobertura",
+          (
+            SELECT LEAST(COUNT(*), 20)
+            FROM almoxarifado_notificacoes
+            WHERE company_id IN (${idsSql})
+              AND lida = false
+          )::int AS "divergencias"
+      `);
+      const badgeRow = ((badgeResult as any).rows ?? [])[0] ?? {};
+      const aprovacoesPendentes = Number(badgeRow.aprovacoesPendentes ?? 0);
+      const emergenciais = Number(badgeRow.emergenciais ?? 0);
+      const ocsAtrasadas = Number(badgeRow.ocsAtrasadas ?? 0);
+      const pagamentosVencidos = Number(badgeRow.pagamentosVencidos ?? 0);
+      const scsSemCobertura = Number(badgeRow.scsSemCobertura ?? 0);
+      const divergencias = Number(badgeRow.divergencias ?? 0);
+      logComprasPerf("getComprasBadgeCounts", perfStartedAt, { companies: ids.length });
+      return {
+        aprovacoesPendentes,
+        emergenciais,
+        ocsAtrasadas,
+        pagamentosVencidos,
+        scsSemCobertura,
+        divergencias,
+      };
     }),
 
   getAlertasCompras: protectedProcedure
     .input(z.object({ companyIds: z.array(z.number()).min(1) }))
     .query(async ({ input, ctx }) => {
-      const _emptyAlertas = () => ({
-        pagamentos: { vencidas: [], proximas: [], bloqueadas: [], totalVencido: 0, totalProximo: 0, totalBloqueado: 0 },
-        entregas:   { atrasadas: 0, proximas: 0, listaAtrasadas: [], listaProximas: [] },
-        cobertura:  { scsSemCobertura: [], totalSemCobertura: 0 },
-        divergencias: { compras: [], financeiro: [], total: 0 },
-      });
-      try {
+      const perfStartedAt = Date.now();
       const db = await getDb();
       const ids = input.companyIds;
-      for (const _cid of ids) await _assertCompanyAccess(ctx.user, _cid);
+      await Promise.all(ids.map(_cid => _assertCompanyAccess(ctx.user, _cid)));
       const hoje = new Date().toISOString().slice(0, 10);
       const em7dias = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
 
-      const [pagRows, notifRows, ocsRows, scsRows, scItensRows, obrasAlertas] = await Promise.all([
+      const [
+        pagVencidasRows,
+        pagProximasRows,
+        pagSummaryResult,
+        pagBloqueadasRows,
+        pagBloqueadasSummaryRows,
+        notifRows,
+        ocsAtrasadasRows,
+        ocsProximasRows,
+        ocsSummaryResult,
+        scsSemCoberturaRows,
+        coberturaSummaryResult,
+        obrasAlertas,
+      ] = await Promise.all([
         db.select({
           id: purchaseAccountsPayable.id,
           ordemId: purchaseAccountsPayable.ordemId,
@@ -12057,10 +13913,77 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         }).from(purchaseAccountsPayable)
           .where(and(
             inArray(purchaseAccountsPayable.companyId, ids),
-            or(eq(purchaseAccountsPayable.status, "liberado"), eq(purchaseAccountsPayable.status, "bloqueado")),
+            eq(purchaseAccountsPayable.status, "liberado"),
+            lt(purchaseAccountsPayable.dataVencimento, hoje),
+          ))
+          .orderBy(asc(purchaseAccountsPayable.dataVencimento))
+          .limit(12),
+
+        db.select({
+          id: purchaseAccountsPayable.id,
+          ordemId: purchaseAccountsPayable.ordemId,
+          supplierNome: purchaseAccountsPayable.supplierNome,
+          valorTotal: purchaseAccountsPayable.valorTotal,
+          status: purchaseAccountsPayable.status,
+          dataVencimento: purchaseAccountsPayable.dataVencimento,
+          parcelaNumero: purchaseAccountsPayable.parcelaNumero,
+          parcelaTotal: purchaseAccountsPayable.parcelaTotal,
+          obraId: purchaseAccountsPayable.obraId,
+        }).from(purchaseAccountsPayable)
+          .where(and(
+            inArray(purchaseAccountsPayable.companyId, ids),
+            eq(purchaseAccountsPayable.status, "liberado"),
+            gte(purchaseAccountsPayable.dataVencimento, hoje),
+            lte(purchaseAccountsPayable.dataVencimento, em7dias),
+          ))
+          .orderBy(asc(purchaseAccountsPayable.dataVencimento))
+          .limit(12),
+
+        db.execute(sql`
+          SELECT
+            COUNT(*) FILTER (WHERE data_vencimento < ${hoje})::int AS vencidas,
+            COUNT(*) FILTER (WHERE data_vencimento >= ${hoje} AND data_vencimento <= ${em7dias})::int AS proximas,
+            COALESCE(SUM(valor_total) FILTER (WHERE data_vencimento < ${hoje}), 0)::float8 AS "totalVencido",
+            COALESCE(SUM(valor_total) FILTER (WHERE data_vencimento >= ${hoje} AND data_vencimento <= ${em7dias}), 0)::float8 AS "totalProximo"
+          FROM purchase_accounts_payable
+          WHERE company_id IN (${sql.join(ids.map(id => sql`${id}`), sql`, `)})
+            AND status = 'liberado'
+            AND data_vencimento <= ${em7dias}
+        `),
+
+        db.select({
+          id: purchaseAccountsPayable.id,
+          ordemId: purchaseAccountsPayable.ordemId,
+          supplierNome: purchaseAccountsPayable.supplierNome,
+          valorTotal: purchaseAccountsPayable.valorTotal,
+          status: purchaseAccountsPayable.status,
+          dataVencimento: purchaseAccountsPayable.dataVencimento,
+          parcelaNumero: purchaseAccountsPayable.parcelaNumero,
+          parcelaTotal: purchaseAccountsPayable.parcelaTotal,
+          obraId: purchaseAccountsPayable.obraId,
+        }).from(purchaseAccountsPayable)
+          .where(and(
+            inArray(purchaseAccountsPayable.companyId, ids),
+            eq(purchaseAccountsPayable.status, "bloqueado"),
+          ))
+          .orderBy(asc(purchaseAccountsPayable.id))
+          .limit(12),
+
+        db.select({
+          quantidade: sql<number>`COUNT(*)`.mapWith(Number),
+          total: sql<number>`COALESCE(SUM(${purchaseAccountsPayable.valorTotal}), 0)`.mapWith(Number),
+        }).from(purchaseAccountsPayable)
+          .where(and(
+            inArray(purchaseAccountsPayable.companyId, ids),
+            eq(purchaseAccountsPayable.status, "bloqueado"),
           )),
 
-        db.select().from(almoxarifadoNotificacoes)
+        db.select({
+          id: almoxarifadoNotificacoes.id,
+          titulo: almoxarifadoNotificacoes.titulo,
+          mensagem: almoxarifadoNotificacoes.mensagem,
+          destinoModulo: almoxarifadoNotificacoes.destinoModulo,
+        }).from(almoxarifadoNotificacoes)
           .where(and(
             inArray(almoxarifadoNotificacoes.companyId, ids),
             eq(almoxarifadoNotificacoes.lida, false),
@@ -12086,27 +14009,69 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
               eq(comprasOrdens.status, "enviada"),
               eq(comprasOrdens.status, "parcial"),
             ),
-          )),
+            lt(comprasOrdens.dataEntregaPrevista, hoje),
+          ))
+          .orderBy(asc(comprasOrdens.dataEntregaPrevista))
+          .limit(10),
 
         db.select({
-          id: comprasSolicitacoes.id,
-          numero: comprasSolicitacoes.numero,
+          id: comprasOrdens.id,
+          numeroOc: comprasOrdens.numeroOc,
+          status: comprasOrdens.status,
+          dataEntregaPrevista: comprasOrdens.dataEntregaPrevista,
+          fornecedorId: comprasOrdens.fornecedorId,
+          fornecedorNome: comprasOrdens.fornecedorNome,
+          obraId: comprasOrdens.obraId,
+          total: comprasOrdens.total,
+        }).from(comprasOrdens)
+          .where(and(
+            inArray(comprasOrdens.companyId, ids),
+            or(
+              eq(comprasOrdens.status, "pendente"),
+              eq(comprasOrdens.status, "aprovada"),
+              eq(comprasOrdens.status, "enviada"),
+              eq(comprasOrdens.status, "parcial"),
+            ),
+            gte(comprasOrdens.dataEntregaPrevista, hoje),
+            lte(comprasOrdens.dataEntregaPrevista, em7dias),
+          ))
+          .orderBy(asc(comprasOrdens.dataEntregaPrevista))
+          .limit(10),
+
+        db.execute(sql`
+          SELECT
+            COUNT(*) FILTER (WHERE data_entrega_prevista < ${hoje})::int AS atrasadas,
+            COUNT(*) FILTER (WHERE data_entrega_prevista >= ${hoje} AND data_entrega_prevista <= ${em7dias})::int AS proximas
+          FROM compras_ordens
+          WHERE company_id IN (${sql.join(ids.map(id => sql`${id}`), sql`, `)})
+            AND status IN ('pendente', 'aprovada', 'enviada', 'parcial')
+            AND data_entrega_prevista <= ${em7dias}
+        `),
+
+        db.select({
+          scId: comprasSolicitacoes.id,
+          numero: comprasSolicitacoes.numeroSc,
           titulo: comprasSolicitacoes.titulo,
-          obraId: comprasSolicitacoes.obraId,
-        }).from(comprasSolicitacoes)
+          itensCount: sql<number>`COUNT(${comprasSolicitacoesItens.id})`.mapWith(Number),
+        }).from(comprasSolicitacoesItens)
+          .innerJoin(comprasSolicitacoes, eq(comprasSolicitacoesItens.solicitacaoId, comprasSolicitacoes.id))
           .where(and(
             inArray(comprasSolicitacoes.companyId, ids),
             or(eq(comprasSolicitacoes.status, "pendente"), eq(comprasSolicitacoes.status, "em_cotacao")),
-          )),
+            isNull(comprasSolicitacoesItens.orcamentoItemId),
+          ))
+          .groupBy(comprasSolicitacoes.id, comprasSolicitacoes.numeroSc, comprasSolicitacoes.titulo)
+          .orderBy(desc(comprasSolicitacoes.id))
+          .limit(10),
 
-        db.select({
-          id: comprasSolicitacoesItens.id,
-          solicitacaoId: comprasSolicitacoesItens.solicitacaoId,
-          orcamentoItemId: comprasSolicitacoesItens.orcamentoItemId,
-          descricao: comprasSolicitacoesItens.descricao,
-        }).from(comprasSolicitacoesItens)
-          .innerJoin(comprasSolicitacoes, eq(comprasSolicitacoesItens.solicitacaoId, comprasSolicitacoes.id))
-          .where(inArray(comprasSolicitacoes.companyId, ids)),
+        db.execute(sql`
+          SELECT COUNT(DISTINCT sc.id)::int AS total
+          FROM compras_solicitacoes sc
+          INNER JOIN compras_solicitacoes_itens sci ON sci.solicitacao_id = sc.id
+          WHERE sc.company_id IN (${sql.join(ids.map(id => sql`${id}`), sql`, `)})
+            AND sc.status IN ('pendente', 'em_cotacao')
+            AND sci.orcamento_item_id IS NULL
+        `),
 
         db.select({ id: obras.id, nome: obras.nome })
           .from(obras)
@@ -12115,27 +14080,25 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
 
       const obraMapAlertas: Record<number, string> = {};
       for (const o of obrasAlertas) { if (o.id && o.nome) obraMapAlertas[o.id] = o.nome; }
+      const pagSummary = ((pagSummaryResult as any).rows ?? [])[0] ?? {};
+      const ocsSummary = ((ocsSummaryResult as any).rows ?? [])[0] ?? {};
+      const coberturaSummary = ((coberturaSummaryResult as any).rows ?? [])[0] ?? {};
 
-      const pagVencidas = pagRows.filter(p =>
-        p.status === "liberado" && p.dataVencimento && p.dataVencimento < hoje
-      ).map(p => ({
+      const pagVencidas = pagVencidasRows.map(p => ({
         ...p, valorTotal: n(p.valorTotal), tipo: "vencida" as const,
       }));
 
-      const pagProximas = pagRows.filter(p =>
-        p.status === "liberado" && p.dataVencimento && p.dataVencimento >= hoje && p.dataVencimento <= em7dias
-      ).map(p => ({
+      const pagProximas = pagProximasRows.map(p => ({
         ...p, valorTotal: n(p.valorTotal), tipo: "proxima" as const,
       }));
 
-      const pagBloqueadas = pagRows.filter(p => p.status === "bloqueado").map(p => ({
+      const pagBloqueadas = pagBloqueadasRows.map(p => ({
         ...p, valorTotal: n(p.valorTotal), tipo: "bloqueada" as const,
       }));
+      const quantidadeBloqueadas = pagBloqueadasSummaryRows[0]?.quantidade ?? 0;
+      const totalBloqueado = pagBloqueadasSummaryRows[0]?.total ?? 0;
 
-      const CLOSED_OC = ["entregue", "cancelada", "recebido"];
-      const ocsAtrasadas = ocsRows.filter(oc =>
-        oc.dataEntregaPrevista && oc.dataEntregaPrevista < hoje && !CLOSED_OC.includes(oc.status ?? "")
-      ).map(oc => ({
+      const ocsAtrasadas = ocsAtrasadasRows.map(oc => ({
         id: oc.id,
         numeroOc: oc.numeroOc,
         status: oc.status,
@@ -12147,9 +14110,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         total: oc.total ? parseFloat(String(oc.total)) : 0,
         diasAtraso: Math.floor((Date.now() - new Date(oc.dataEntregaPrevista! + "T00:00:00").getTime()) / 86400000),
       }));
-      const ocsProximas = ocsRows.filter(oc =>
-        oc.dataEntregaPrevista && oc.dataEntregaPrevista >= hoje && oc.dataEntregaPrevista <= em7dias && !CLOSED_OC.includes(oc.status ?? "")
-      ).map(oc => ({
+      const ocsProximas = ocsProximasRows.map(oc => ({
         id: oc.id,
         numeroOc: oc.numeroOc,
         status: oc.status,
@@ -12161,46 +14122,37 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         total: oc.total ? parseFloat(String(oc.total)) : 0,
       }));
 
-      const scsSemCobertura: { scId: number; numero: string; titulo: string; itensCount: number }[] = [];
-      const scIds = scsRows.map(s => s.id);
-      const itensAtivos = scItensRows.filter(i => scIds.includes(i.solicitacaoId));
-      const scsSemOrcMap: Record<number, number> = {};
-      for (const item of itensAtivos) {
-        if (!item.orcamentoItemId) {
-          scsSemOrcMap[item.solicitacaoId] = (scsSemOrcMap[item.solicitacaoId] ?? 0) + 1;
-        }
-      }
-      for (const [scIdStr, count] of Object.entries(scsSemOrcMap)) {
-        const scId = Number(scIdStr);
-        const sc = scsRows.find(s => s.id === scId);
-        if (sc) {
-          scsSemCobertura.push({
-            scId, numero: sc.numero ?? `SC-${scId}`, titulo: sc.titulo ?? "", itensCount: count,
-          });
-        }
-      }
+      const scsSemCobertura = scsSemCoberturaRows.map(sc => ({
+        scId: sc.scId,
+        numero: sc.numero ?? `SC-${sc.scId}`,
+        titulo: sc.titulo ?? "",
+        itensCount: sc.itensCount,
+      }));
 
       const notifCompras = notifRows.filter(n => n.destinoModulo === "compras");
       const notifFinanceiro = notifRows.filter(n => n.destinoModulo === "financeiro");
 
-      return {
+      const response = {
         pagamentos: {
           vencidas: pagVencidas,
           proximas: pagProximas,
+          quantidadeVencidas: Number(pagSummary.vencidas ?? 0),
+          quantidadeProximas: Number(pagSummary.proximas ?? 0),
           bloqueadas: pagBloqueadas,
-          totalVencido: pagVencidas.reduce((s, p) => s + p.valorTotal, 0),
-          totalProximo: pagProximas.reduce((s, p) => s + p.valorTotal, 0),
-          totalBloqueado: pagBloqueadas.reduce((s, p) => s + p.valorTotal, 0),
+          quantidadeBloqueadas,
+          totalVencido: n(pagSummary.totalVencido),
+          totalProximo: n(pagSummary.totalProximo),
+          totalBloqueado,
         },
         entregas: {
-          atrasadas: ocsAtrasadas.length,
-          proximas: ocsProximas.length,
+          atrasadas: Number(ocsSummary.atrasadas ?? 0),
+          proximas: Number(ocsSummary.proximas ?? 0),
           listaAtrasadas: ocsAtrasadas.slice(0, 10),
           listaProximas: ocsProximas.slice(0, 10),
         },
         cobertura: {
           scsSemCobertura: scsSemCobertura.slice(0, 10),
-          totalSemCobertura: scsSemCobertura.length,
+          totalSemCobertura: Number(coberturaSummary.total ?? 0),
         },
         divergencias: {
           compras: notifCompras,
@@ -12208,138 +14160,188 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
           total: notifRows.length,
         },
       };
-      } catch (err: any) {
-        console.error("[getAlertasCompras] Erro inesperado — stack completo:", err?.stack ?? err);
-        return _emptyAlertas();
-      }
+      logComprasPerf("getAlertasCompras", perfStartedAt, {
+        companies: ids.length,
+        pagamentos: pagVencidasRows.length + pagProximasRows.length + quantidadeBloqueadas,
+        entregas: ocsAtrasadasRows.length + ocsProximasRows.length,
+        cobertura: scsSemCobertura.length,
+      });
+      return response;
     }),
 
   getDashboardPorObra: protectedProcedure
     .input(z.object({ companyIds: z.array(z.number()).min(1) }))
     .query(async ({ input, ctx }) => {
+      const perfStartedAt = Date.now();
       const db = await getDb();
       const ids = input.companyIds;
-      for (const _cid of ids) await _assertCompanyAccess(ctx.user, _cid);
+      await Promise.all(ids.map(_cid => _assertCompanyAccess(ctx.user, _cid)));
       const hoje = new Date().toISOString().slice(0, 10);
 
-      const [ocsRows, scsRows, obrasRows, fornRows, pagRows] = await Promise.all([
-        db.select({
-          id: comprasOrdens.id,
-          status: comprasOrdens.status,
-          total: comprasOrdens.total,
-          obraId: comprasOrdens.obraId,
-          fornecedorId: comprasOrdens.fornecedorId,
-          dataEntregaPrevista: comprasOrdens.dataEntregaPrevista,
-          criadoEm: comprasOrdens.criadoEm,
-        }).from(comprasOrdens)
-          .where(inArray(comprasOrdens.companyId, ids)),
-
-        db.select({
-          id: comprasSolicitacoes.id,
-          status: comprasSolicitacoes.status,
-          obraId: comprasSolicitacoes.obraId,
-        }).from(comprasSolicitacoes)
-          .where(inArray(comprasSolicitacoes.companyId, ids)),
-
+      // Rev. opt — todas as agregações em SQL; apenas topFornecedores precisa de join
+      const idsSql = sql.join(ids.map(i => sql`${i}`), sql`, `);
+      const [ocAggRows, scAggRows, pagAggRows, mensaisRows, obrasRows, fornTopRows] = await Promise.all([
+        // Totais de OC por obra
+        db.execute(sql`
+          SELECT
+            obra_id                                                                  AS "obraId",
+            SUM(CASE WHEN status <> 'cancelada' THEN COALESCE(total::numeric,0) ELSE 0 END) AS "totalGasto",
+            COUNT(*) FILTER (WHERE status <> 'cancelada')::int                      AS "totalOCs",
+            COUNT(*) FILTER (WHERE status NOT IN ('entregue','cancelada','recebido'))::int AS "ocsPendentes",
+            COUNT(*) FILTER (
+              WHERE data_entrega_prevista IS NOT NULL
+                AND data_entrega_prevista < ${hoje}
+                AND status NOT IN ('entregue','cancelada','recebido')
+            )::int                                                                   AS "ocsAtrasadas",
+            COUNT(DISTINCT fornecedor_id) FILTER (WHERE fornecedor_id IS NOT NULL)::int AS "fornecedoresCount"
+          FROM compras_ordens
+          WHERE company_id IN (${idsSql})
+            AND obra_id IS NOT NULL
+          GROUP BY obra_id
+        `),
+        // Totais de SC por obra
+        db.execute(sql`
+          SELECT
+            obra_id                                                AS "obraId",
+            COUNT(*)::int                                         AS "totalSCs",
+            COUNT(*) FILTER (WHERE status IN ('pendente','em_cotacao'))::int AS "scsPendentes"
+          FROM compras_solicitacoes
+          WHERE company_id IN (${idsSql})
+            AND obra_id IS NOT NULL
+          GROUP BY obra_id
+        `),
+        // Totais de pagamentos por obra
+        db.execute(sql`
+          SELECT
+            obra_id                                                               AS "obraId",
+            SUM(COALESCE(valor_pago::numeric, 0))                                AS "totalPago",
+            SUM(CASE WHEN status NOT IN ('pago','cancelado')
+                  THEN COALESCE(valor_total::numeric,0) - COALESCE(valor_pago::numeric,0)
+                  ELSE 0 END)                                                    AS "totalAPagar"
+          FROM purchase_accounts_payable
+          WHERE company_id IN (${idsSql})
+            AND obra_id IS NOT NULL
+          GROUP BY obra_id
+        `),
+        // Últimos 6 meses COM movimento por obra, preservando a regra anterior
+        // mesmo quando não houve compra nos meses corridos mais recentes.
+        db.execute(sql`
+          WITH mensais AS (
+            SELECT
+              obra_id,
+              TO_CHAR(created_at, 'YYYY-MM') AS mes,
+              SUM(COALESCE(total::numeric, 0)) AS valor
+            FROM compras_ordens
+            WHERE company_id IN (${idsSql})
+              AND obra_id IS NOT NULL
+              AND status <> 'cancelada'
+            GROUP BY obra_id, TO_CHAR(created_at, 'YYYY-MM')
+          ),
+          ranked AS (
+            SELECT *, ROW_NUMBER() OVER (PARTITION BY obra_id ORDER BY mes DESC) AS rn
+            FROM mensais
+          )
+          SELECT obra_id AS "obraId", mes AS "mes", valor AS "valor"
+          FROM ranked
+          WHERE rn <= 6
+          ORDER BY obra_id, mes
+        `),
+        // Obras
         db.select({ id: obras.id, nome: obras.nome, codigo: obras.codigo })
           .from(obras).where(inArray(obras.companyId, ids)),
-
-        db.select({ id: fornecedores.id, nomeFantasia: fornecedores.nomeFantasia, razaoSocial: fornecedores.razaoSocial })
-          .from(fornecedores).where(and(inArray(fornecedores.companyId, ids), eq(fornecedores.ativo, true))),
-
-        db.select({
-          obraId: purchaseAccountsPayable.obraId,
-          valorTotal: purchaseAccountsPayable.valorTotal,
-          valorPago: purchaseAccountsPayable.valorPago,
-          status: purchaseAccountsPayable.status,
-        }).from(purchaseAccountsPayable)
-          .where(inArray(purchaseAccountsPayable.companyId, ids)),
+        // A regra anterior usava os 5 primeiros fornecedores distintos vistos nas
+        // OCs (inclusive canceladas) e só resolvia o nome se o fornecedor estivesse
+        // ativo. MIN(id) torna essa ordem histórica determinística sem trazer as OCs.
+        db.execute(sql`
+          WITH fornecedores_por_obra AS (
+            SELECT
+              co.obra_id                                 AS "obraId",
+              co.fornecedor_id                           AS "fornecedorId",
+              f.nome_fantasia                            AS "nomeFantasia",
+              f.razao_social                             AS "razaoSocial",
+              MIN(co.id)                                 AS "primeiraOcId"
+            FROM compras_ordens co
+            LEFT JOIN fornecedores f
+              ON f.id = co.fornecedor_id
+             AND f.company_id = co.company_id
+             AND f.ativo = true
+            WHERE co.company_id IN (${idsSql})
+              AND co.obra_id IS NOT NULL
+              AND co.fornecedor_id IS NOT NULL
+            GROUP BY co.obra_id, co.fornecedor_id, f.nome_fantasia, f.razao_social
+          ),
+          ranked AS (
+            SELECT *,
+              ROW_NUMBER() OVER (PARTITION BY "obraId" ORDER BY "primeiraOcId") AS rn
+            FROM fornecedores_por_obra
+          )
+          SELECT "obraId", "fornecedorId", "nomeFantasia", "razaoSocial", "primeiraOcId"
+          FROM ranked
+          WHERE rn <= 5
+          ORDER BY "obraId", "primeiraOcId"
+        `),
       ]);
 
       const obraMap: Record<number, { nome: string; codigo: string | null }> = {};
       obrasRows.forEach(o => { obraMap[o.id] = { nome: o.nome, codigo: o.codigo }; });
 
-      const fornMap: Record<number, string> = {};
-      fornRows.forEach(f => { fornMap[f.id] = f.nomeFantasia || f.razaoSocial; });
-
-      const CLOSED_OC = ["entregue", "cancelada", "recebido"];
-
-      const obraStats: Record<number, {
-        obraId: number; obraNome: string; obraCodigo: string | null;
-        totalGasto: number; totalOCs: number; ocsPendentes: number; ocsAtrasadas: number;
-        totalSCs: number; scsPendentes: number;
-        totalPago: number; totalAPagar: number;
-        fornecedoresUsados: Set<number>;
-        gastosMensais: Record<string, number>;
-      }> = {};
-
-      const getObraStats = (obraId: number) => {
-        if (!obraStats[obraId]) {
-          const info = obraMap[obraId] || { nome: `Obra #${obraId}`, codigo: null };
-          obraStats[obraId] = {
-            obraId, obraNome: info.nome, obraCodigo: info.codigo,
-            totalGasto: 0, totalOCs: 0, ocsPendentes: 0, ocsAtrasadas: 0,
-            totalSCs: 0, scsPendentes: 0,
-            totalPago: 0, totalAPagar: 0,
-            fornecedoresUsados: new Set(),
-            gastosMensais: {},
-          };
-        }
-        return obraStats[obraId];
-      };
-
-      for (const oc of ocsRows) {
-        if (!oc.obraId) continue;
-        const stats = getObraStats(oc.obraId);
-        const val = n(oc.total);
-        if (oc.status !== "cancelada") {
-          stats.totalGasto += val;
-          stats.totalOCs++;
-          const mes = oc.criadoEm.slice(0, 7);
-          stats.gastosMensais[mes] = (stats.gastosMensais[mes] ?? 0) + val;
-        }
-        if (!CLOSED_OC.includes(oc.status)) stats.ocsPendentes++;
-        if (oc.dataEntregaPrevista && oc.dataEntregaPrevista < hoje && !CLOSED_OC.includes(oc.status)) stats.ocsAtrasadas++;
-        if (oc.fornecedorId) stats.fornecedoresUsados.add(oc.fornecedorId);
-      }
-
-      for (const sc of scsRows) {
-        if (!sc.obraId) continue;
-        const stats = getObraStats(sc.obraId);
-        stats.totalSCs++;
-        if (sc.status === "pendente" || sc.status === "em_cotacao") stats.scsPendentes++;
-      }
-
-      for (const pag of pagRows) {
-        if (!pag.obraId) continue;
-        const stats = getObraStats(pag.obraId);
-        stats.totalPago += n(pag.valorPago);
-        if (pag.status !== "pago" && pag.status !== "cancelado") {
-          stats.totalAPagar += n(pag.valorTotal) - n(pag.valorPago);
+      // Montar topFornecedores por obra (top 5 por ocs count — já vem ordenado DESC)
+      const topFornPorObra: Record<number, { id: number; nome: string }[]> = {};
+      for (const row of (fornTopRows as any).rows ?? []) {
+        const oid = Number(row.obraId);
+        if (!topFornPorObra[oid]) topFornPorObra[oid] = [];
+        if (topFornPorObra[oid].length < 5) {
+          topFornPorObra[oid].push({ id: Number(row.fornecedorId), nome: (row.nomeFantasia || row.razaoSocial || `#${row.fornecedorId}`) as string });
         }
       }
 
-      const result = Object.values(obraStats).map(s => ({
-        obraId: s.obraId,
-        obraNome: s.obraCodigo ? `${s.obraCodigo} – ${s.obraNome}` : s.obraNome,
-        totalGasto: s.totalGasto,
-        totalOCs: s.totalOCs,
-        ocsPendentes: s.ocsPendentes,
-        ocsAtrasadas: s.ocsAtrasadas,
-        totalSCs: s.totalSCs,
-        scsPendentes: s.scsPendentes,
-        totalPago: s.totalPago,
-        totalAPagar: s.totalAPagar,
-        fornecedoresCount: s.fornecedoresUsados.size,
-        topFornecedores: [...s.fornecedoresUsados].slice(0, 5).map(id => ({
-          id, nome: fornMap[id] ?? `#${id}`,
-        })),
-        gastosMensais: Object.entries(s.gastosMensais)
-          .sort(([a], [b]) => a.localeCompare(b))
-          .slice(-6)
-          .map(([mes, valor]) => ({ mes, valor })),
-      })).sort((a, b) => b.totalGasto - a.totalGasto);
+      // Montar gastosMensais por obra
+      const mensaisPorObra: Record<number, { mes: string; valor: number }[]> = {};
+      for (const row of (mensaisRows as any).rows ?? []) {
+        const oid = Number(row.obraId);
+        if (!mensaisPorObra[oid]) mensaisPorObra[oid] = [];
+        mensaisPorObra[oid].push({ mes: String(row.mes), valor: parseFloat(row.valor ?? "0") || 0 });
+      }
 
+      // Combinar todos os obraIds vistos
+      const allObraIds = new Set<number>();
+      for (const r of (ocAggRows as any).rows ?? []) allObraIds.add(Number(r.obraId));
+      for (const r of (scAggRows as any).rows ?? []) allObraIds.add(Number(r.obraId));
+      for (const r of (pagAggRows as any).rows ?? []) allObraIds.add(Number(r.obraId));
+
+      const ocByObra: Record<number, any> = {};
+      for (const r of (ocAggRows as any).rows ?? []) ocByObra[Number(r.obraId)] = r;
+      const scByObra: Record<number, any> = {};
+      for (const r of (scAggRows as any).rows ?? []) scByObra[Number(r.obraId)] = r;
+      const pagByObra: Record<number, any> = {};
+      for (const r of (pagAggRows as any).rows ?? []) pagByObra[Number(r.obraId)] = r;
+
+      const result = Array.from(allObraIds).map(obraId => {
+        const info = obraMap[obraId] ?? { nome: `Obra #${obraId}`, codigo: null };
+        const oc = ocByObra[obraId] ?? {};
+        const sc = scByObra[obraId] ?? {};
+        const pag = pagByObra[obraId] ?? {};
+        return {
+          obraId,
+          obraNome: info.codigo ? `${info.codigo} – ${info.nome}` : info.nome,
+          totalGasto: parseFloat(oc.totalGasto ?? "0") || 0,
+          totalOCs: Number(oc.totalOCs ?? 0),
+          ocsPendentes: Number(oc.ocsPendentes ?? 0),
+          ocsAtrasadas: Number(oc.ocsAtrasadas ?? 0),
+          totalSCs: Number(sc.totalSCs ?? 0),
+          scsPendentes: Number(sc.scsPendentes ?? 0),
+          totalPago: parseFloat(pag.totalPago ?? "0") || 0,
+          totalAPagar: parseFloat(pag.totalAPagar ?? "0") || 0,
+          fornecedoresCount: Number(oc.fornecedoresCount ?? 0),
+          topFornecedores: topFornPorObra[obraId] ?? [],
+          gastosMensais: mensaisPorObra[obraId] ?? [],
+        };
+      }).sort((a, b) => b.totalGasto - a.totalGasto);
+
+      logComprasPerf("getDashboardPorObra", perfStartedAt, {
+        companies: ids.length,
+        obras: result.length,
+      });
       return { obras: result };
     }),
 
@@ -13561,7 +15563,12 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
           prazoFim: atividadesMap[it.eapCodigo]?.dataFim ?? null,
           duracaoDias: atividadesMap[it.eapCodigo]?.duracaoDias ?? null,
           temMat: isComposto ? (compostoMdoMat?.temMat ?? true) : (realServicoCodigo ? (mdoMatMap[realServicoCodigo]?.temMat ?? false) : true),
-          temMdo: isComposto ? (compostoMdoMat?.temMdo ?? true) : (realServicoCodigo ? (mdoMatMap[realServicoCodigo]?.temMdo ?? false) : false),
+          // Rev. 5026 — a coluna de M.O. do ORÇAMENTO é soberana: se o item tem
+          // valor unitário de MO na planilha (custoUnitMdo > 0), ele DEVE aparecer
+          // na solicitação de mão de obra, mesmo que a composição/CPU não tenha
+          // insumo com alocação MDO (ou nem exista composição vinculada).
+          temMdo: n(it.custoUnitMdo) > 0
+            || (isComposto ? (compostoMdoMat?.temMdo ?? true) : (realServicoCodigo ? (mdoMatMap[realServicoCodigo]?.temMdo ?? false) : false)),
           temEquip: isComposto ? (compostoMdoMat?.temEquip ?? false) : (realServicoCodigo ? (mdoMatMap[realServicoCodigo]?.temEquip ?? false) : false),
           mdoContratado: mdoContratadoMap[it.id] || 0,
           mdoSaldo: n(it.quantidade) - (mdoContratadoMap[it.id] || 0),
@@ -13635,7 +15642,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       entregas: z.array(z.object({
         id: z.number().optional(),
         dataEntrega: z.string(),
-        quantidade: z.number(),
+        quantidade: z.number().int().positive(),
         observacoes: z.string().optional(),
       })),
     }))
@@ -13734,6 +15741,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
           sc = s ?? null;
         }
       }
+      if (cot) await _assertObraReadAccess(ctx.user, cot.obraId);
+      else if (oc) await _assertObraReadAccess(ctx.user, oc.obraId);
 
       let financialEntry: { status: string; dataPagamento: string | null; dataVencimento: string | null } | null = null;
       if (oc?.financialEntryId) {
@@ -14812,7 +16821,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         id: z.number().optional(),
         descricao: z.string(),
         unidade: z.string().optional(),
-        quantidade: z.number(),
+        quantidade: z.number().int().positive(),
         observacoes: z.string().optional(),
         orcamentoItemId: z.number().optional(),
         eapCodigo: z.string().optional(),
@@ -15118,7 +17127,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
                 const [cotRow] = await tx.insert(comprasCotacoes).values({
                   companyId: sc.companyId,
                   numeroCotacao: numeroCotacaoTx,
-                  descricao: sc.titulo || sc.departamento || "Cotação automática",
+                  descricao: tituloMaiusculo(sc.titulo || sc.departamento || "Cotação automática"),
                   prioridade: sc.prioridade ?? "normal",
                   obraId: sc.obraId ?? null,
                   solicitacaoId: sc.id,
@@ -16793,6 +18802,11 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       } else {
         // Sem contrato: cancela só a OC + seus financeiros não pagos (transação única).
         await db.transaction(async (tx: any) => {
+          if ((oc as any).lancamentoRecorrente) {
+            // Mesmo lock do materializador: se houver corrida, ou a criação
+            // termina antes e é cancelada abaixo, ou lê a OC já cancelada.
+            await tx.execute(sql`SELECT pg_advisory_xact_lock(477002, ${input.ordemId})`);
+          }
           await tx.update(comprasOrdens).set({
             status: "cancelada",
             canceladoPor: usuarioNome,
@@ -18708,7 +20722,10 @@ Responda APENAS com JSON válido, sem markdown, no formato:
 
   getItemSugestoes: protectedProcedure
     .input(z.object({ companyId: z.number(), q: z.string().min(1) }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco de dados indisponível." });
       const { companyId, q } = input;
       const pat = `%${q}%`;
       // Busca mais do que o necessário para poder agrupar por normItemDesc

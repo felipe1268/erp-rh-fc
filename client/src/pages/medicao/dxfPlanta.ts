@@ -23,10 +23,22 @@ export interface DxfPlanta {
   algoVersion?: number;
   ok: boolean;
   erro?: string;
+  /** Rev. — sugestões de portas/janelas detectadas no DXF (arcos de giro de porta
+   *  e blocos com nome PORTA/JANELA). posX/posY normalizados 0..1 no mesmo box do SVG. */
+  vaosSugeridos?: VaoSugerido[];
+}
+
+export interface VaoSugerido {
+  tipo: "porta" | "janela";
+  posX: number;
+  posY: number;
+  /** largura provável do vão em METROS (raio do arco da porta), quando deduzível */
+  larguraM?: number;
+  fonte: "arco" | "bloco";
 }
 
 /** bump sempre que a lógica de parse/escala mudar — invalida sidecars cacheados no servidor. */
-export const DXF_ALGO_VERSION = 3;
+export const DXF_ALGO_VERSION = 5;
 
 type Pt = { x: number; y: number };
 type Poly = { pts: Pt[]; closed: boolean };
@@ -97,12 +109,16 @@ function apply(xf: Xf, p: Pt): Pt {
 
 // Coleta polilinhas (em coords mundo) de uma lista de entidades, expandindo
 // INSERTs (referências de bloco) recursivamente.
+// Marcas candidatas a porta/janela coletadas durante a varredura (coords mundo).
+type Marca = { tipo: "porta" | "janela"; x: number; y: number; rUnid?: number; fonte: "arco" | "bloco" };
+
 function coletar(
   entities: any[],
   blocks: Record<string, any>,
   xf: Xf,
   out: Poly[],
   depth: number,
+  marcas?: Marca[],
 ) {
   if (!Array.isArray(entities) || depth > 6) return;
   for (const e of entities) {
@@ -125,7 +141,20 @@ function coletar(
           break;
         }
         case "ARC": {
-          if (e.center && e.radius != null) out.push({ pts: arcPts(e.center.x, e.center.y, e.radius, e.startAngle ?? 0, e.endAngle ?? Math.PI * 2).map((p) => apply(xf, p)), closed: false });
+          if (e.center && e.radius != null) {
+            out.push({ pts: arcPts(e.center.x, e.center.y, e.radius, e.startAngle ?? 0, e.endAngle ?? Math.PI * 2).map((p) => apply(xf, p)), closed: false });
+            // Candidato a PORTA: arco de giro ~90° (folha da porta). O centro do
+            // arco é a dobradiça; o raio é a largura da folha.
+            if (marcas) {
+              let sweep = (e.endAngle ?? 0) - (e.startAngle ?? 0);
+              while (sweep < 0) sweep += Math.PI * 2;
+              const deg = (sweep * 180) / Math.PI;
+              if (deg >= 60 && deg <= 120) {
+                const c = apply(xf, e.center);
+                marcas.push({ tipo: "porta", x: c.x, y: c.y, rUnid: e.radius * Math.abs(xf.sx || 1), fonte: "arco" });
+              }
+            }
+          }
           break;
         }
         case "ELLIPSE": {
@@ -144,6 +173,13 @@ function coletar(
           break;
         }
         case "INSERT": {
+          // Candidato por NOME do bloco (PORTA*/DOOR*/JANELA*/WINDOW*).
+          if (marcas && e.name && e.position) {
+            const nm = String(e.name).toUpperCase();
+            const pos = apply(xf, e.position);
+            if (/PORTA|DOOR/.test(nm)) marcas.push({ tipo: "porta", x: pos.x, y: pos.y, fonte: "bloco" });
+            else if (/JANELA|WINDOW/.test(nm)) marcas.push({ tipo: "janela", x: pos.x, y: pos.y, fonte: "bloco" });
+          }
           const blk = blocks[e.name];
           if (!blk || !Array.isArray(blk.entities)) break;
           const rot = ((e.rotation ?? 0) * Math.PI) / 180;
@@ -166,7 +202,7 @@ function coletar(
           const tParent = apply(xf, { x: local.tx, y: local.ty });
           childXf.tx = tParent.x - (base.x * childXf.sx * childXf.cos - base.y * childXf.sy * childXf.sin);
           childXf.ty = tParent.y - (base.x * childXf.sx * childXf.sin + base.y * childXf.sy * childXf.cos);
-          coletar(blk.entities, blocks, childXf, out, depth + 1);
+          coletar(blk.entities, blocks, childXf, out, depth + 1, marcas);
           break;
         }
         default:
@@ -188,7 +224,8 @@ export function parseDxfPlanta(text: string): DxfPlanta {
 
   const blocks: Record<string, any> = dxf.blocks || {};
   let polys: Poly[] = [];
-  coletar(dxf.entities || [], blocks, IDENT, polys, 0);
+  const marcas: Marca[] = [];
+  coletar(dxf.entities || [], blocks, IDENT, polys, 0, marcas);
 
   if (!polys.length) return fail("Nenhum desenho reconhecido no DXF (somente texto/cotas?).");
 
@@ -326,5 +363,79 @@ export function parseDxfPlanta(text: string): DxfPlanta {
     }
   }
 
-  return { svg, w, h, metrosPorUnidade, escalaHeuristica, algoVersion: DXF_ALGO_VERSION, ok: true };
+  // Rev. — sugestões de portas/janelas: filtra marcas dentro do box escolhido,
+  // valida a largura da porta em metros (0,50–1,50 m quando a escala é conhecida)
+  // e deduplica marcas muito próximas (≤ ~0,30 m).
+  const vaosSugeridos: VaoSugerido[] = [];
+  // Rev. — heurística de JANELA: na planta baixa, janela é desenhada como 3+
+  // linhas PARALELAS e próximas (dentro da espessura da parede), todas com o
+  // mesmo comprimento ≈ largura do vão. Agrupa segmentos assim e sugere o vão.
+  if ((metrosPorUnidade ?? 0) > 0) {
+    const mpu = metrosPorUnidade!;
+    type Seg = { mx: number; my: number; ang: number; len: number; usado?: boolean };
+    const segs: Seg[] = [];
+    for (const pl of polys) {
+      if (pl.pts.length < 2 || pl.pts.length > 3) continue; // só traços simples (LINE / poly curtinha)
+      for (let i = 0; i + 1 < pl.pts.length; i++) {
+        const a = pl.pts[i], b = pl.pts[i + 1];
+        if (![a.x, a.y, b.x, b.y].every(Number.isFinite)) continue;
+        const len = Math.hypot(b.x - a.x, b.y - a.y) * mpu;
+        if (len < 0.4 || len > 3.0) continue; // largura plausível de janela
+        let ang = Math.atan2(b.y - a.y, b.x - a.x);
+        if (ang < 0) ang += Math.PI; // direção sem sentido (mod 180°)
+        segs.push({ mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2, ang, len });
+      }
+      if (segs.length > 4000) break; // sanidade em plantas gigantes
+    }
+    const angDiff = (a: number, b: number) => { const d = Math.abs(a - b); return Math.min(d, Math.PI - d); };
+    for (let i = 0; i < segs.length; i++) {
+      const s = segs[i];
+      if (s.usado) continue;
+      const grupo = [s];
+      for (let j = i + 1; j < segs.length; j++) {
+        const t = segs[j];
+        if (t.usado) continue;
+        if (angDiff(s.ang, t.ang) > 0.09) continue;                 // ~5°
+        if (Math.abs(t.len - s.len) > s.len * 0.2) continue;        // mesmo comprimento ±20%
+        const dx = (t.mx - s.mx) * mpu, dy = (t.my - s.my) * mpu;
+        // decompõe a distância entre centros em ao-longo (‖) e perpendicular (⊥)
+        const ux = Math.cos(s.ang), uy = Math.sin(s.ang);
+        const along = Math.abs(dx * ux + dy * uy);
+        const perp = Math.abs(-dx * uy + dy * ux);
+        if (perp > 0.30 || along > s.len * 0.35) continue;          // dentro da parede, alinhadas
+        grupo.push(t);
+      }
+      if (grupo.length >= 3) {
+        for (const g of grupo) g.usado = true;
+        const cx = grupo.reduce((acc, g) => acc + g.mx, 0) / grupo.length;
+        const cy = grupo.reduce((acc, g) => acc + g.my, 0) / grupo.length;
+        const larg = grupo.map(g => g.len).sort((a, b) => a - b)[Math.floor(grupo.length / 2)];
+        // não sugerir janela em cima de porta (arco já detectado a ≤0,8 m)
+        const pertoDePorta = marcas.some(mk => mk.tipo === "porta" && Math.hypot((mk.x - cx) * mpu, (mk.y - cy) * mpu) <= 0.8);
+        if (!pertoDePorta) marcas.push({ tipo: "janela", x: cx, y: cy, rUnid: larg / mpu, fonte: "bloco" });
+      }
+    }
+  }
+  {
+    const mpu = metrosPorUnidade ?? 0;
+    const tolUnid = mpu > 0 ? 0.30 / mpu : Math.max(w, h) / 200;
+    for (const mk of marcas) {
+      if (!Number.isFinite(mk.x) || !Number.isFinite(mk.y)) continue;
+      if (mk.x < minX - w * 0.01 || mk.x > maxX + w * 0.01 || mk.y < minY - h * 0.01 || mk.y > maxY + h * 0.01) continue;
+      let larguraM: number | undefined;
+      if (mk.rUnid != null && mpu > 0) {
+        larguraM = mk.rUnid * mpu;
+        if (mk.fonte === "arco" && (larguraM < 0.5 || larguraM > 1.5)) continue; // não é folha de porta plausível
+        if (mk.tipo === "janela" && (larguraM < 0.4 || larguraM > 3.0)) continue;
+        larguraM = +(Math.round(larguraM * 20) / 20).toFixed(2); // arredonda p/ 5 cm
+      }
+      const posX = (mk.x - minX) / w;
+      const posY = (maxY - mk.y) / h; // Y invertido, igual ao SVG
+      if (vaosSugeridos.some(s => Math.hypot((s.posX - posX) * w, (s.posY - posY) * h) <= tolUnid)) continue;
+      vaosSugeridos.push({ tipo: mk.tipo, posX: +posX.toFixed(6), posY: +posY.toFixed(6), larguraM, fonte: mk.fonte });
+      if (vaosSugeridos.length >= 400) break;
+    }
+  }
+
+  return { svg, w, h, metrosPorUnidade, escalaHeuristica, algoVersion: DXF_ALGO_VERSION, vaosSugeridos, ok: true };
 }

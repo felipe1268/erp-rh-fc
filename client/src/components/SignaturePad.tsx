@@ -44,38 +44,56 @@ export const SignaturePad = forwardRef<SignaturePadHandle, SignaturePadProps>(fu
   const inkDistanceRef = useRef(0);
   const MIN_INK_DISTANCE = 30; // px somados
   const [hasInk, setHasInk] = useState(!!value);
+  // Rev. 5032 — snapshot do desenho atual (dataURL) p/ redesenhar em resize
+  // (dialog maximizado esticava o canvas por CSS sem mudar o bitmap → cursor
+  // deslocado e assinatura distorcida).
+  const snapshotRef = useRef<string | null>(value || null);
 
-  // Restaura value (ex: navegação de etapas) — desenha PNG salvo no canvas.
-  useEffect(() => {
+  // (Re)configura a resolução do bitmap p/ o tamanho CSS atual e redesenha o snapshot.
+  const setupCanvas = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    // Ajusta resolução pra densidade do device
     const dpr = window.devicePixelRatio || 1;
     const cssW = canvas.clientWidth;
     const cssH = canvas.clientHeight;
-    if (canvas.width !== cssW * dpr || canvas.height !== cssH * dpr) {
-      canvas.width = cssW * dpr;
-      canvas.height = cssH * dpr;
-      ctx.scale(dpr, dpr);
+    if (cssW === 0 || cssH === 0) return;
+    if (canvas.width !== Math.round(cssW * dpr) || canvas.height !== Math.round(cssH * dpr)) {
+      canvas.width = Math.round(cssW * dpr);
+      canvas.height = Math.round(cssH * dpr);
     }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.lineWidth = 2;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     ctx.strokeStyle = "#0f172a";
-    if (value) {
+    ctx.clearRect(0, 0, cssW, cssH);
+    const snap = snapshotRef.current;
+    if (snap) {
       const img = new Image();
       img.onload = () => {
         ctx.clearRect(0, 0, cssW, cssH);
         ctx.drawImage(img, 0, 0, cssW, cssH);
-        setHasInk(true);
       };
-      img.src = value;
-    } else {
-      ctx.clearRect(0, 0, cssW, cssH);
-      setHasInk(false);
+      img.src = snap;
     }
+  };
+
+  // Restaura value (ex: navegação de etapas) + acompanha mudanças de tamanho.
+  useEffect(() => {
+    snapshotRef.current = value || null;
+    setHasInk(!!value);
+    setupCanvas();
+    const canvas = canvasRef.current;
+    if (!canvas || typeof ResizeObserver === "undefined") return;
+    let lastW = canvas.clientWidth, lastH = canvas.clientHeight;
+    const ro = new ResizeObserver(() => {
+      const w = canvas.clientWidth, h = canvas.clientHeight;
+      if (w !== lastW || h !== lastH) { lastW = w; lastH = h; setupCanvas(); }
+    });
+    ro.observe(canvas);
+    return () => ro.disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -126,6 +144,7 @@ export const SignaturePad = forwardRef<SignaturePadHandle, SignaturePadProps>(fu
       return;
     }
     const dataUrl = canvas.toDataURL("image/png");
+    snapshotRef.current = dataUrl; // p/ redesenho em resize
     onChange?.(dataUrl);
   }
 
@@ -136,6 +155,7 @@ export const SignaturePad = forwardRef<SignaturePadHandle, SignaturePadProps>(fu
     if (!ctx) return;
     ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
     inkDistanceRef.current = 0;
+    snapshotRef.current = null;
     setHasInk(false);
     onChange?.(null);
   }

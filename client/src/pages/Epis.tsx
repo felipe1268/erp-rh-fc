@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { trpc } from "@/lib/trpc";
 import { handleCurrencyInput, floatToCurrency, parseCurrencyToFloat } from "@/lib/currency";
 import { labelTamanhoEpi, labelTamanhoCalca } from "@/lib/epiTamanho";
@@ -232,21 +233,45 @@ export default function Epis() {
 
   const [debouncedSearch, setDebouncedSearch] = useState("");
   useEffect(() => {
-    const t = setTimeout(() => { setDebouncedSearch(search); setEpisPage(0); setDeliveriesPage(0); }, 350);
+    const t = setTimeout(() => {
+      setDebouncedSearch(search);
+      setEpisPage(0);
+      setDeliveriesPage(0);
+      setSelectedDeliveryIds(new Set());
+    }, 350);
     return () => clearTimeout(t);
   }, [search]);
-  useEffect(() => { setEpisPage(0); }, [filterCategoria, filterCondicao, filterTamanho, filterEstoque]);
+  useEffect(() => {
+    setEpisPage(0);
+    setDeliveriesPage(0);
+    setSelectedDeliveryIds(new Set());
+  }, [filterCategoria, filterCondicao, filterTamanho, filterEstoque]);
 
   // Rev. 2950 — local de estoque ativo no Catálogo ("central" = Almoxarifado Central;
   // senão o id da obra). Declarado ANTES de episQ p/ evitar TDZ.
   const [catalogoObraId, setCatalogoObraId] = useState<string>("central");
   const [estoqueLocalId, setEstoqueLocalId] = useState<string>("central");
+  // Seleção da aba "Estoque por Obra". Também alimenta os cartões superiores
+  // para que os indicadores reflitam a obra escolhida, em vez do total central.
+  const [filterObraEstoque, setFilterObraEstoque] = useState<string>("todas");
   useEffect(() => { setEpisPage(0); }, [catalogoObraId]);
 
   const episQ = trpc.epis.list.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined, limit: PAGE_SIZE, offset: episPage * PAGE_SIZE, search: debouncedSearch || undefined, categoria: filterCategoria !== "Todos" ? filterCategoria : undefined, condicao: filterCondicao !== "Todos" ? filterCondicao : undefined, tamanho: filterTamanho !== "Todos" ? filterTamanho : undefined, filtroEstoque: filterEstoque !== "todos" ? filterEstoque : undefined, obraId: catalogoObraId !== "central" ? parseInt(catalogoObraId) : undefined }, { enabled: hasValidCompany });
   const episAllQ = trpc.epis.list.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined, limit: 2000, offset: 0 }, { enabled: hasValidCompany && (viewMode === "nova_entrega" || viewMode === "ficha_epi" || viewMode === "estoque_obra" || viewMode === "transferencias") });
-  const deliveriesQ = trpc.epis.listDeliveries.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined, search: debouncedSearch || undefined, limit: PAGE_SIZE, offset: deliveriesPage * PAGE_SIZE }, { enabled: hasValidCompany && (viewMode === "entregas" || viewMode === "nova_entrega" || viewMode === "ficha_epi") });
-  const statsQ = trpc.epis.stats.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined }, { enabled: hasValidCompany });
+  const deliveriesQ = trpc.epis.listDeliveries.useQuery({
+    companyId: queryCompanyId,
+    companyIds: isConstrutoras ? companyIds : undefined,
+    search: debouncedSearch || undefined,
+    categoria: filterCategoria !== "Todos" ? filterCategoria : undefined,
+    condicao: filterCondicao !== "Todos" ? filterCondicao : undefined,
+    tamanho: filterTamanho !== "Todos" ? filterTamanho : undefined,
+    limit: PAGE_SIZE,
+    offset: deliveriesPage * PAGE_SIZE,
+  }, { enabled: hasValidCompany && (viewMode === "entregas" || viewMode === "nova_entrega" || viewMode === "ficha_epi") });
+  const statsObraId = viewMode === "estoque_obra" && filterObraEstoque !== "todas" && filterObraEstoque !== "central"
+    ? parseInt(filterObraEstoque, 10)
+    : undefined;
+  const statsQ = trpc.epis.stats.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined, obraId: statsObraId }, { enabled: hasValidCompany });
   const employeesQ = trpc.employees.list.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined, excludeTerminated: true }, { enabled: hasValidCompany && (viewMode === "nova_entrega" || viewMode === "ficha_epi") });
   const bdiQ = trpc.epis.getBdi.useQuery({ companyId: queryCompanyId }, { enabled: hasValidCompany && (viewMode === "nova_entrega" || viewMode === "ficha_epi" || viewMode === "config") });
   const kitsNovaEntregaQ = trpc.epiAvancado.kitsList.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined }, { enabled: hasValidCompany && viewMode === "nova_entrega" });
@@ -290,13 +315,9 @@ export default function Epis() {
     return m;
   }, [estoqueObraList2]);
 
-  // Rev. 2773 — declarado aqui (antes dos memos abaixo) pra evitar TDZ.
-  const [filterObraEstoque, setFilterObraEstoque] = useState<string>("todas");
-
   // Rev. 2773 — Itens do Estoque Central derivados do catálogo (epis c/ quantidadeEstoque > 0),
   // normalizados no MESMO formato das linhas de obra pra alimentar a tabela detalhada.
   const centralItensList = useMemo(() => (episAllList as any[])
-    .filter((e: any) => Number(e.quantidadeEstoque || 0) > 0)
     .map((e: any) => ({
       id: `central-${e.id}`,
       obraId: "central",
@@ -305,6 +326,7 @@ export default function Epis() {
       nomeEpi: e.nome,
       caEpi: e.ca,
       categoriaEpi: e.categoria,
+      condicaoEpi: e.condicao,
       tamanhoEpi: e.tamanho, // Rev. 2776 — mostrar numeração/tamanho na tela
       quantidade: Number(e.quantidadeEstoque || 0),
       valorProdutoEpi: e.valorProduto,
@@ -313,9 +335,23 @@ export default function Epis() {
   // Rev. 2773 — Lista que alimenta a tabela detalhada conforme o card/obra selecionado:
   // "central" → itens do central; obraId → itens daquela obra; "todas" → todos os de obra.
   const tabelaEstoqueList = useMemo(() => {
-    if (filterObraEstoque === "central") return centralItensList;
-    return (estoqueObraList2 as any[]).filter((e: any) => filterObraEstoque === "todas" || String(e.obraId) === filterObraEstoque);
-  }, [filterObraEstoque, estoqueObraList2, centralItensList]);
+    const base = filterObraEstoque === "central"
+      ? centralItensList
+      : (estoqueObraList2 as any[]).filter((e: any) => filterObraEstoque === "todas" || String(e.obraId) === filterObraEstoque);
+    const searchTerm = debouncedSearch.trim().toLowerCase();
+    return base.filter((e: any) => {
+      const quantidade = Number(e.quantidade || 0);
+      const texto = `${e.nomeEpi || ""} ${e.caEpi || ""} ${e.nomeObra || ""}`.toLowerCase();
+      if (searchTerm && !texto.includes(searchTerm)) return false;
+      if (filterCategoria !== "Todos" && e.categoriaEpi !== filterCategoria) return false;
+      if (filterCondicao !== "Todos" && (e.condicaoEpi || "Novo") !== filterCondicao) return false;
+      if (filterTamanho !== "Todos" && e.tamanhoEpi !== filterTamanho) return false;
+      if (filterEstoque === "zerado" && quantidade !== 0) return false;
+      if (filterEstoque === "critico" && (quantidade < 1 || quantidade > 3)) return false;
+      if (filterEstoque === "baixo" && (quantidade < 4 || quantidade > 10)) return false;
+      return true;
+    });
+  }, [filterObraEstoque, estoqueObraList2, centralItensList, debouncedSearch, filterCategoria, filterCondicao, filterTamanho, filterEstoque]);
   const deliveriesList = deliveriesQ.data?.items ?? [];
   const deliveriesTotal = deliveriesQ.data?.total ?? 0;
   const stats = statsQ.data;
@@ -404,6 +440,13 @@ export default function Epis() {
   });
   const [transItens, setTransItens] = useState<Array<{ epiId: string; quantidade: number }>>([]);
   const [transSaving, setTransSaving] = useState(false);
+  const [filterObraTransferencia, setFilterObraTransferencia] = useState<string>("todas");
+  const [editingTransferencia, setEditingTransferencia] = useState<any>(null);
+  const [editTransferenciaForm, setEditTransferenciaForm] = useState({
+    quantidade: 1, tipoOrigem: "central" as "central" | "obra", origemObraId: "",
+    tipoDestino: "obra" as "central" | "obra", destinoObraId: "",
+    data: "", observacoes: "",
+  });
   // Rev. 2186 — filtro de assinatura na lista de Entregas de EPI
   const [filterAssinatura, setFilterAssinatura] = useState<"todas" | "assinadas" | "nao_assinadas">("todas");
   const [showTransferDialog, setShowTransferDialog] = useState(false);
@@ -419,6 +462,13 @@ export default function Epis() {
   // p/ ver todos. O filtro segue disponível no dropdown do topo.
   const [estoqueCardsOpen, setEstoqueCardsOpen] = useState<boolean>(false);
 
+  useEffect(() => {
+    setCatalogoObraId("central");
+    setFilterObraEstoque("todas");
+    setFilterObraTransferencia("todas");
+    setSelectedDeliveryIds(new Set());
+  }, [queryCompanyId]);
+
   // BDI config
   const [bdiValue, setBdiValue] = useState("");
 
@@ -432,6 +482,83 @@ export default function Epis() {
   const suggestLifespanMut = trpc.epis.suggestLifespan.useMutation();
   const sugerirFotoIAMut = trpc.epis.sugerirFotoIA.useMutation();
   const [autoFotoBulkLoading, setAutoFotoBulkLoading] = useState(false);
+  const trpcUtils = trpc.useUtils();
+  const [listaTamanhosLoading, setListaTamanhosLoading] = useState(false);
+  // Rev. 5059 — Lista de Tamanhos (uniforme/calçado por funcionário), padrão
+  // de impressão aprovado (cabeçalho + thead escuro + zebra + rodapé LGPD).
+  const imprimirListaTamanhos = async () => {
+    setListaTamanhosLoading(true);
+    try {
+      const emps = await trpcUtils.employees.list.fetch({
+        companyId: queryCompanyId,
+        companyIds: isConstrutoras ? companyIds : undefined,
+        excludeTerminated: true,
+      });
+      const lista = (emps || []).slice().sort((a: any, b: any) =>
+        String(a.nomeCompleto || '').localeCompare(String(b.nomeCompleto || ''), 'pt-BR'));
+      const esc = (s: any) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      const tam = (v: any) => {
+        const t = String(v ?? '').trim();
+        return t ? `<span style="display:inline-block;min-width:34px;padding:2px 8px;border:1px solid #cbd5e1;border-radius:6px;font-weight:700;">${esc(t)}</span>` : '<span style="color:#b45309;font-size:10px;">não informado</span>';
+      };
+      const agora = new Date();
+      const emitidoEm = agora.toLocaleDateString('pt-BR') + ' ' + agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      const emissor = esc(user?.name || '—');
+      const empresaNome = esc(selectedCompany?.razaoSocial || selectedCompany?.nomeFantasia || '');
+      const logo = selectedCompany?.logoUrl || '/logo-fc.jpg';
+      const semCadastro = lista.filter((e: any) => !String(e.tamanhoCalcado ?? '').trim() && !String(e.tamanhoCamisa ?? '').trim() && !String(e.tamanhoCalca ?? '').trim()).length;
+      const linhas = lista.map((e: any, i: number) => `
+        <tr style="background:${i % 2 ? '#f8fafc' : '#fff'};">
+          <td style="padding:6px 8px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              ${e.fotoUrl ? `<img src="${esc(e.fotoUrl)}?w=128" style="width:26px;height:26px;border-radius:50%;object-fit:cover;flex:none;" />` : `<span style="width:26px;height:26px;border-radius:50%;background:#e2e8f0;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#475569;flex:none;">${esc(String(e.nomeCompleto || '?').charAt(0))}</span>`}
+              <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600;">${esc(e.nomeCompleto)}</span>
+            </div>
+          </td>
+          <td style="padding:6px 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(e.cargo || e.funcao || '-')}</td>
+          <td style="padding:6px 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(e.obraNome || '-')}</td>
+          <td style="padding:6px 8px;text-align:center;">${tam(e.tamanhoCalcado)}</td>
+          <td style="padding:6px 8px;text-align:center;">${tam(e.tamanhoCamisa)}</td>
+          <td style="padding:6px 8px;text-align:center;">${tam(e.tamanhoCalca)}</td>
+        </tr>`).join('');
+      const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Lista de Tamanhos — Uniforme e Calçado</title>
+        <style>
+          *{box-sizing:border-box;margin:0;padding:0;} body{font-family:Arial,Helvetica,sans-serif;color:#0f172a;font-size:12px;padding:24px;}
+          table{width:100%;border-collapse:collapse;table-layout:fixed;} thead th{background:#0f172a;color:#fff;text-transform:uppercase;font-size:10px;letter-spacing:.04em;padding:7px 8px;text-align:left;}
+          @page{margin:14mm 10mm;}
+          @media print{ .no-print{display:none;} }
+        </style></head><body>
+        <div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #0f172a;padding-bottom:10px;margin-bottom:14px;">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <img src="${esc(logo)}" style="height:44px;object-fit:contain;" onerror="this.style.display='none'" />
+            <div>
+              <div style="font-size:17px;font-weight:800;">Lista de Tamanhos — Uniforme e Calçado</div>
+              <div style="font-size:11px;color:#475569;">${empresaNome} · ${lista.length} colaborador(es) ativo(s)${semCadastro ? ` · ${semCadastro} sem tamanhos cadastrados` : ''}</div>
+            </div>
+          </div>
+          <div style="font-size:10px;color:#475569;text-align:right;">Emitido em ${emitidoEm}<br/>por ${emissor}</div>
+        </div>
+        <table>
+          <colgroup><col style="width:30%"/><col style="width:20%"/><col style="width:20%"/><col style="width:10%"/><col style="width:10%"/><col style="width:10%"/></colgroup>
+          <thead><tr><th>Colaborador</th><th>Função</th><th>Obra</th><th style="text-align:center;">Calçado</th><th style="text-align:center;">Camisa</th><th style="text-align:center;">Calça</th></tr></thead>
+          <tbody>${linhas}</tbody>
+        </table>
+        <div style="margin-top:16px;border:1px solid #cbd5e1;background:#f8fafc;border-radius:8px;padding:10px 12px;font-size:10px;color:#475569;">
+          🔒 <b>LGPD — Lei nº 13.709/2018:</b> documento com dados pessoais de colaboradores. Emissão registrada e rastreável — emitido por ${emissor} em ${emitidoEm} · ${empresaNome}.
+        </div>
+        <div class="no-print" style="margin-top:16px;text-align:center;"><button onclick="window.print()" style="padding:8px 18px;font-size:13px;cursor:pointer;">Imprimir</button></div>
+        <script>window.addEventListener('load',function(){setTimeout(function(){window.print();},400);});</script>
+        </body></html>`;
+      const w = window.open('', '_blank');
+      if (!w) { toast.error('Pop-up bloqueado — permita pop-ups para imprimir.'); return; }
+      w.document.write(html);
+      w.document.close();
+    } catch (e: any) {
+      toast.error('Erro ao gerar a lista: ' + (e?.message || e));
+    } finally {
+      setListaTamanhosLoading(false);
+    }
+  };
   const autoFotoBulkMut = trpc.epis.autoFotoBulk.useMutation();
   const uploadFotoEpiMut = trpc.epis.uploadFotoEpi.useMutation({
     onSuccess: (data: any) => { episQ.refetch(); setEpiForm(f => ({ ...f, fotoUrl: data.url || "" })); toast.success("Foto salva!"); },
@@ -498,6 +625,35 @@ export default function Epis() {
   });
   const transferirMut = trpc.epis.transferir.useMutation({
     onSuccess: () => { estoqueObraQ.refetch(); estoqueObraResumoQ.refetch(); estoqueCentralQ.refetch(); episAllQ.refetch(); transferenciasQ.refetch(); episQ.refetch(); statsQ.refetch(); setShowTransferDialog(false); resetTransForm(); toast.success("Transferência realizada com sucesso!"); },
+    onError: (err) => toast.error(err.message),
+  });
+  const editarTransferenciaMut = trpc.epis.editarTransferencia.useMutation({
+    onSuccess: () => {
+      estoqueObraQ.refetch(); estoqueObraResumoQ.refetch(); estoqueCentralQ.refetch();
+      episAllQ.refetch(); transferenciasQ.refetch(); episQ.refetch(); statsQ.refetch();
+      setEditingTransferencia(null);
+      toast.success("Transferência atualizada com sucesso!");
+    },
+    onError: (err) => toast.error(err.message),
+  });
+  // Rev. 4992 — Importar DANFE no Novo EPI: Preview (IA/XML) → validação → Confirmar
+  const [danfePreview, setDanfePreview] = useState<any>(null);
+  const [danfeItens, setDanfeItens] = useState<any[]>([]);
+  const danfeFileRef = useRef<HTMLInputElement>(null);
+  const importarDanfePreviewMut = trpc.epis.importarDanfePreview.useMutation({
+    onSuccess: (data) => {
+      setDanfePreview(data);
+      setDanfeItens(data.itens.map((i: any) => ({ ...i, acao: i.sugestao, quantidade: i.quantidade, valorUnitario: i.valorUnitario })));
+    },
+    onError: (err) => toast.error(err.message),
+  });
+  const importarDanfeConfirmarMut = trpc.epis.importarDanfeConfirmar.useMutation({
+    onSuccess: (r) => {
+      episQ.refetch(); episAllQ.refetch(); statsQ.refetch(); estoqueCentralQ.refetch();
+      setDanfePreview(null); setDanfeItens([]);
+      toast.success(`Nota processada: ${r.somados} somado(s) ao estoque, ${r.criados} novo(s) cadastrado(s)${r.ignorados ? `, ${r.ignorados} ignorado(s)` : ""}.`);
+      setViewMode("catalogo");
+    },
     onError: (err) => toast.error(err.message),
   });
   const entradaEstoqueMut = trpc.epis.entradaEstoque.useMutation({
@@ -659,6 +815,27 @@ export default function Epis() {
     return episList;
   }, [episList]);
 
+  const transferenciasFiltradas = useMemo(() => {
+    const searchTerm = search.trim().toLowerCase();
+    return (transferenciasList as any[]).filter((transferencia: any) => {
+      const envolveObra = filterObraTransferencia === "todas"
+        || (filterObraTransferencia === "central"
+          ? transferencia.tipoOrigem === "central" || !transferencia.destinoObraId
+          : String(transferencia.origemObraId) === filterObraTransferencia || String(transferencia.destinoObraId) === filterObraTransferencia);
+      if (!envolveObra) return false;
+      if (filterCategoria !== "Todos" && transferencia.categoriaEpi !== filterCategoria) return false;
+      if (filterCondicao !== "Todos" && (transferencia.condicaoEpi || "Novo") !== filterCondicao) return false;
+      if (filterTamanho !== "Todos" && transferencia.tamanhoEpi !== filterTamanho) return false;
+      if (!searchTerm) return true;
+      const searchable = [
+        transferencia.nomeEpi, transferencia.caEpi, transferencia.origemNome,
+        transferencia.destinoNome, transferencia.criadoPor, transferencia.observacoes,
+        transferencia.categoriaEpi, transferencia.condicaoEpi, transferencia.tamanhoEpi,
+      ].filter(Boolean).join(" ").toLowerCase();
+      return searchable.includes(searchTerm);
+    });
+  }, [transferenciasList, filterObraTransferencia, search, filterCategoria, filterCondicao, filterTamanho]);
+
   // Tamanhos disponíveis baseados na categoria selecionada
   const tamanhosFiltro = useMemo(() => {
     const TAMANHOS_ROUPA_LIST = ['Único', 'PP', 'P', 'M', 'G', 'GG', 'XGG', 'XXGG', 'XXXGG'];
@@ -672,6 +849,15 @@ export default function Epis() {
 
   const filteredDeliveries = useMemo(() => {
     let arr = deliveriesList as any[];
+    if (filterCategoria !== "Todos") {
+      arr = arr.filter((d: any) => d.categoriaEpi === filterCategoria);
+    }
+    if (filterCondicao !== "Todos") {
+      arr = arr.filter((d: any) => (d.condicaoEpi || "Novo") === filterCondicao);
+    }
+    if (filterTamanho !== "Todos") {
+      arr = arr.filter((d: any) => d.tamanhoEpi === filterTamanho);
+    }
     // Rev. 2186 — filtro por status de assinatura (fonte de verdade: assinaturaUrl do funcionário)
     if (filterAssinatura === "assinadas") {
       arr = arr.filter((d: any) => !!d.assinaturaUrl);
@@ -681,7 +867,7 @@ export default function Epis() {
     // Rev. 2911 — a busca por texto agora é SERVER-SIDE (varre todas as páginas).
     // Não re-filtramos por `search` aqui pra não esconder resultados do servidor.
     return arr;
-  }, [deliveriesList, filterAssinatura]);
+  }, [deliveriesList, filterCategoria, filterCondicao, filterTamanho, filterAssinatura]);
 
   const formatCurrency = (val: any) => {
     if (!val) return "—";
@@ -1122,6 +1308,31 @@ export default function Epis() {
             <h1 className="text-xl font-bold">Cadastrar Novo EPI</h1>
           </div>
 
+          {/* Rev. 4992 — Importar direto da nota fiscal (DANFE) */}
+          <Card className="border-violet-200 bg-gradient-to-r from-violet-50 to-fuchsia-50">
+            <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+              <div className="flex-1">
+                <p className="text-sm font-bold text-violet-900">📄 Importar da Nota Fiscal (DANFE)</p>
+                <p className="text-xs text-violet-700 mt-0.5">Suba o XML, PDF ou foto da nota — o sistema lê os itens, cruza com o catálogo e você valida antes de gravar: item já cadastrado soma no estoque, item novo é criado.</p>
+              </div>
+              <input ref={danfeFileRef} type="file" accept=".xml,.pdf,image/*" className="hidden" onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                if (file.size > 15 * 1024 * 1024) { toast.error("Arquivo muito grande (máx. 15MB)."); e.target.value = ""; return; }
+                const reader = new FileReader();
+                reader.onload = () => {
+                  const b64 = String(reader.result || "").split(",").pop() || "";
+                  importarDanfePreviewMut.mutate({ companyId: queryCompanyId, fileBase64: b64, mimeType: file.type || (file.name.toLowerCase().endsWith(".xml") ? "text/xml" : "application/pdf"), fileName: file.name });
+                };
+                reader.readAsDataURL(file);
+                e.target.value = "";
+              }} />
+              <Button className="bg-violet-600 hover:bg-violet-700 shrink-0" disabled={importarDanfePreviewMut.isPending} onClick={() => danfeFileRef.current?.click()}>
+                {importarDanfePreviewMut.isPending ? "Lendo a nota..." : "📤 Subir nota (DANFE)"}
+              </Button>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardContent className="p-6 space-y-4 w-full">
               <div>
@@ -1357,6 +1568,92 @@ export default function Epis() {
           }}
           isPending={createFornecedorMut.isPending || updateFornecedorMut.isPending}
         />}
+
+        {/* Rev. 4992 — VALIDAÇÃO da nota (DANFE) antes de gravar */}
+        <Dialog open={!!danfePreview} onOpenChange={(o) => { if (!o) { setDanfePreview(null); setDanfeItens([]); } }}>
+          <DialogContent className="max-w-5xl">
+            <DialogHeader>
+              <DialogTitle>✅ Validar itens da nota antes de gravar</DialogTitle>
+            </DialogHeader>
+            {danfePreview && (
+              <div className="space-y-3 max-h-[65vh] overflow-y-auto pr-1">
+                <div className="rounded-lg bg-slate-50 border px-3 py-2 text-xs text-slate-700 flex flex-wrap gap-x-4 gap-y-1">
+                  <span><b>Fornecedor:</b> {danfePreview.fornecedor?.nome || "—"}</span>
+                  {danfePreview.fornecedor?.cnpj && <span><b>CNPJ:</b> {danfePreview.fornecedor.cnpj}</span>}
+                  {danfePreview.numeroNota && <span><b>NF:</b> {danfePreview.numeroNota}</span>}
+                  {danfePreview.dataEmissao && <span><b>Emissão:</b> {danfePreview.dataEmissao}</span>}
+                </div>
+                <div className="rounded-lg bg-blue-50 border border-blue-200 px-3 py-2 text-[11px] text-blue-800">
+                  Nada foi gravado ainda. Revise item a item: <b>Somar</b> credita o estoque do EPI já cadastrado (Almoxarifado Central), <b>Criar novo</b> cadastra um item novo no catálogo, <b>Ignorar</b> pula o item.
+                </div>
+                {danfeItens.map((it, ix) => (
+                  <div key={ix} className={`rounded-xl border p-3 space-y-2 ${it.acao === "ignorar" ? "opacity-50 bg-slate-50" : it.acao === "somar" ? "border-emerald-200 bg-emerald-50/40" : "border-violet-200 bg-violet-50/40"}`}>
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                      <Input className="flex-1 font-medium text-sm" value={it.nome} onChange={(e) => setDanfeItens(a => a.map((x, i) => i === ix ? { ...x, nome: e.target.value } : x))} disabled={it.acao === "somar"} />
+                      <div className="flex items-center gap-2 shrink-0">
+                        <div className="w-24">
+                          <Input type="number" min={0} value={it.quantidade} onChange={(e) => setDanfeItens(a => a.map((x, i) => i === ix ? { ...x, quantidade: Number(e.target.value) } : x))} />
+                        </div>
+                        <span className="text-xs text-muted-foreground">un ×</span>
+                        <div className="w-28">
+                          <Input type="number" min={0} step="0.01" value={it.valorUnitario} onChange={(e) => setDanfeItens(a => a.map((x, i) => i === ix ? { ...x, valorUnitario: Number(e.target.value) } : x))} />
+                        </div>
+                      </div>
+                    </div>
+                    {it.match ? (
+                      <p className="text-[11px] text-emerald-800">
+                        ✓ Já existe no catálogo{it.matchVia === "CA" ? " (mesmo CA)" : ""}: <b>{it.match.nome}</b>{it.match.tamanho ? ` · Tam. ${it.match.tamanho}` : ""}{it.match.ca ? ` · CA ${it.match.ca}` : ""} — estoque central atual: <b>{it.match.estoqueCentral}</b>{it.acao === "somar" && it.quantidade > 0 ? <> → ficará <b>{(it.match.estoqueCentral ?? 0) + Math.round(it.quantidade)}</b></> : null}
+                      </p>
+                    ) : (
+                      <p className="text-[11px] text-violet-700">Nenhum EPI parecido encontrado no catálogo — será cadastrado como novo.</p>
+                    )}
+                    <div className="flex flex-wrap items-center gap-2">
+                      {it.match && (
+                        <Button size="sm" variant={it.acao === "somar" ? "default" : "outline"} className={it.acao === "somar" ? "bg-emerald-600 hover:bg-emerald-700 h-7 text-xs" : "h-7 text-xs"} onClick={() => setDanfeItens(a => a.map((x, i) => i === ix ? { ...x, acao: "somar" } : x))}>➕ Somar ao existente</Button>
+                      )}
+                      <Button size="sm" variant={it.acao === "novo" ? "default" : "outline"} className={it.acao === "novo" ? "bg-violet-600 hover:bg-violet-700 h-7 text-xs" : "h-7 text-xs"} onClick={() => setDanfeItens(a => a.map((x, i) => i === ix ? { ...x, acao: "novo" } : x))}>🆕 Criar novo</Button>
+                      <Button size="sm" variant={it.acao === "ignorar" ? "default" : "outline"} className="h-7 text-xs" onClick={() => setDanfeItens(a => a.map((x, i) => i === ix ? { ...x, acao: "ignorar" } : x))}>🚫 Ignorar</Button>
+                      {it.acao === "novo" && (
+                        <Select value={it.categoria || "EPI"} onValueChange={(v) => setDanfeItens(a => a.map((x, i) => i === ix ? { ...x, categoria: v } : x))}>
+                          <SelectTrigger className="h-7 w-32 text-xs"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="EPI">EPI</SelectItem>
+                            <SelectItem value="Uniforme">Uniforme</SelectItem>
+                            <SelectItem value="Calcado">Calçado</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                <div className="flex justify-end gap-2 pt-1">
+                  <Button variant="outline" onClick={() => { setDanfePreview(null); setDanfeItens([]); }}>Cancelar</Button>
+                  <Button className="bg-[#1B2A4A] hover:bg-[#243660]" disabled={importarDanfeConfirmarMut.isPending || danfeItens.every(i => i.acao === "ignorar")}
+                    onClick={() => {
+                      if (!canWriteCentral) return toast.error("Você não tem permissão para dar entrada no Almoxarifado Central.");
+                      importarDanfeConfirmarMut.mutate({
+                        companyId: queryCompanyId,
+                        numeroNota: danfePreview.numeroNota || undefined,
+                        fornecedorNome: danfePreview.fornecedor?.nome || undefined,
+                        fornecedorCnpj: danfePreview.fornecedor?.cnpj || undefined,
+                        itens: danfeItens.map(i => ({
+                          acao: i.acao,
+                          epiId: i.acao === "somar" ? i.match?.epiId : undefined,
+                          nome: i.nome,
+                          quantidade: Number(i.quantidade) || 0,
+                          valorUnitario: Number(i.valorUnitario) > 0 ? Number(i.valorUnitario) : undefined,
+                          ca: i.ca || undefined,
+                          categoria: i.acao === "novo" ? (i.categoria || "EPI") : undefined,
+                        })),
+                      });
+                    }}>
+                    {importarDanfeConfirmarMut.isPending ? "Gravando..." : `Confirmar (${danfeItens.filter(i => i.acao !== "ignorar").length} item(ns))`}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </DashboardLayout>
     );
   }
@@ -2254,6 +2551,9 @@ export default function Epis() {
             <h1 className="text-lg sm:text-xl font-bold text-gray-800">Equipamentos de Proteção Individual</h1>
           </div>
           <div className="flex gap-2 flex-wrap">
+            <Button size="sm" variant="outline" disabled={listaTamanhosLoading} onClick={imprimirListaTamanhos} className="border-teal-400 text-teal-700 hover:bg-teal-50">
+              <Shirt className="h-4 w-4 mr-1" /> {listaTamanhosLoading ? "Gerando..." : "Lista de Tamanhos"}
+            </Button>
             {viewMode === "catalogo" && (
               <>
                 {/* Rev. 2950 — local de estoque do Catálogo: Central (todos veem) + obras permitidas */}
@@ -2317,6 +2617,16 @@ export default function Epis() {
             )}
           </div>
         </div>
+
+        {statsObraId && (
+          <div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
+            <Building2 className="h-4 w-4 shrink-0 text-blue-700" />
+            <span>
+              Indicadores de estoque filtrados para a obra:{" "}
+              <strong>{(obrasList as any[]).find((obra: any) => obra.id === statsObraId)?.nome || "obra selecionada"}</strong>.
+            </span>
+          </div>
+        )}
 
         {/* Stats Cards - clicáveis com drill-down full screen */}
         {stats && (
@@ -3374,8 +3684,11 @@ export default function Epis() {
                       </thead>
                       <tbody>
                         {tabelaEstoqueList
-                          .map((e: any) => (
-                          <tr key={e.id} className="border-b last:border-0 hover:bg-muted/30 cursor-pointer" onClick={() => {
+                          .map((e: any) => {
+                          const quantidade = Number(e.quantidade || 0);
+                          const estoqueBaixo = quantidade > 0 && quantidade <= 5;
+                          return (
+                          <tr key={e.id} className={`border-b last:border-0 hover:bg-muted/30 cursor-pointer ${estoqueBaixo ? "bg-red-50/40" : ""}`} onClick={() => {
                             // Rev. 2928 — linha do Almoxarifado Central NÃO usa o ajuste de obra
                             // (id sintético "central-*" / obraId "central"): vai ao catálogo central.
                             if (e.obraId === "central") {
@@ -3415,7 +3728,7 @@ export default function Epis() {
                             <td className="p-3 text-center">
                               <Badge variant="outline" className="text-[10px]">{e.categoriaEpi || '—'}</Badge>
                             </td>
-                            <td className="p-3 text-center font-bold text-lg">{e.quantidade}</td>
+                            <td className={`p-3 text-center font-bold text-lg ${estoqueBaixo ? "text-red-700" : ""}`}>{quantidade}</td>
                             <td className="p-3 text-right text-xs">
                               {e.valorProdutoEpi ? `R$ ${parseFloat(String(e.valorProdutoEpi)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—'}
                             </td>
@@ -3423,10 +3736,12 @@ export default function Epis() {
                               {e.valorProdutoEpi ? `R$ ${(parseFloat(String(e.valorProdutoEpi)) * e.quantidade).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—'}
                             </td>
                             <td className="p-3 text-center">
-                              {e.quantidade > 0 ? (
-                                <Badge className="bg-green-100 text-green-700 border-green-300">Disponível</Badge>
-                              ) : (
+                              {quantidade === 0 ? (
                                 <Badge variant="destructive">Zerado</Badge>
+                              ) : estoqueBaixo ? (
+                                <Badge variant="destructive" className="bg-red-600">Estoque baixo</Badge>
+                              ) : (
+                                <Badge className="bg-green-100 text-green-700 border-green-300">Disponível</Badge>
                               )}
                             </td>
                             <td className="p-3 text-center" onClick={(ev) => ev.stopPropagation()}>
@@ -3458,7 +3773,8 @@ export default function Epis() {
                               </div>
                             </td>
                           </tr>
-                        ))}
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -3482,16 +3798,41 @@ export default function Epis() {
               </Button>
             </div>
 
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-medium text-muted-foreground">Filtrar local:</span>
+              <Select value={filterObraTransferencia} onValueChange={setFilterObraTransferencia}>
+                <SelectTrigger className="w-full sm:w-[250px]">
+                  <SelectValue placeholder="Todas as obras" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todas">Todas as obras e Central</SelectItem>
+                  <SelectItem value="central">🏢 Almoxarifado Central</SelectItem>
+                  {obrasList.map((obra: any) => (
+                    <SelectItem key={obra.id} value={String(obra.id)}>🏗️ {obra.nome}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {filterObraTransferencia !== "todas" && (
+                <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => setFilterObraTransferencia("todas")}>
+                  Limpar filtro
+                </Button>
+              )}
+            </div>
+
             <Card>
               <CardContent className="p-0">
-                {transferenciasList.length === 0 ? (
+                {transferenciasFiltradas.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-16">
                     <ArrowLeftRight className="h-12 w-12 text-muted-foreground/50 mb-4" />
-                    <h3 className="font-semibold text-lg">Nenhuma transferência registrada</h3>
-                    <p className="text-muted-foreground text-sm mt-1">Transfira EPIs do almoxarifado central para as obras.</p>
-                    <Button onClick={() => setShowTransferDialog(true)} className="mt-4 bg-[#1B2A4A] hover:bg-[#243660]">
-                      <Plus className="h-4 w-4 mr-2" /> Nova Transferência
-                    </Button>
+                    <h3 className="font-semibold text-lg">{transferenciasList.length === 0 ? "Nenhuma transferência registrada" : "Nenhuma transferência encontrada"}</h3>
+                    <p className="text-muted-foreground text-sm mt-1">
+                      {transferenciasList.length === 0 ? "Transfira EPIs do almoxarifado central para as obras." : "Altere ou limpe os filtros para ver outros registros."}
+                    </p>
+                    {transferenciasList.length === 0 && (
+                      <Button onClick={() => setShowTransferDialog(true)} className="mt-4 bg-[#1B2A4A] hover:bg-[#243660]">
+                        <Plus className="h-4 w-4 mr-2" /> Nova Transferência
+                      </Button>
+                    )}
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
@@ -3506,10 +3847,11 @@ export default function Epis() {
                           <th className="p-3 text-left font-medium">Destino</th>
                           <th className="p-3 text-left font-medium">Usuário</th>
                           <th className="p-3 text-left font-medium">Obs</th>
+                          <th className="p-3 text-center font-medium">Ações</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {transferenciasList.map((t: any) => (
+                        {transferenciasFiltradas.map((t: any) => (
                           <tr key={t.id} className="border-b last:border-0 hover:bg-muted/30">
                             <td className="p-3 text-xs whitespace-nowrap">
                               {(() => {
@@ -3556,6 +3898,30 @@ export default function Epis() {
                               ) : <span className="text-muted-foreground">—</span>}
                             </td>
                             <td className="p-3 text-xs text-muted-foreground">{t.observacoes || '—'}</td>
+                            <td className="p-3 text-center">
+                              {!readOnly && ["central", "obra"].includes(t.tipoOrigem) ? (
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-7 w-7 text-blue-700 hover:text-blue-900 hover:bg-blue-50"
+                                  title="Editar transferência"
+                                  onClick={() => {
+                                    setEditingTransferencia(t);
+                                    setEditTransferenciaForm({
+                                      quantidade: Number(t.quantidade) || 1,
+                                      tipoOrigem: t.tipoOrigem === "obra" ? "obra" : "central",
+                                      origemObraId: t.origemObraId ? String(t.origemObraId) : "",
+                                      tipoDestino: t.destinoObraId ? "obra" : "central",
+                                      destinoObraId: t.destinoObraId ? String(t.destinoObraId) : "",
+                                      data: t.data || "",
+                                      observacoes: t.observacoes || "",
+                                    });
+                                  }}
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+                              ) : <span className="text-xs text-muted-foreground">—</span>}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -3563,7 +3929,8 @@ export default function Epis() {
                   </div>
                 )}
                 <div className="border-t bg-muted/30 p-3 text-sm text-muted-foreground">
-                  {transferenciasList.length} transferência{transferenciasList.length !== 1 ? 's' : ''}
+                  {transferenciasFiltradas.length} transferência{transferenciasFiltradas.length !== 1 ? 's' : ''}
+                  {transferenciasFiltradas.length !== transferenciasList.length && ` de ${transferenciasList.length}`}
                 </div>
               </CardContent>
             </Card>
@@ -3834,6 +4201,146 @@ export default function Epis() {
         </div>
         );
       })()}
+
+      {/* Edição segura: o servidor reverte e reaplica a transferência na mesma transação. */}
+      {editingTransferencia && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-lg max-h-[90vh] overflow-auto rounded-xl bg-white p-6 shadow-xl space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-bold text-[#1B3A5C] flex items-center gap-2">
+                  <Pencil className="h-5 w-5" /> Editar Transferência
+                </h3>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  EPI: <strong>{editingTransferencia.nomeEpi || `EPI #${editingTransferencia.epiId}`}</strong>
+                </p>
+              </div>
+              <Button size="icon" variant="ghost" onClick={() => setEditingTransferencia(null)}>✕</Button>
+            </div>
+
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              A edição recalcula os saldos da origem e do destino. Se o saldo recebido já tiver sido utilizado em outra movimentação, o sistema bloqueará a alteração para preservar o estoque.
+            </div>
+
+            <div>
+              <Label>Quantidade *</Label>
+              <Input
+                className="mt-1"
+                type="number"
+                min={1}
+                step={1}
+                value={editTransferenciaForm.quantidade}
+                onChange={(event) => setEditTransferenciaForm((form) => ({
+                  ...form,
+                  quantidade: Math.max(1, parseInt(event.target.value, 10) || 1),
+                }))}
+              />
+            </div>
+
+            <div>
+              <Label>Origem *</Label>
+              <div className="mt-1 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  disabled={!canWriteCentral}
+                  onClick={() => setEditTransferenciaForm((form) => ({
+                    ...form,
+                    tipoOrigem: "central",
+                    origemObraId: "",
+                    ...(form.tipoDestino === "central" ? { tipoDestino: "obra", destinoObraId: "" } : {}),
+                  }))}
+                  className={`rounded-lg border-2 p-2 text-sm transition-colors ${editTransferenciaForm.tipoOrigem === "central" ? "border-[#1B2A4A] bg-[#1B2A4A]/5" : "border-gray-200"} ${!canWriteCentral ? "cursor-not-allowed opacity-50" : ""}`}
+                >
+                  🏢 Central
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditTransferenciaForm((form) => ({ ...form, tipoOrigem: "obra" }))}
+                  className={`rounded-lg border-2 p-2 text-sm transition-colors ${editTransferenciaForm.tipoOrigem === "obra" ? "border-[#1B2A4A] bg-[#1B2A4A]/5" : "border-gray-200"}`}
+                >
+                  🏗️ Obra
+                </button>
+              </div>
+              {editTransferenciaForm.tipoOrigem === "obra" && (
+                <Select value={editTransferenciaForm.origemObraId || undefined} onValueChange={(value) => setEditTransferenciaForm((form) => ({ ...form, origemObraId: value }))}>
+                  <SelectTrigger className="mt-2"><SelectValue placeholder="Selecione a obra de origem..." /></SelectTrigger>
+                  <SelectContent>
+                    {obrasPermitidas.map((obra: any) => <SelectItem key={obra.id} value={String(obra.id)}>{obra.nome}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+
+            <div>
+              <Label>Destino *</Label>
+              <div className="mt-1 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditTransferenciaForm((form) => ({ ...form, tipoDestino: "obra", destinoObraId: "" }))}
+                  className={`rounded-lg border-2 p-2 text-sm transition-colors ${editTransferenciaForm.tipoDestino === "obra" ? "border-[#1B2A4A] bg-[#1B2A4A]/5" : "border-gray-200"}`}
+                >
+                  🏗️ Obra
+                </button>
+                <button
+                  type="button"
+                  disabled={!canWriteCentral || editTransferenciaForm.tipoOrigem === "central"}
+                  onClick={() => setEditTransferenciaForm((form) => ({ ...form, tipoDestino: "central", destinoObraId: "" }))}
+                  className={`rounded-lg border-2 p-2 text-sm transition-colors ${editTransferenciaForm.tipoDestino === "central" ? "border-[#1B2A4A] bg-[#1B2A4A]/5" : "border-gray-200"} ${(!canWriteCentral || editTransferenciaForm.tipoOrigem === "central") ? "cursor-not-allowed opacity-50" : ""}`}
+                >
+                  🏢 Central
+                </button>
+              </div>
+              {editTransferenciaForm.tipoDestino === "obra" && (
+                <Select value={editTransferenciaForm.destinoObraId || undefined} onValueChange={(value) => setEditTransferenciaForm((form) => ({ ...form, destinoObraId: value }))}>
+                  <SelectTrigger className="mt-2"><SelectValue placeholder="Selecione a obra de destino..." /></SelectTrigger>
+                  <SelectContent>
+                    {obrasPermitidas
+                      .filter((obra: any) => String(obra.id) !== editTransferenciaForm.origemObraId)
+                      .map((obra: any) => <SelectItem key={obra.id} value={String(obra.id)}>{obra.nome}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <Label>Data</Label>
+                <Input className="mt-1" type="date" value={editTransferenciaForm.data} onChange={(event) => setEditTransferenciaForm((form) => ({ ...form, data: event.target.value }))} />
+              </div>
+              <div>
+                <Label>Observações</Label>
+                <Input className="mt-1" value={editTransferenciaForm.observacoes} onChange={(event) => setEditTransferenciaForm((form) => ({ ...form, observacoes: event.target.value }))} placeholder="Motivo ou observação..." />
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <Button variant="outline" className="flex-1" onClick={() => setEditingTransferencia(null)}>Cancelar</Button>
+              <Button
+                className="flex-1 bg-[#1B2A4A] hover:bg-[#243660]"
+                disabled={editarTransferenciaMut.isPending}
+                onClick={() => {
+                  if (editTransferenciaForm.tipoOrigem === "obra" && !editTransferenciaForm.origemObraId) return toast.error("Selecione a obra de origem.");
+                  if (editTransferenciaForm.tipoDestino === "obra" && !editTransferenciaForm.destinoObraId) return toast.error("Selecione a obra de destino.");
+                  if (editTransferenciaForm.tipoOrigem === "central" && editTransferenciaForm.tipoDestino === "central") return toast.error("Origem e destino não podem ser o Almoxarifado Central.");
+                  if (editTransferenciaForm.tipoOrigem === "obra" && editTransferenciaForm.tipoDestino === "obra" && editTransferenciaForm.origemObraId === editTransferenciaForm.destinoObraId) return toast.error("Origem e destino não podem ser a mesma obra.");
+                  editarTransferenciaMut.mutate({
+                    id: editingTransferencia.id,
+                    quantidade: editTransferenciaForm.quantidade,
+                    tipoOrigem: editTransferenciaForm.tipoOrigem,
+                    origemObraId: editTransferenciaForm.origemObraId ? parseInt(editTransferenciaForm.origemObraId, 10) : undefined,
+                    tipoDestino: editTransferenciaForm.tipoDestino,
+                    destinoObraId: editTransferenciaForm.destinoObraId ? parseInt(editTransferenciaForm.destinoObraId, 10) : undefined,
+                    data: editTransferenciaForm.data,
+                    observacoes: editTransferenciaForm.observacoes || undefined,
+                  });
+                }}
+              >
+                {editarTransferenciaMut.isPending ? "Salvando..." : "Salvar alterações"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Dialog Entrada Direta na Obra */}
       {showEntradaDiretaDialog && (

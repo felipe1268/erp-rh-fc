@@ -322,26 +322,30 @@ export const integrasignRouter = router({
           .orderBy(desc(gestorSubstituicaoSolicitacoes.criadoEm));
 
         const subFin = subs.find(s => s.papel === "financeiro");
-        const subRh  = subs.find(s => s.papel === "rh");
 
         const finId = subFin ? subFin.substitutoId : (company?.gestorFinanceiroId ?? null);
-        const rhId  = subRh  ? subRh.substitutoId  : ((company as any)?.gestorRhId  ?? null);
 
-        const empIds = [...new Set([finId, rhId].filter(Boolean))] as number[];
-        const empRows = empIds.length > 0
+        const empRows = finId
           ? await db!.select({ id: employees.id, nomeCompleto: employees.nomeCompleto, email: employees.email, cpf: employees.cpf })
-              .from(employees).where(inArray(employees.id, empIds))
+              .from(employees).where(inArray(employees.id, [finId]))
           : [];
-        const empMap = new Map(empRows.map(e => [e.id, e]));
-
-        const finEmp = finId ? empMap.get(finId) : null;
-        const rhEmp  = rhId  ? empMap.get(rhId)  : null;
+        const finEmp = empRows[0] ?? null;
 
         // Mantém fornecedor + gestor_projeto; descarta qualquer rh/financeiro/diretor
         // que o cliente tenha eventualmente enviado (garante injeção determinística).
         const fornecedores    = signatariosFinais.filter(s => s.papel === "fornecedor");
         const gestoresProjeto = signatariosFinais.filter(s => s.papel === "gestor_projeto");
         const testemunhas     = signatariosFinais.filter(s => s.papel === "testemunha");
+
+        // Rev. 5005 — poka-yoke: contrato de terceiros exige EXATAMENTE 1 contratado
+        // (fornecedor) e 1 gestor do projeto no envelope, e o Gestor Financeiro
+        // configurado na empresa — sem isso, não existe contrato com 4 assinaturas.
+        if (fornecedores.length !== 1 || gestoresProjeto.length !== 1) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "O contrato de terceiros exige exatamente 1 signatário Contratado (fornecedor) e 1 Gestor do Projeto." });
+        }
+        if (!finId) {
+          throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Defina o Gestor Financeiro da empresa (Configurações › Empresa) antes de enviar o contrato: ele é a 3ª assinatura obrigatória (Contratado → Gestor do Projeto → Financeiro → Sócio Administrador)." });
+        }
 
         const diretor = {
           papel: "diretor" as const,
@@ -353,19 +357,11 @@ export const integrasignRouter = router({
           empresaNome: "FC Engenharia",
         };
 
-        // Gestores injetados server-side (só inclui se configurados)
+        // Gestores injetados server-side (só inclui se configurados).
+        // Rev. 5005 (decisão do usuário): contrato de terceiros tem 4 assinaturas
+        // obrigatórias — CONTRATADO → GESTOR DO PROJETO → FINANCEIRO → SÓCIO ADM.
+        // RH não assina contrato de terceiros. Testemunhas são opcionais, ao final.
         const gestoresInjetados: typeof signatariosFinais = [];
-        if (rhId) {
-          gestoresInjetados.push({
-            papel: "rh" as any,
-            ordemAssinatura: 0,
-            nome: rhEmp?.nomeCompleto || subRh?.substitutoNome || (company as any)?.gestorRhNome || "Gestor RH",
-            email: subRh?.substitutoEmail || rhEmp?.email || "",
-            cpfCnpj: rhEmp?.cpf ?? undefined,
-            cargo: "Gestor RH",
-            empresaNome: "FC Engenharia",
-          });
-        }
         if (finId) {
           gestoresInjetados.push({
             papel: "financeiro" as any,
@@ -378,8 +374,8 @@ export const integrasignRouter = router({
           });
         }
 
-        // Ordem Rev. 4479: FORNECEDOR → RH → FINANCEIRO → GESTOR_PROJETO → testemunhas → DIRETOR (último)
-        const reordenados = [...fornecedores, ...gestoresInjetados, ...gestoresProjeto, ...testemunhas, diretor];
+        // Ordem Rev. 5005: FORNECEDOR (contratado) → GESTOR_PROJETO → FINANCEIRO → DIRETOR (sócio adm) → testemunhas opcionais
+        const reordenados = [...fornecedores, ...gestoresProjeto, ...gestoresInjetados, diretor, ...testemunhas];
         signatariosFinais.length = 0;
         signatariosFinais.push(...reordenados.map((s, i) => ({ ...s, ordemAssinatura: i + 1 })));
       }
@@ -810,6 +806,9 @@ export const integrasignRouter = router({
       enviarEmail: z.boolean().optional().default(true),
     }))
     .mutation(async ({ input, ctx }) => {
+      // Rev. 5055 — tenant guard (antes só casava companyId+envelopeId do input,
+      // permitindo ativar envelope de outra empresa com par adivinhado).
+      await assertIntegraSignCompanyAccess((ctx as any).user, input.companyId);
       const db = await getDb();
       const userId = (ctx as any).session?.userId;
       const userName = (ctx as any).session?.name || "Sistema";

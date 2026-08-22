@@ -21,25 +21,27 @@ export async function resolveMealBenefitConfig(
   obraId: number | null | undefined,
   refDate: string, // 'YYYY-MM-DD'
 ): Promise<any | null> {
-  async function tryTier(obraFilter: "obra" | "padrao"): Promise<any | null> {
-    const obraCondition = obraFilter === "obra"
-      ? sql`"obraId" = ${obraId}`
-      : sql`"obraId" IS NULL`;
+  const cond = (obraFilter: "obra" | "padrao") => obraFilter === "obra"
+    ? sql`"obraId" = ${obraId}`
+    : sql`"obraId" IS NULL`;
 
-    const vigente = await db.execute(sql`
+  async function vigente(obraFilter: "obra" | "padrao"): Promise<any | null> {
+    const r = await db.execute(sql`
       SELECT * FROM meal_benefit_configs
-      WHERE "companyId" = ${companyId} AND ${obraCondition} AND ativo = 1
+      WHERE "companyId" = ${companyId} AND ${cond(obraFilter)} AND ativo = 1
         AND (vigencia_inicio IS NULL OR vigencia_inicio <= ${refDate}::date)
         AND (vigencia_fim IS NULL OR vigencia_fim >= ${refDate}::date)
       ORDER BY vigencia_inicio DESC NULLS LAST, "createdAt" DESC
       LIMIT 1
     `);
-    if (vigente.rows?.length) return vigente.rows[0];
+    return r.rows?.length ? r.rows[0] : null;
+  }
 
-    // Fallback: nada vigente exatamente na data — pega a mais recente que já tinha começado
+  async function fallback(obraFilter: "obra" | "padrao"): Promise<any | null> {
+    // Nada vigente exatamente na data — pega a mais recente que já tinha começado
     const anterior = await db.execute(sql`
       SELECT * FROM meal_benefit_configs
-      WHERE "companyId" = ${companyId} AND ${obraCondition} AND ativo = 1
+      WHERE "companyId" = ${companyId} AND ${cond(obraFilter)} AND ativo = 1
         AND (vigencia_inicio IS NULL OR vigencia_inicio <= ${refDate}::date)
       ORDER BY vigencia_inicio DESC NULLS LAST, "createdAt" DESC
       LIMIT 1
@@ -50,16 +52,26 @@ export async function resolveMealBenefitConfig(
     // usa a mais antiga disponível para não deixar o cálculo zerado.
     const maisAntiga = await db.execute(sql`
       SELECT * FROM meal_benefit_configs
-      WHERE "companyId" = ${companyId} AND ${obraCondition} AND ativo = 1
+      WHERE "companyId" = ${companyId} AND ${cond(obraFilter)} AND ativo = 1
       ORDER BY vigencia_inicio ASC NULLS LAST, "createdAt" ASC
       LIMIT 1
     `);
     return maisAntiga.rows?.length ? maisAntiga.rows[0] : null;
   }
 
+  // Rev. 5049 — config VIGENTE (em qualquer nível) tem prioridade sobre config
+  // VENCIDA: antes, uma config da obra já expirada (ou com vigência inválida)
+  // "ressuscitava" pelo fallback e ganhava da config padrão vigente da empresa,
+  // saindo com valores defasados nos termos/rescisões.
   if (obraId) {
-    const cfg = await tryTier("obra");
-    if (cfg) return cfg;
+    const cfgObra = await vigente("obra");
+    if (cfgObra) return cfgObra;
   }
-  return tryTier("padrao");
+  const cfgPadrao = await vigente("padrao");
+  if (cfgPadrao) return cfgPadrao;
+  if (obraId) {
+    const fbObra = await fallback("obra");
+    if (fbObra) return fbObra;
+  }
+  return fallback("padrao");
 }

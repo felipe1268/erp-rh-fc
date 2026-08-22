@@ -1,6 +1,7 @@
 import { router, protectedProcedure, publicProcedure } from "../_core/trpc";
 import { z } from "zod";
 import { getDb, getUserCompanyLinks } from "../db";
+import { assertRaioXAccess } from "../raioXGuard";
 import {
   sstIntegracaoConfig, sstIntegracaoModulos, sstIntegracaoPerguntas,
   sstIntegracaoAlternativas, sstIntegracaoRegistros, sstIntegracaoRespostas,
@@ -1839,6 +1840,8 @@ export const integracaoSSTRouter = router({
     .input(z.object({ companyId: z.number().int().positive(), employeeId: z.number().int().positive() }))
     .query(async ({ input, ctx }) => {
       await assertCompanyAccess(ctx, input.companyId);
+      // Rev. 5192 — Raio-X guard.
+      await assertRaioXAccess(ctx as any, input.employeeId);
       const db = (await getDb())!;
       // Rev. 2035: enriquece com nome da configuração pro card SST do Raio-X.
       const rows = await db.select({

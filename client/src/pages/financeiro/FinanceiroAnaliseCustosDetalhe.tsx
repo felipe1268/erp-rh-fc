@@ -22,7 +22,7 @@ import { useCompany } from "@/hooks/useCompany";
 import {
   ChevronLeft, CircleDollarSign, CheckCircle2, Receipt, AlertTriangle,
   BarChart2, Layers, Tag, Building2, Calendar, ListChecks, Pencil, X, Loader2, Lock, ExternalLink,
-  ChevronDown, ChevronRight, Package, ShoppingCart, TrendingUp, TrendingDown, Minus, CreditCard, MapPin, Hash,
+  ChevronDown, ChevronRight, Package, ShoppingCart, TrendingUp, TrendingDown, Minus, CreditCard, MapPin, Hash, Search,
 } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -32,7 +32,7 @@ import { classificarGrupoCusto } from "@shared/custosCategorias";
 import { OcMiniDialog } from "@/components/compras/ItemCatalogo";
 import { buildCentroCustoMaps, centroCustoNomeDe, SEM_CENTRO_CUSTO } from "@shared/centroCusto";
 import AnaliseDashPanel from "./AnaliseDashPanel";
-import { Search } from "lucide-react";
+import { filtrarLinhasAnaliseCustos } from "@shared/analiseCustosBusca";
 
 function formatBRL(value: number): string {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value || 0);
@@ -183,6 +183,8 @@ export default function FinanceiroAnaliseCustosDetalhe() {
   const mes = parseInt(params.get("mes") || "0", 10); // 0 = ano inteiro
   const tipo = params.get("tipo") || "status"; // status | mes | categoria | centro | fornecedor
   const valor = params.get("valor") || "total";
+  const busca = params.get("busca") || "";
+  const buscaAtiva = busca.trim().length > 0;
   // Rev. 3024 — cadeia de drills FEITOS NESTA tela (clique numa barra). A tela-mãe
   // passa só tipo/valor; cada clique aqui empilha um filtro em `extra`.
   const extra = useMemo(() => parseExtra(params.get("extra")), [params]);
@@ -273,7 +275,7 @@ export default function FinanceiroAnaliseCustosDetalhe() {
   // Recorte: filtro de mês herdado da tela-mãe + filtro primário (tipo/valor)
   // + cadeia de drills feitos nesta tela (extra).
   const rows = useMemo(() => {
-    let base = rowsAll;
+    let base = filtrarLinhasAnaliseCustos(rowsAll, busca);
     // tipo=mes define o próprio mês; senão respeita o filtro herdado.
     if (tipo === "mes") {
       base = base.filter((r) => mesNumDe(r) === parseInt(valor, 10));
@@ -283,7 +285,7 @@ export default function FinanceiroAnaliseCustosDetalhe() {
     base = aplicaFiltro(base, tipo, valor);
     for (const f of extra) base = aplicaFiltro(base, f.t, f.v);
     return base;
-  }, [rowsAll, tipo, valor, mes, extra]);
+  }, [rowsAll, tipo, valor, mes, extra, busca]);
 
   const kpis = useMemo(() => {
     let total = 0, pago = 0, aberto = 0, vencido = 0, qtdVencido = 0;
@@ -585,7 +587,18 @@ export default function FinanceiroAnaliseCustosDetalhe() {
   // Voltar: se há drills, sobe UM nível; senão volta à tela-mãe.
   const voltar = () => {
     if (extra.length) irPara(extra.slice(0, -1));
-    else setLocation("/financeiro/analise-custos");
+    else {
+      const sp = new URLSearchParams();
+      if (busca.trim()) sp.set("busca", busca.trim());
+      const qs = sp.toString();
+      setLocation(`/financeiro/analise-custos${qs ? `?${qs}` : ""}`);
+    }
+  };
+  const limparBusca = () => {
+    const sp = new URLSearchParams(search);
+    sp.delete("busca");
+    const qs = sp.toString();
+    setLocation(`${location}${qs ? `?${qs}` : ""}`);
   };
 
   return (
@@ -603,6 +616,18 @@ export default function FinanceiroAnaliseCustosDetalhe() {
                 <span className="truncate" title={titulo}>{titulo}</span>
               </h1>
               <p className="text-sm text-gray-500 mt-0.5 truncate">{subtitulo}</p>
+              {buscaAtiva && (
+                <button
+                  type="button"
+                  onClick={limparBusca}
+                  className="mt-1.5 inline-flex max-w-full items-center gap-1 rounded-full bg-rose-50 px-2 py-1 text-[11px] font-medium text-rose-700 hover:bg-rose-100"
+                  title="Remover busca"
+                >
+                  <Search className="w-3 h-3 shrink-0" />
+                  <span className="truncate">Busca: {busca}</span>
+                  <X className="w-3 h-3 shrink-0" />
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -699,8 +724,12 @@ export default function FinanceiroAnaliseCustosDetalhe() {
           <Card className="border-0 shadow-sm">
             <CardContent className="py-16 text-center">
               <CircleDollarSign className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-              <p className="text-sm text-gray-500">Nenhum lançamento neste recorte.</p>
-              <p className="text-xs text-gray-400 mt-1">Volte e selecione outro item.</p>
+              <p className="text-sm text-gray-500">
+                {buscaAtiva ? <>Nenhum lançamento corresponde a <span className="font-medium">“{busca}”</span> neste recorte.</> : "Nenhum lançamento neste recorte."}
+              </p>
+              <p className="text-xs text-gray-400 mt-1">
+                {buscaAtiva ? "Remova a busca ou volte e tente outro termo." : "Volte e selecione outro item."}
+              </p>
             </CardContent>
           </Card>
         ) : (

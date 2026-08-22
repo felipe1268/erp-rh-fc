@@ -1,7 +1,7 @@
 import { getDb } from "../db";
 import {
   purchaseOrders, purchaseRequests, purchaseAccountsPayable,
-  financialEntries, financialAccounts,
+  financialEntries, financialEntryBaixas, financialAccounts,
   fornecedores, buyerCommissions, purchaseCancellations,
   purchaseOrderItems, notificationLogs, almoxarifadoNotificacoes,
   comprasEntregasProgramadas, comprasOrdens, obras, empresasTerceiras,
@@ -11,6 +11,11 @@ import { createAuditLog } from "../db";
 import { calcularParcelas, getTipoPagamentoInfo } from "../../shared/paymentConditions";
 import { sendEmail } from "./smtpService";
 import crypto from "crypto";
+import {
+  gerarVencimentosRecorrenciaMensal,
+  planejarLimpezaReedicaoRecorrencia,
+  planejarReconciliacaoRecorrencia,
+} from "../../shared/ocRecorrencia";
 
 async function getContaId(db: any, companyId: number, codigo: string) {
   const res = await db.select({ id: financialAccounts.id })
@@ -59,6 +64,35 @@ export interface OCParcelasInput {
   tipo?: string | null;
   freteSufixo?: string;
   vehicleId?: number | null;
+}
+
+interface ParcelaSalvaOC {
+  numero: number;
+  valor: number;
+  vencimento: string;
+}
+
+function obterParcelasSalvasDaOC(parcelasJson: unknown, totalOc: number): ParcelaSalvaOC[] | null {
+  if (!parcelasJson) return null;
+  try {
+    const bruto = typeof parcelasJson === "string" ? JSON.parse(parcelasJson) : parcelasJson;
+    if (!Array.isArray(bruto) || bruto.length === 0) return null;
+    const parcelas = bruto.map((parcela: any, index: number) => ({
+      numero: Number(parcela?.numero) || index + 1,
+      valor: Number(parcela?.valor),
+      vencimento: typeof parcela?.vencimento === "string" ? parcela.vencimento.slice(0, 10) : "",
+    }));
+    const totalParcelas = parcelas.reduce((soma, parcela) => soma + parcela.valor, 0);
+    if (
+      parcelas.some(parcela => !Number.isFinite(parcela.valor) || parcela.valor <= 0 || !/^\d{4}-\d{2}-\d{2}$/.test(parcela.vencimento))
+      || Math.abs(totalParcelas - totalOc) >= 0.02
+    ) {
+      return null;
+    }
+    return parcelas;
+  } catch {
+    return null;
+  }
 }
 
 // Rev. 1624 — Detecta OS por medição (serviço/pacote pago por medição mensal).
@@ -204,6 +238,221 @@ export async function criarParcelasFinanceiras(
   return { entryIds, apIds };
 }
 
+/**
+ * Rev. 5085 — Materializa a recorrência mensal de uma OC.
+ * O total da OC é o valor mensal (não é dividido) e cada vencimento fica
+ * vinculado à mesma origem compras/OC. O lock + dedup por vencimento tornam
+ * reaprovação, entrega e self-heal idempotentes.
+ */
+export async function sincronizarLancamentosRecorrentesOC(
+  ocId: number,
+  companyId: number,
+  dataLancamento?: string | null,
+): Promise<number | null> {
+  const outerDb = await getDb();
+  if (!outerDb) return null;
+  return outerDb.transaction(async (db: any) => {
+    await db.execute(sql`SELECT pg_advisory_xact_lock(477002, ${ocId})`);
+    const [oc] = await db.select().from(comprasOrdens)
+      .where(and(eq(comprasOrdens.id, ocId), eq(comprasOrdens.companyId, companyId)));
+    if (!oc || !(oc as any).lancamentoRecorrente) return null;
+    const statusOc = String((oc as any).status || "");
+    if (!["aprovada", "entregue", "entregue_parcial", "parcial", "concluida"].includes(statusOc)) return null;
+    if (((oc as any).modalidadeFd ?? "normal") !== "normal") return null;
+    if ((oc as any).cartaoId || (oc as any).formaPagamento === "cartao" || (oc as any).formaPagamento === "cartao_credito") return null;
+
+    const valorMensal = parseFloat(String((oc as any).total ?? "0")) || 0;
+    const inicio = String((oc as any).recorrenciaDataInicio || "");
+    const fim = String((oc as any).recorrenciaDataFim || "");
+    if (valorMensal <= 0 || !inicio || !fim || fim < inicio) return null;
+    const vencimentos = gerarVencimentosRecorrenciaMensal(inicio, fim);
+    if (vencimentos.length === 0) return null;
+
+    const existentes = await db.select({
+      id: financialEntries.id,
+      status: financialEntries.status,
+      dataVencimento: financialEntries.dataVencimento,
+      parcelaGrupoId: financialEntries.parcelaGrupoId,
+    }).from(financialEntries).where(and(
+      eq(financialEntries.companyId, companyId),
+      eq(financialEntries.origemModulo, "compras"),
+      eq(financialEntries.origemId, ocId),
+    ));
+    const idsExistentes = existentes.map((e: any) => Number(e.id)).filter(Number.isFinite);
+    const baixasAtivas = idsExistentes.length > 0
+      ? await db.select({ entryId: financialEntryBaixas.entryId }).from(financialEntryBaixas)
+        .where(and(
+          inArray(financialEntryBaixas.entryId, idsExistentes),
+          sql`${financialEntryBaixas.estornadaEm} IS NULL`,
+        ))
+      : [];
+    const idsComBaixa = new Set(baixasAtivas.map((b: any) => Number(b.entryId)));
+    const existentesPlanejamento = existentes.map((entry: any) => ({
+      id: Number(entry.id),
+      status: entry.status,
+      dataVencimento: entry.dataVencimento ? String(entry.dataVencimento).slice(0, 10) : null,
+      temBaixaAtiva: idsComBaixa.has(Number(entry.id)),
+    }));
+    const plano = planejarReconciliacaoRecorrencia(vencimentos, existentesPlanejamento);
+    const existentePorId = new Map(existentes.map((entry: any) => [Number(entry.id), entry]));
+    const grupoId = existentes.find((e: any) => e.parcelaGrupoId)?.parcelaGrupoId || crypto.randomUUID();
+    const codigoConta = (oc as any).tipo === "servico" ? "3.2" : (oc as any).tipo === "locacao" ? "3.4" : "3.3";
+    const contaId = await getContaId(db, companyId, codigoConta);
+    const obraNome = (oc as any).obraId
+      ? (await db.select({ nome: obras.nome }).from(obras).where(eq(obras.id, (oc as any).obraId)))[0]?.nome ?? null
+      : null;
+    const novoStatus = statusOc === "aprovada" ? "previsto" : "a_pagar";
+    const idsAtivos: number[] = [];
+
+    for (const competencia of plano.competencias) {
+      const i = competencia.indice;
+      const vencimento = competencia.vencimento;
+      const existente = competencia.existenteId == null ? null : existentePorId.get(competencia.existenteId);
+      if (existente) {
+        if (!competencia.cancelado) {
+          if (!competencia.protegido) {
+            const statusAtualizado = novoStatus === "a_pagar" ? "a_pagar" : existente.status;
+            await db.update(financialEntries).set({
+              obraId: (oc as any).obraId ?? null,
+              obraNome,
+              contaId,
+              valorPrevisto: valorMensal.toFixed(2),
+              dataCompetencia: vencimento,
+              dataVencimento: vencimento,
+              status: statusAtualizado,
+              contaBancariaId: (oc as any).contaBancariaId ?? null,
+              formaPagamento: (oc as any).formaPagamento ?? null,
+              origemDescricao: `OC ${(oc as any).numeroOc} — recorrência ${i + 1}/${vencimentos.length}`,
+              fornecedorNome: (oc as any).fornecedorNome ?? null,
+              descricao: `OC ${(oc as any).numeroOc}${(oc as any).fornecedorNome ? " — " + (oc as any).fornecedorNome : ""} — recorrência ${i + 1}/${vencimentos.length}`,
+              parcelaNumero: i + 1,
+              parcelaTotal: vencimentos.length,
+              parcelaGrupoId: grupoId,
+            } as any).where(eq(financialEntries.id, existente.id));
+          }
+          idsAtivos.push(existente.id);
+        }
+        continue;
+      }
+
+      const [entry] = await db.insert(financialEntries).values({
+        companyId,
+        obraId: (oc as any).obraId ?? null,
+        obraNome,
+        contaId,
+        tipo: "despesa",
+        natureza: "variavel",
+        valorPrevisto: valorMensal.toFixed(2),
+        dataCompetencia: vencimento || dataLancamento || new Date().toISOString().slice(0, 10),
+        dataVencimento: vencimento,
+        status: novoStatus,
+        contaBancariaId: (oc as any).contaBancariaId ?? null,
+        origemModulo: "compras",
+        origemId: ocId,
+        origemDescricao: `OC ${(oc as any).numeroOc} — recorrência ${i + 1}/${vencimentos.length}`,
+        fornecedorNome: (oc as any).fornecedorNome ?? null,
+        descricao: `OC ${(oc as any).numeroOc}${(oc as any).fornecedorNome ? " — " + (oc as any).fornecedorNome : ""} — recorrência ${i + 1}/${vencimentos.length}`,
+        parcelaNumero: i + 1,
+        parcelaTotal: vencimentos.length,
+        parcelaGrupoId: grupoId,
+        formaPagamento: (oc as any).formaPagamento ?? null,
+      } as any).returning({ id: financialEntries.id });
+      if (entry?.id) idsAtivos.push(entry.id);
+    }
+
+    // Projeções não pagas que saíram do período (ou duplicatas legadas da mesma
+    // competência) são removidas. Canceladas e títulos com baixa ficam como histórico.
+    const idsRemover = plano.removerIds;
+    if (idsRemover.length > 0) {
+      await db.delete(financialEntries).where(and(
+        eq(financialEntries.companyId, companyId),
+        eq(financialEntries.origemModulo, "compras"),
+        eq(financialEntries.origemId, ocId),
+        inArray(financialEntries.id, idsRemover),
+      ));
+    }
+
+    const primeiroId = idsAtivos[0] ?? null;
+    if ((oc as any).financialEntryId !== primeiroId) {
+      await db.update(comprasOrdens).set({ financialEntryId: primeiroId } as any)
+        .where(and(eq(comprasOrdens.id, ocId), eq(comprasOrdens.companyId, companyId)));
+    }
+    return primeiroId;
+  });
+}
+
+/**
+ * Prepara uma OC aprovada para reedição. Deve rodar na mesma transação que
+ * devolve a OC para pendente. Projeções abertas são descartadas para que a
+ * próxima aprovação recrie exatamente o período/valor atual; títulos pagos ou
+ * com baixa ativa são preservados e reconciliados pelo materializador.
+ */
+export async function prepararReedicaoLancamentosOC(
+  db: any,
+  ocId: number,
+  companyId: number,
+): Promise<{ removidos: number; protegidos: number }> {
+  await db.execute(sql`SELECT pg_advisory_xact_lock(477002, ${ocId})`);
+  const entries = await db.select({
+    id: financialEntries.id,
+    status: financialEntries.status,
+  }).from(financialEntries).where(and(
+    eq(financialEntries.companyId, companyId),
+    eq(financialEntries.origemModulo, "compras"),
+    eq(financialEntries.origemId, ocId),
+  ));
+  const ids = entries.map((e: any) => Number(e.id)).filter(Number.isFinite);
+  const baixasAtivas = ids.length > 0
+    ? await db.select({ entryId: financialEntryBaixas.entryId }).from(financialEntryBaixas)
+      .where(and(
+        inArray(financialEntryBaixas.entryId, ids),
+        sql`${financialEntryBaixas.estornadaEm} IS NULL`,
+      ))
+    : [];
+  const idsComBaixa = new Set(baixasAtivas.map((b: any) => Number(b.entryId)));
+  const plano = planejarLimpezaReedicaoRecorrencia(entries.map((entry: any) => ({
+    id: Number(entry.id),
+    status: entry.status,
+    dataVencimento: null,
+    temBaixaAtiva: idsComBaixa.has(Number(entry.id)),
+  })));
+  const removerIds = plano.removerIds;
+  if (removerIds.length > 0) {
+    await db.delete(financialEntries).where(and(
+      eq(financialEntries.companyId, companyId),
+      eq(financialEntries.origemModulo, "compras"),
+      eq(financialEntries.origemId, ocId),
+      inArray(financialEntries.id, removerIds),
+    ));
+  }
+  await db.update(comprasOrdens).set({ financialEntryId: null } as any)
+    .where(and(eq(comprasOrdens.id, ocId), eq(comprasOrdens.companyId, companyId)));
+  return { removidos: removerIds.length, protegidos: plano.protegidosIds.length };
+}
+
+export async function cancelarLancamentosRecorrentesOC(
+  ocId: number,
+  companyId: number,
+  motivo: string,
+): Promise<number> {
+  const outerDb = await getDb();
+  if (!outerDb) return 0;
+  return outerDb.transaction(async (db: any) => {
+    await db.execute(sql`SELECT pg_advisory_xact_lock(477002, ${ocId})`);
+    const cancelados = await db.update(financialEntries).set({
+      status: "cancelado",
+      motivoCancelamento: motivo,
+      updatedAt: new Date().toISOString(),
+    } as any).where(and(
+      eq(financialEntries.companyId, companyId),
+      eq(financialEntries.origemModulo, "compras"),
+      eq(financialEntries.origemId, ocId),
+      sql`${financialEntries.status} NOT IN ('pago','recebido','cancelado')`,
+    )).returning({ id: financialEntries.id });
+    return cancelados.length;
+  });
+}
+
 // Rev. 4722 — SELF-HEAL: garante que uma OC aprovada/entregue tenha o título no
 // Contas a Pagar. Caminhos como o recebimento pelo Almoxarifado (registerSmartEntry)
 // marcavam a OC como entregue SEM passar pela integração financeira de
@@ -220,6 +469,12 @@ export async function criarParcelasFinanceiras(
 export async function garantirEntryDaOC(ocId: number, companyId: number, dataLancamento?: string | null): Promise<number | null> {
   const outerDb = await getDb();
   if (!outerDb) return null;
+  const [recorrente] = await outerDb.select({ lancamentoRecorrente: comprasOrdens.lancamentoRecorrente })
+    .from(comprasOrdens)
+    .where(and(eq(comprasOrdens.id, ocId), eq(comprasOrdens.companyId, companyId)));
+  if (recorrente?.lancamentoRecorrente) {
+    return sincronizarLancamentosRecorrentesOC(ocId, companyId, dataLancamento);
+  }
   return await outerDb.transaction(async (db: any) => {
   // Lock por OC: serializa com outros recebimentos/self-heals da mesma OC.
   await db.execute(sql`SELECT pg_advisory_xact_lock(477002, ${ocId})`);
@@ -267,8 +522,9 @@ export async function garantirEntryDaOC(ocId: number, companyId: number, dataLan
 
   const novoStatus = status === "aprovada" ? "previsto" : "a_pagar";
   const dataCompetenciaFin = dataLancamento || new Date().toISOString().split("T")[0];
+  const parcelasSalvas = obterParcelasSalvasDaOC((oc as any).parcelasJson, total);
   let vencimentoFin: string | null = (oc as any).dataVencimento ?? (oc as any).dataEntregaPrevista ?? null;
-  if ((oc as any).fornecedorId) {
+  if (!parcelasSalvas && (oc as any).fornecedorId) {
     const [cycleCfg] = await db.select({ cicloPagamento: (empresasTerceiras as any).cicloPagamento })
       .from(empresasTerceiras as any)
       .where(and(
@@ -282,26 +538,41 @@ export async function garantirEntryDaOC(ocId: number, companyId: number, dataLan
   }
   if (!vencimentoFin) vencimentoFin = dataCompetenciaFin;
 
-  const [entry] = await db.insert(financialEntries as any).values({
-    companyId: (oc as any).companyId,
-    obraId: (oc as any).obraId ?? null,
-    obraNome: obraNomeFin,
-    contaId,
-    tipo: "despesa",
-    natureza: "variavel",
-    valorPrevisto: String((oc as any).total ?? "0"),
-    dataCompetencia: dataCompetenciaFin,
-    dataVencimento: vencimentoFin,
-    status: novoStatus,
-    origemModulo: "compras",
-    origemId: ocId,
-    fornecedorNome: (oc as any).fornecedorNome ?? null,
-    descricao: `OC ${(oc as any).numeroOc}${(oc as any).fornecedorNome ? " — " + (oc as any).fornecedorNome : ""}`,
-  } as any).returning({ id: (financialEntries as any).id });
-  if (entry?.id) {
-    await db.update(comprasOrdens).set({ financialEntryId: entry.id } as any)
+  // O parcelamento informado na OC é soberano: especialmente para "Outras condições",
+  // não tente deduzir datas ou valores a partir do texto comercial.
+  const parcelasFinanceiras = parcelasSalvas ?? [{
+    numero: 1,
+    valor: total,
+    vencimento: vencimentoFin,
+  }];
+  const grupoParcelasId = parcelasFinanceiras.length > 1 ? crypto.randomUUID() : null;
+  const entryIds: number[] = [];
+  for (const parcela of parcelasFinanceiras) {
+    const [entry] = await db.insert(financialEntries as any).values({
+      companyId: (oc as any).companyId,
+      obraId: (oc as any).obraId ?? null,
+      obraNome: obraNomeFin,
+      contaId,
+      tipo: "despesa",
+      natureza: "variavel",
+      valorPrevisto: parcela.valor.toFixed(2),
+      dataCompetencia: dataCompetenciaFin,
+      dataVencimento: parcela.vencimento,
+      status: novoStatus,
+      origemModulo: "compras",
+      origemId: ocId,
+      fornecedorNome: (oc as any).fornecedorNome ?? null,
+      descricao: `OC ${(oc as any).numeroOc}${(oc as any).fornecedorNome ? " — " + (oc as any).fornecedorNome : ""}${parcelasFinanceiras.length > 1 ? ` — parcela ${parcela.numero}/${parcelasFinanceiras.length}` : ""}`,
+      parcelaNumero: parcela.numero,
+      parcelaTotal: parcelasFinanceiras.length,
+      parcelaGrupoId: grupoParcelasId,
+    } as any).returning({ id: (financialEntries as any).id });
+    if (entry?.id) entryIds.push(entry.id);
+  }
+  if (entryIds[0]) {
+    await db.update(comprasOrdens).set({ financialEntryId: entryIds[0] } as any)
       .where(and(eq(comprasOrdens.id, ocId), eq(comprasOrdens.companyId, companyId)));
-    return entry.id;
+    return entryIds[0];
   }
   return null;
   });

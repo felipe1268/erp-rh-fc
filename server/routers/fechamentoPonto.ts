@@ -10,6 +10,7 @@ import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
 import { parseBRL } from "../utils/parseBRL";
 import { jornadaEfetiva, obraTemJornada, obraNaDataFromAlocacoes, type AlocacaoObra } from "../utils/jornadaObra";
+import { bancoHorasEstaVigente } from "../utils/bancoHorasVigencia";
 
 // ============================================================
 // HELPERS
@@ -135,12 +136,34 @@ function getExpectedMinsFromJornada(jornadaTrabalho: string | null | undefined, 
     if (!day?.entrada || !day?.saida) return 0;
     const toMins = (t: string) => { const [h, m] = t.split(":").map(Number); return (h || 0) * 60 + (m || 0); };
     let expectedMins = toMins(day.saida) - toMins(day.entrada);
-    if (day.intervalo) {
-      const [ih, im] = day.intervalo.split(":").map(Number);
-      expectedMins -= (ih || 0) * 60 + (im || 0);
-    }
+    expectedMins -= parseIntervaloMins(day.intervalo);
     return Math.max(0, expectedMins);
   } catch { return null; }
+}
+
+// Tolerant parser for the jornada "intervalo" field. Accepts "01:00", "1:00",
+// and free-text forms like "1 hora", "1h", "1h30", "30 min". Legacy rows contain
+// text (e.g. "1 hora") which an HH:MM split parsed as 0 (lunch not subtracted).
+function parseIntervaloMins(intervalo: unknown): number {
+  if (intervalo == null) return 0;
+  const s = String(intervalo).trim().toLowerCase();
+  if (!s) return 0;
+  const hm = s.match(/^(\d{1,2}):(\d{2})$/);
+  if (hm) return Number(hm[1]) * 60 + Number(hm[2]);
+  const hText = s.match(/(\d+(?:[.,]\d+)?)\s*h(?:ora)?s?/);
+  const mText = s.match(/(\d+)\s*(?:min(?:uto)?s?)\b/);
+  const hAfter = s.match(/h(?:ora)?s?\s*(?:e\s*)?(\d+)\s*(?!h)/);
+  if (hText) {
+    const h = Number(hText[1].replace(",", "."));
+    let mins = Math.round(h * 60);
+    if (mText) mins = Math.floor(h) * 60 + Number(mText[1]);
+    else if (hAfter && Number.isInteger(h)) mins = h * 60 + Number(hAfter[1]);
+    return mins;
+  }
+  if (mText) return Number(mText[1]);
+  const n = Number(s.replace(",", "."));
+  if (Number.isFinite(n)) return n <= 3 ? Math.round(n * 60) : Math.round(n);
+  return 0;
 }
 
 // Chave de AGRUPAMENTO por pessoa: preserva dígitos!
@@ -1357,7 +1380,19 @@ export const fechamentoPontoRouter = router({
         const isSelective = input.mode === "selective" && input.selectedEmployeeIds && input.selectedEmployeeIds.length > 0;
         const selectedSet = isSelective ? new Set(input.selectedEmployeeIds) : null;
 
-        console.log(`[DIXI-DEBUG] grupos recordsByMesObra: ${Object.keys(recordsByMesObra).join(' | ')} | mode=${input.mode} | selectedIds=${input.selectedEmployeeIds?.join(',')}`);
+        // Rev. — sobreposição por PERÍODO do arquivo, não por mês inteiro:
+        // antes, importar o fechamento 16/06–14/07 apagava TODO o junho (incl. 01–15/06
+        // vindos do arquivo anterior). Agora o DELETE fica restrito ao intervalo de datas
+        // efetivamente presente no arquivo.
+        let fileDataMin: string | null = null;
+        let fileDataMax: string | null = null;
+        for (const rec of timeRecordsToInsert) {
+          const d = String(rec.data);
+          if (!fileDataMin || d < fileDataMin) fileDataMin = d;
+          if (!fileDataMax || d > fileDataMax) fileDataMax = d;
+        }
+
+        console.log(`[DIXI-DEBUG] grupos recordsByMesObra: ${Object.keys(recordsByMesObra).join(' | ')} | período do arquivo: ${fileDataMin}→${fileDataMax} | mode=${input.mode} | selectedIds=${input.selectedEmployeeIds?.join(',')}`);
         for (const [mesObraKey, allRecs] of Object.entries(recordsByMesObra)) {
           const [mesRef, groupObraIdStr] = mesObraKey.split("|");
           const groupObraId = Number(groupObraIdStr);
@@ -1389,6 +1424,9 @@ export const fechamentoPontoRouter = router({
                 eq(timeRecords.fonte, "dixi"),
                 inArray(timeRecords.employeeId, batch),
               ];
+              if (fileDataMin && fileDataMax) {
+                baseConds.push(sql`${timeRecords.data} BETWEEN ${fileDataMin}::date AND ${fileDataMax}::date`);
+              }
               for (const r of lockedRanges) {
                 baseConds.push(sql`NOT (${timeRecords.data} BETWEEN ${r.dataInicioCiclo}::date AND ${r.dataFimCiclo}::date)`);
               }
@@ -1399,6 +1437,9 @@ export const fechamentoPontoRouter = router({
                 eq(timeInconsistencies.obraId, groupObraId),
                 inArray(timeInconsistencies.employeeId, batch),
               ];
+              if (fileDataMin && fileDataMax) {
+                incConds.push(sql`${timeInconsistencies.data} BETWEEN ${fileDataMin}::date AND ${fileDataMax}::date`);
+              }
               for (const r of lockedRanges) {
                 incConds.push(sql`NOT (${timeInconsistencies.data} BETWEEN ${r.dataInicioCiclo}::date AND ${r.dataFimCiclo}::date)`);
               }
@@ -1416,6 +1457,9 @@ export const fechamentoPontoRouter = router({
                   eq(timeRecords.fonte, "dixi"),
                   inArray(timeRecords.employeeId, batch),
                 ];
+                if (fileDataMin && fileDataMax) {
+                  baseConds.push(sql`${timeRecords.data} BETWEEN ${fileDataMin}::date AND ${fileDataMax}::date`);
+                }
                 for (const r of lockedRanges) {
                   baseConds.push(sql`NOT (${timeRecords.data} BETWEEN ${r.dataInicioCiclo}::date AND ${r.dataFimCiclo}::date)`);
                 }
@@ -1426,6 +1470,9 @@ export const fechamentoPontoRouter = router({
                   eq(timeInconsistencies.obraId, groupObraId),
                   inArray(timeInconsistencies.employeeId, batch),
                 ];
+                if (fileDataMin && fileDataMax) {
+                  incConds.push(sql`${timeInconsistencies.data} BETWEEN ${fileDataMin}::date AND ${fileDataMax}::date`);
+                }
                 for (const r of lockedRanges) {
                   incConds.push(sql`NOT (${timeInconsistencies.data} BETWEEN ${r.dataInicioCiclo}::date AND ${r.dataFimCiclo}::date)`);
                 }
@@ -1438,6 +1485,9 @@ export const fechamentoPontoRouter = router({
                 eq(timeRecords.obraId, groupObraId),
                 eq(timeRecords.fonte, "dixi"),
               ];
+              if (fileDataMin && fileDataMax) {
+                baseConds.push(sql`${timeRecords.data} BETWEEN ${fileDataMin}::date AND ${fileDataMax}::date`);
+              }
               for (const r of lockedRanges) {
                 baseConds.push(sql`NOT (${timeRecords.data} BETWEEN ${r.dataInicioCiclo}::date AND ${r.dataFimCiclo}::date)`);
               }
@@ -1447,6 +1497,9 @@ export const fechamentoPontoRouter = router({
                 eq(timeInconsistencies.mesReferencia, mesRef),
                 eq(timeInconsistencies.obraId, groupObraId),
               ];
+              if (fileDataMin && fileDataMax) {
+                incConds.push(sql`${timeInconsistencies.data} BETWEEN ${fileDataMin}::date AND ${fileDataMax}::date`);
+              }
               for (const r of lockedRanges) {
                 incConds.push(sql`NOT (${timeInconsistencies.data} BETWEEN ${r.dataInicioCiclo}::date AND ${r.dataFimCiclo}::date)`);
               }
@@ -2266,7 +2319,10 @@ export const fechamentoPontoRouter = router({
         // sem interferir nos demais lançamentos do banco de horas (HE, ajustes
         // manuais via tela de Banco de Horas, etc.). Como estamos em transação,
         // o delete-then-insert é atômico e idempotente.
-        if (prevTipoDia === "bh") {
+        // Movimentos anteriores ao marco permanecem imutáveis no livro razão:
+        // editar um ponto antigo não pode apagar a trilha de auditoria nem tocar
+        // o saldo ativo.
+        if (bancoHorasEstaVigente(input.data) && prevTipoDia === "bh") {
           const prevLancRows = ((await tx.execute(sql`
             SELECT id, minutos FROM banco_horas_lancamentos
             WHERE "employeeId" = ${input.employeeId}
@@ -2289,7 +2345,7 @@ export const fechamentoPontoRouter = router({
             `);
           }
         }
-        if (tipoDia === "bh") {
+        if (bancoHorasEstaVigente(input.data) && tipoDia === "bh") {
           const debitMins = expectedMins ?? 0;
           if (debitMins > 0) {
             // Defesa em profundidade contra corrida: apaga qualquer lançamento

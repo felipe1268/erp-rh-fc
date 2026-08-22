@@ -967,6 +967,8 @@ export default function AlmoxarifadoPage() {
       });
       utils.compras.listarItens.invalidate();
       utils.compras.listarItensConsolidado.invalidate();
+      utils.warehouse.getDashboard.invalidate();
+      refetch();
       if (r.falhas.length === 0) {
         toast.success(`${r.sucessos.length} item(ns) transferido(s).`);
         setModalTransfLote(null);
@@ -1211,7 +1213,16 @@ export default function AlmoxarifadoPage() {
   // ── Importar Itens via IA (Rev. 4420) ─────────────────────────
   const [importIAOpen, setImportIAOpen] = useState(false);
   const [importIAStep, setImportIAStep] = useState<"upload"|"processing"|"review">("upload");
-  const [importIAItens, setImportIAItens] = useState<Array<{nome:string;unidade:string;categoria:string;quantidade:number}>>([]);
+  const [importIAItens, setImportIAItens] = useState<Array<{
+    nome: string;
+    unidade: string;
+    categoria: string;
+    quantidade: number;
+    linha?: number;
+    erros?: string[];
+    possivelDuplicata?: boolean;
+    duplicataImportacao?: boolean;
+  }>>([]);
   const [importIADragOver, setImportIADragOver] = useState(false);
   const [importIACriando, setImportIACriando] = useState(false);
   const [importIAProgress, setImportIAProgress] = useState(0);
@@ -1393,51 +1404,119 @@ export default function AlmoxarifadoPage() {
   });
   const extrairItensAlmoxIAMut = trpc.warehouse.extrairItensAlmoxIA.useMutation({
     onSuccess: (res) => {
-      setImportIAItens(res.itens);
-      setImportIASelected(new Set(res.itens.map((_:any, i:number) => i)));
+      const normalizarNome = (nome: string) => String(nome || "")
+        .trim()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLocaleLowerCase("pt-BR")
+        .replace(/\s+/g, " ");
+      const fonteItens = obraContexto === "todos" ? itensTodos : itens;
+      const nomesExistentes = new Set((fonteItens as any[]).map(item => normalizarNome(item.nome)));
+      const contagemNomes = new Map<string, number>();
+      for (const item of res.itens as any[]) {
+        const nome = normalizarNome(item.nome);
+        if (nome) contagemNomes.set(nome, (contagemNomes.get(nome) || 0) + 1);
+      }
+      const itensParaRevisao = (res.itens as any[]).map((item: any) => {
+        const nome = normalizarNome(item.nome);
+        return {
+          ...item,
+          possivelDuplicata: !!nome && nomesExistentes.has(nome),
+          duplicataImportacao: !!nome && (contagemNomes.get(nome) || 0) > 1,
+        };
+      });
+      setImportIAItens(itensParaRevisao);
+      setImportIASelected(new Set(itensParaRevisao
+        .map((item: any, index: number) => ({ item, index }))
+        .filter(({ item }: any) => errosDaLinhaImportIA(item).length === 0)
+        .map(({ index }: any) => index)));
       setImportIAStep("review");
     },
     onError: (e) => { toast.error(e.message); setImportIAStep("upload"); },
   });
   async function handleImportIAFile(file: File) {
     if (!file) return;
-    const valid = ["application/pdf","image/jpeg","image/jpg","image/png"];
-    if (!valid.includes(file.type)) { toast.error("Formato inválido. Use PDF, JPG ou PNG."); return; }
+    const extension = file.name.split(".").pop()?.toLowerCase();
+    const mimeType = file.type || ({
+      pdf: "application/pdf",
+      jpg: "image/jpeg",
+      jpeg: "image/jpeg",
+      png: "image/png",
+      xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      xls: "application/vnd.ms-excel",
+    }[extension || ""] || "");
+    const valid = ["application/pdf", "image/jpeg", "image/jpg", "image/png", "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"];
+    if (!valid.includes(mimeType) && !["pdf", "jpg", "jpeg", "png", "xls", "xlsx"].includes(extension || "")) {
+      toast.error("Formato inválido. Use Excel, PDF, JPG ou PNG.");
+      return;
+    }
     if (file.size > 10 * 1024 * 1024) { toast.error("Arquivo muito grande. Máximo 10 MB."); return; }
     const reader = new FileReader();
     reader.onload = (e) => {
       const b64 = (e.target?.result as string)?.split(",")[1] ?? "";
       setImportIAStep("processing");
-      extrairItensAlmoxIAMut.mutate({ companyId, fileBase64: b64, mimeType: file.type });
+      extrairItensAlmoxIAMut.mutate({ companyId, fileBase64: b64, mimeType });
     };
     reader.readAsDataURL(file);
   }
   async function criarItensIA() {
     const selecionados = importIAItens.filter((_,i) => importIASelected.has(i));
     if (selecionados.length === 0) { toast.error("Selecione ao menos um item."); return; }
+    const invalido = selecionados.find(item => errosDaLinhaImportIA(item).length > 0);
+    if (invalido) {
+      toast.error(`Corrija os dados inválidos${invalido.linha ? ` da linha ${invalido.linha}` : ""} antes de criar.`);
+      return;
+    }
     setImportIACriando(true);
     setImportIAProgress(0);
     let ok = 0;
+    const falhas: string[] = [];
     for (let i = 0; i < selecionados.length; i++) {
       const it = selecionados[i];
       try {
         await new Promise<void>((res, rej) => {
           criarMut.mutate(
-            { companyId, nome: it.nome, unidade: it.unidade, categoria: it.categoria, quantidadeAtual: it.quantidade, quantidadeMinima: 0 },
+            {
+              companyId,
+              obraId: typeof obraContexto === "number" ? obraContexto : null,
+              nome: it.nome.trim(),
+              unidade: it.unidade.trim(),
+              categoria: it.categoria.trim(),
+              quantidadeAtual: it.quantidade,
+              quantidadeMinima: 0,
+            },
             { onSuccess: () => { ok++; res(); }, onError: (e) => rej(e) }
           );
         });
-      } catch { /* pula item com erro */ }
+      } catch (error: any) {
+        falhas.push(`${it.nome}: ${error?.message || "falha ao criar"}`);
+      }
       setImportIAProgress(Math.round(((i + 1) / selecionados.length) * 100));
     }
     setImportIACriando(false);
     setImportIAProgress(0);
-    toast.success(`${ok} ite${ok === 1 ? "m criado" : "ns criados"} no catálogo!`);
+    if (falhas.length) {
+      toast.warning(`${ok} item(ns) criado(s) e ${falhas.length} falha(s). ${falhas.slice(0, 2).join(" · ")}`);
+    } else {
+      toast.success(`${ok} ite${ok === 1 ? "m criado" : "ns criados"} no catálogo!`);
+    }
     refetch();
     utils.warehouse.getDashboard.invalidate();
     setImportIAOpen(false);
     setImportIAItens([]);
     setImportIAStep("upload");
+  }
+  function errosDaLinhaImportIA(item: {
+    nome: string; unidade: string; categoria: string; quantidade: number; erros?: string[];
+  }) {
+    const erros = [...(item.erros || [])];
+    if (!item.nome?.trim() && !erros.some(erro => erro.includes("Nome"))) erros.push("Nome do item não informado.");
+    if (!item.unidade?.trim() && !erros.some(erro => erro.includes("Unidade"))) erros.push("Unidade não informada.");
+    if (!item.categoria?.trim() && !erros.some(erro => erro.includes("Categoria"))) erros.push("Categoria não informada.");
+    if (!Number.isInteger(item.quantidade) || item.quantidade < 0) {
+      erros.push("Quantidade deve ser um número inteiro não negativo.");
+    }
+    return erros;
   }
   const atualizarMut = trpc.compras.atualizarItem.useMutation({
     onSuccess: () => { refetch(); utils.warehouse.getDashboard.invalidate(); setModalItem(false); toast.success("Item atualizado!"); },
@@ -1533,8 +1612,8 @@ export default function AlmoxarifadoPage() {
 
   function salvarItem() {
     if (!formItem.nome.trim()) { toast.error("Nome é obrigatório."); return; }
-    const pQtdAtual = parseNum(formItem.quantidadeAtual);
-    const pQtdMin = parseNum(formItem.quantidadeMinima);
+    const pQtdAtual = Math.max(0, Math.round(parseNum(formItem.quantidadeAtual)));
+    const pQtdMin = Math.max(0, Math.round(parseNum(formItem.quantidadeMinima)));
     const pValUnit = parseNum(formItem.valorUnitario);
     const pValLoc = parseNum(formItem.valorLocacaoMensal);
     const pDiasAlerta = parseInt(formItem.diasAlertaLocacao) || 7;
@@ -1621,7 +1700,7 @@ export default function AlmoxarifadoPage() {
   }
   function salvarMovimento() {
     if (!movItem) return;
-    if (formMov.quantidade <= 0) { toast.error("Quantidade deve ser maior que zero."); return; }
+    if (!Number.isInteger(formMov.quantidade) || formMov.quantidade <= 0) { toast.error("Quantidade deve ser um número inteiro maior que zero."); return; }
     if (formMov.tipo === "saida" && !formMov.obraId) { toast.error("Selecione a obra de destino."); return; }
     const obraSel = obrasAtivas.find((o: any) => o.id === formMov.obraId);
     movMut.mutate({ companyId, itemId: movItem.id, tipo: formMov.tipo, quantidade: formMov.quantidade, obraId: formMov.obraId || undefined, obraNome: obraSel ? (obraSel.codigo ? `${obraSel.codigo} – ${obraSel.nome}` : obraSel.nome) : undefined, motivo: formMov.motivo || undefined, observacoes: formMov.observacoes || undefined });
@@ -1679,8 +1758,31 @@ export default function AlmoxarifadoPage() {
   const [empErr, setEmpErr] = useState<string | null>(null);
   // Tipo: mão de obra direta vs terceiros
   const [empTipo, setEmpTipo] = useState<"mao_obra" | "terceiro">("mao_obra");
-  const [empTerceiroNome, setEmpTerceiroNome] = useState("");
-  const [empTerceiroEmpresa, setEmpTerceiroEmpresa] = useState("");
+  // Rev. 5063 — poka-yoke: terceiro só por CADASTRO (proibido nome digitado)
+  const [empTerceiroSearch, setEmpTerceiroSearch] = useState("");
+  const [empTerceiroSel, setEmpTerceiroSel] = useState<null | { id: number; nome: string; fotoUrl?: string | null; empresa?: string | null; cpf?: string | null; rg?: string | null }>(null);
+  const [empCadOpen, setEmpCadOpen] = useState(false);
+  const [empCadEmpresaId, setEmpCadEmpresaId] = useState<number>(0);
+  const [empCadEmpresaNome, setEmpCadEmpresaNome] = useState("");
+  const [empCadEmpresaCnpj, setEmpCadEmpresaCnpj] = useState("");
+  const [empCadNome, setEmpCadNome] = useState("");
+  const [empCadRg, setEmpCadRg] = useState("");
+  const [empCadCpf, setEmpCadCpf] = useState("");
+  const [empCadFotoB64, setEmpCadFotoB64] = useState("");
+  const [empCadFotoName, setEmpCadFotoName] = useState("");
+  const [empCadFotoType, setEmpCadFotoType] = useState("image/jpeg");
+  const [empCadSaving, setEmpCadSaving] = useState(false);
+  const [empCadErr, setEmpCadErr] = useState<string | null>(null);
+  const { data: empTerceiroSugestoes = [] } = trpc.warehouse.searchTerceiros.useQuery(
+    { companyId, q: empTerceiroSearch },
+    { enabled: empTipo === "terceiro" && empTerceiroSearch.length >= 2 && !empTerceiroSel }
+  );
+  const { data: empresasTerceirasList = [] } = trpc.terceiros.empresas.list.useQuery(
+    { companyId },
+    { enabled: empCadOpen }
+  );
+  const criarEmpresaTerceiraMut = trpc.terceiros.empresas.create.useMutation();
+  const criarTerceiroMut = trpc.terceiros.funcionarios.create.useMutation();
   const [empObservacoes, setEmpObservacoes] = useState("");
   const { data: empFuncionario } = trpc.warehouse.getFuncionarioByCodigo.useQuery(
     { companyId, codigo: empCodigo },
@@ -1708,6 +1810,8 @@ export default function AlmoxarifadoPage() {
   const [insItemSearch, setInsItemSearch] = useState("");
   const [insItemFocused, setInsItemFocused] = useState(false);
   const [insQtd, setInsQtd] = useState("1");
+  // Rev. 5033 — carrinho: vários materiais numa mesma saída p/ a mesma pessoa
+  const [insCart, setInsCart] = useState<{ itemId: number; nome: string; unidade: string; qtd: number }[]>([]);
   const [insObraId, setInsObraId] = useState<number>(0);
   const [insMotivo, setInsMotivo] = useState("");
   const [insOk, setInsOk] = useState<null | { nome: string; item: string }>(null);
@@ -1724,14 +1828,14 @@ export default function AlmoxarifadoPage() {
     { companyId, q: insSearch },
     { enabled: insSearch.length >= 2 && !insSelecionado }
   );
+  // Rev. 5033 — sucesso/erro tratados no fluxo do carrinho (loop de mutateAsync)
   const registerInsumo = trpc.warehouse.registerInsumo.useMutation({
-    onSuccess: (d: any) => { refetch(); setInsOk({ nome: d.funcionarioNome, item: d.itemNome }); setInsErr(null); },
-    onError: (e: any) => { setInsErr(e.message); setInsOk(null); },
+    onSuccess: () => { refetch(); },
   });
   function resetInsumo() {
     setInsTipo("mao_obra"); setInsTerceiroNome(""); setInsTerceiroEmpresa("");
     setInsCodigo(""); setInsSearch(""); setInsSelecionado(null); setInsShowSug(false);
-    setInsItemId(0); setInsItemSearch(""); setInsItemFocused(false); setInsQtd("1");
+    setInsItemId(0); setInsItemSearch(""); setInsItemFocused(false); setInsQtd("1"); setInsCart([]);
     setInsObraId(typeof obraContexto === "number" ? obraContexto : 0);
     setInsMotivo(""); setInsOk(null); setInsErr(null);
     setInsCustoDe(""); setInsContratoId(0); setInsDescTipo("insumo");
@@ -1742,8 +1846,7 @@ export default function AlmoxarifadoPage() {
   const [modalTransf, setModalTransf] = useState(false);
   const [transfOrigemTipo, setTransfOrigemTipo] = useState<"central" | "obra">("central");
   const [transfOrigemObraId, setTransfOrigemObraId] = useState<number>(0);
-  const [transfItemId, setTransfItemId] = useState<number>(0);
-  const [transfQtd, setTransfQtd] = useState("1");
+  const [transfSelecionados, setTransfSelecionados] = useState<Record<number, string>>({});
   const [transfDestinoTipo, setTransfDestinoTipo] = useState<"central" | "obra">("obra");
   const [transfDestinoObraId, setTransfDestinoObraId] = useState<number>(0);
   const [transfMotivo, setTransfMotivo] = useState("");
@@ -1770,7 +1873,7 @@ export default function AlmoxarifadoPage() {
   });
 
   function resetTransf() {
-    setTransfItemId(0); setTransfQtd("1"); setTransfMotivo(""); setTransfOk(null); setTransfErr(null); setTransfBusca(""); setTransfDropOpen(false);
+    setTransfSelecionados({}); setTransfMotivo(""); setTransfOk(null); setTransfErr(null); setTransfBusca(""); setTransfDropOpen(false);
   }
 
   // Modal Fechar Dia (devolução) — Rev. 4005: antes só trazia empréstimos de HOJE
@@ -1837,6 +1940,14 @@ export default function AlmoxarifadoPage() {
     { companyId, limit: 300, data: filtroData },
     { enabled: !!companyId && modalRegistros && abaRegistros === "insumos" }
   );
+  // Rev. 5033 — filtro por material na aba Insumos: histórico completo (sem data) do item
+  const [insRegFiltroBusca, setInsRegFiltroBusca] = useState("");
+  const [insRegFiltroItem, setInsRegFiltroItem] = useState<{ id: number; nome: string } | null>(null);
+  const [insRegFiltroFocus, setInsRegFiltroFocus] = useState(false);
+  const { data: insumosDoItem = [], isLoading: loadingInsumosItem } = trpc.warehouse.listInsumos.useQuery(
+    { companyId, limit: 2000, itemId: insRegFiltroItem?.id ?? 0 },
+    { enabled: !!companyId && modalRegistros && abaRegistros === "insumos" && !!insRegFiltroItem }
+  );
   const { data: transferenciasRegistros = [], isLoading: loadingTransferencias } = trpc.warehouse.listTransferencias.useQuery(
     { companyId, limit: 300, data: filtroData },
     { enabled: !!companyId && modalRegistros && abaRegistros === "transferencias" }
@@ -1844,7 +1955,7 @@ export default function AlmoxarifadoPage() {
 
   function resetEntrada() { setEntradaItemId(0); setEntradaQtd(""); setEntradaMotivo(""); setEntradaOk(null); }
   function resetSaida() { setSaidaItemId(0); setSaidaQtd(""); setSaidaObraId(typeof obraContexto === "number" ? obraContexto : 0); setSaidaOk(null); }
-  function resetEmprestimo() { setEmpCodigo(""); setEmpSearch(""); setEmpSelecionado(null); setEmpShowSug(false); setEmpItemId(0); setEmpQtd("1"); setEmpItens([]); setEmpSubmitting(false); setEmpOk(null); setEmpErr(null); setEmpTipo("mao_obra"); setEmpTerceiroNome(""); setEmpTerceiroEmpresa(""); setEmpObservacoes(""); }
+  function resetEmprestimo() { setEmpCodigo(""); setEmpSearch(""); setEmpSelecionado(null); setEmpShowSug(false); setEmpItemId(0); setEmpQtd("1"); setEmpItens([]); setEmpSubmitting(false); setEmpOk(null); setEmpErr(null); setEmpTipo("mao_obra"); setEmpTerceiroSearch(""); setEmpTerceiroSel(null); setEmpCadOpen(false); setEmpCadEmpresaId(0); setEmpCadEmpresaNome(""); setEmpCadEmpresaCnpj(""); setEmpCadNome(""); setEmpCadRg(""); setEmpCadCpf(""); setEmpCadFotoB64(""); setEmpCadFotoName(""); setEmpCadErr(null); setEmpObservacoes(""); }
 
   // ── Abrir modal via URL param (?modal=X) e/ou setar obra (?obra=ID) ────────
   useEffect(() => {
@@ -3528,7 +3639,7 @@ export default function AlmoxarifadoPage() {
                     <div>
                       <label className="text-xs font-medium text-gray-700">Qtd. Mínima (alerta)</label>
                       <input
-                        type="text" inputMode="decimal"
+                        type="text" inputMode="numeric"
                         className="mt-1 w-full h-9 px-3 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 outline-none focus:border-emerald-400"
                         value={formItem.quantidadeMinima}
                         placeholder="0"
@@ -3543,7 +3654,7 @@ export default function AlmoxarifadoPage() {
                         <p className="text-[11px] text-amber-600 mt-0.5 leading-tight">⚠ Correção de inventário</p>
                       )}
                       <input
-                        type="text" inputMode="decimal"
+                        type="text" inputMode="numeric"
                         className={`mt-1 w-full h-9 px-3 text-sm rounded-lg border bg-white text-gray-900 outline-none transition ${editandoId ? "border-amber-300 focus:border-amber-500" : "border-gray-200 focus:border-emerald-400"}`}
                         value={formItem.quantidadeAtual}
                         placeholder="0"
@@ -3884,7 +3995,7 @@ export default function AlmoxarifadoPage() {
                   </div>
                   <div>
                     <label className="text-sm font-semibold text-gray-700 block mb-1">Quantidade *</label>
-                    <input type="number" inputMode="decimal" className="w-full border-2 rounded-xl p-4 text-2xl font-bold text-center" placeholder="0" value={entradaQtd} onChange={e => setEntradaQtd(e.target.value)} />
+                    <input type="number" inputMode="numeric" min="1" step="1" className="w-full border-2 rounded-xl p-4 text-2xl font-bold text-center" placeholder="0" value={entradaQtd} onChange={e => setEntradaQtd(e.target.value === "" ? "" : String(Math.max(1, Math.floor(Number(e.target.value) || 1))))} />
                   </div>
                   <div>
                     <label className="text-sm font-semibold text-gray-700 block mb-1">Nota Fiscal / Motivo</label>
@@ -3942,7 +4053,7 @@ export default function AlmoxarifadoPage() {
                   </div>
                   <div>
                     <label className="text-sm font-semibold text-gray-700 block mb-1">Quantidade *</label>
-                    <input type="number" inputMode="decimal" className="w-full border-2 rounded-xl p-4 text-2xl font-bold text-center" placeholder="0" value={saidaQtd} onChange={e => setSaidaQtd(e.target.value)} />
+                    <input type="number" inputMode="numeric" min="1" step="1" className="w-full border-2 rounded-xl p-4 text-2xl font-bold text-center" placeholder="0" value={saidaQtd} onChange={e => setSaidaQtd(e.target.value === "" ? "" : String(Math.max(1, Math.floor(Number(e.target.value) || 1))))} />
                   </div>
                   <div>
                     <label className="text-sm font-semibold text-gray-700 block mb-1">Obra de destino *</label>
@@ -4075,26 +4186,156 @@ export default function AlmoxarifadoPage() {
                   </div>
                   ) : (
                   <div className="space-y-3">
-                    <div>
-                      <label className="text-sm font-semibold text-gray-700 block mb-1">Nome do responsável *</label>
-                      <input
-                        type="text"
-                        className="w-full border-2 rounded-xl p-3 text-base"
-                        placeholder="Nome completo da pessoa..."
-                        value={empTerceiroNome}
-                        onChange={e => setEmpTerceiroNome(e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <label className="text-sm font-semibold text-gray-700 block mb-1">Empresa (opcional)</label>
-                      <input
-                        type="text"
-                        className="w-full border-2 rounded-xl p-3 text-base"
-                        placeholder="Nome da empresa ou prestadora..."
-                        value={empTerceiroEmpresa}
-                        onChange={e => setEmpTerceiroEmpresa(e.target.value)}
-                      />
-                    </div>
+                    {/* Rev. 5063 — poka-yoke: só terceiro CADASTRADO pode retirar */}
+                    {!empTerceiroSel && !empCadOpen && (
+                      <div className="relative">
+                        <label className="text-sm font-semibold text-gray-700 block mb-1">Terceiro cadastrado *</label>
+                        <input
+                          type="text"
+                          className="w-full border-2 rounded-xl p-3 text-base"
+                          placeholder="Buscar por nome ou empresa..."
+                          value={empTerceiroSearch}
+                          onChange={e => setEmpTerceiroSearch(e.target.value)}
+                        />
+                        {empTerceiroSearch.length >= 2 && empTerceiroSugestoes.length > 0 && (
+                          <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+                            {empTerceiroSugestoes.map((t: any) => (
+                              <button key={t.id} type="button"
+                                className="w-full flex items-center gap-3 px-3 py-2 hover:bg-violet-50 text-left transition"
+                                onMouseDown={() => { setEmpTerceiroSel({ id: t.id, nome: t.nome, fotoUrl: t.fotoUrl, empresa: t.empresa, cpf: t.cpf, rg: t.rg }); setEmpTerceiroSearch(""); }}>
+                                {t.fotoUrl
+                                  ? <img src={t.fotoUrl} alt={t.nome} className="w-9 h-9 rounded-full object-cover border border-gray-200 flex-shrink-0" />
+                                  : <div className="w-9 h-9 rounded-full bg-violet-100 flex items-center justify-center flex-shrink-0"><User className="w-5 h-5 text-violet-500" /></div>}
+                                <div className="min-w-0">
+                                  <p className="text-sm font-semibold text-gray-900 truncate">{t.nome}</p>
+                                  <p className="text-xs text-violet-600 truncate">🏢 {t.empresa || "Sem empresa"}{t.funcao ? ` — ${t.funcao}` : ""}</p>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {empTerceiroSearch.length >= 2 && empTerceiroSugestoes.length === 0 && (
+                          <div className="mt-2 bg-amber-50 border-2 border-amber-200 rounded-xl p-3">
+                            <p className="text-sm font-semibold text-amber-800">Terceiro não cadastrado.</p>
+                            <p className="text-xs text-amber-700 mt-0.5">Não é permitido emprestar sem cadastro (empresa, nome completo, RG, CPF e foto).</p>
+                            <button type="button"
+                              onClick={() => { setEmpCadNome(empTerceiroSearch.toUpperCase()); setEmpCadOpen(true); setEmpCadErr(null); }}
+                              className="mt-2 w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-2.5 rounded-xl text-sm transition">
+                              Deseja fazer o cadastro agora?
+                            </button>
+                          </div>
+                        )}
+                        <p className="text-[11px] text-gray-500 mt-1">Digite pelo menos 2 letras. Nome livre (sem cadastro) não é mais aceito.</p>
+                      </div>
+                    )}
+                    {/* Cadastro rápido do terceiro */}
+                    {empCadOpen && !empTerceiroSel && (
+                      <div className="bg-violet-50 border-2 border-violet-200 rounded-2xl p-3 space-y-2.5 relative">
+                        <button type="button" onClick={() => setEmpCadOpen(false)} className="absolute top-2 right-2 text-gray-400 hover:text-red-500"><X className="w-4 h-4" /></button>
+                        <p className="text-sm font-bold text-violet-800">Cadastro rápido de terceiro</p>
+                        <div>
+                          <label className="text-xs font-semibold text-gray-700 block mb-1">Empresa terceira *</label>
+                          <select className="w-full border-2 rounded-xl p-2.5 text-sm bg-white" value={empCadEmpresaId}
+                            onChange={e => setEmpCadEmpresaId(Number(e.target.value))}>
+                            <option value={0}>+ Nova empresa…</option>
+                            {(empresasTerceirasList as any[]).map((et: any) => (
+                              <option key={et.id} value={et.id}>{et.nomeFantasia || et.razaoSocial}</option>
+                            ))}
+                          </select>
+                        </div>
+                        {empCadEmpresaId === 0 && (
+                          <div className="grid grid-cols-1 gap-2">
+                            <input type="text" className="w-full border-2 rounded-xl p-2.5 text-sm" placeholder="Nome da empresa (razão social) *"
+                              value={empCadEmpresaNome} onChange={e => setEmpCadEmpresaNome(e.target.value)} />
+                            <input type="text" inputMode="numeric" className="w-full border-2 rounded-xl p-2.5 text-sm" placeholder="CNPJ (14 dígitos) *"
+                              value={empCadEmpresaCnpj} onChange={e => setEmpCadEmpresaCnpj(e.target.value)} />
+                          </div>
+                        )}
+                        <input type="text" className="w-full border-2 rounded-xl p-2.5 text-sm" placeholder="Nome completo *"
+                          value={empCadNome} onChange={e => setEmpCadNome(e.target.value)} />
+                        <div className="grid grid-cols-2 gap-2">
+                          <input type="text" inputMode="numeric" className="w-full border-2 rounded-xl p-2.5 text-sm" placeholder="CPF *"
+                            value={empCadCpf} onChange={e => setEmpCadCpf(e.target.value)} />
+                          <input type="text" className="w-full border-2 rounded-xl p-2.5 text-sm" placeholder="RG (opcional)"
+                            value={empCadRg} onChange={e => setEmpCadRg(e.target.value)} />
+                        </div>
+                        <div>
+                          <label className="text-xs font-semibold text-gray-700 block mb-1">Foto de quem retira * {empCadFotoName && <span className="text-emerald-600">✓ {empCadFotoName}</span>}</label>
+                          <input type="file" accept="image/*" capture="environment" className="w-full text-xs"
+                            onChange={e => {
+                              const f = e.target.files?.[0];
+                              if (!f) return;
+                              const rd = new FileReader();
+                              rd.onload = () => {
+                                const s = String(rd.result || "");
+                                setEmpCadFotoB64(s.includes(",") ? s.split(",")[1] : s);
+                                setEmpCadFotoName(f.name || "foto.jpg");
+                                setEmpCadFotoType(f.type || "image/jpeg");
+                              };
+                              rd.readAsDataURL(f);
+                            }} />
+                        </div>
+                        {empCadErr && <p className="text-xs text-red-600 bg-red-50 rounded-lg p-2">{empCadErr}</p>}
+                        <button type="button" disabled={empCadSaving}
+                          className="w-full bg-violet-600 hover:bg-violet-700 text-white font-bold py-3 rounded-xl text-sm disabled:opacity-50 transition"
+                          onClick={async () => {
+                            const nome = empCadNome.trim();
+                            const cpfDig = empCadCpf.replace(/\D/g, "");
+                            if (!nome || cpfDig.length !== 11 || !empCadFotoB64) {
+                              setEmpCadErr("Preencha nome completo, CPF válido (11 dígitos) e a foto — tudo obrigatório. RG é opcional.");
+                              return;
+                            }
+                            if (empCadEmpresaId === 0 && (!empCadEmpresaNome.trim() || empCadEmpresaCnpj.replace(/\D/g, "").length !== 14)) {
+                              setEmpCadErr("Para nova empresa, informe o nome e o CNPJ (14 dígitos).");
+                              return;
+                            }
+                            setEmpCadSaving(true); setEmpCadErr(null);
+                            try {
+                              let empresaId = empCadEmpresaId;
+                              if (empresaId === 0) {
+                                const emp = await criarEmpresaTerceiraMut.mutateAsync({
+                                  companyId, razaoSocial: empCadEmpresaNome.trim(), nomeFantasia: empCadEmpresaNome.trim(), cnpj: empCadEmpresaCnpj,
+                                } as any);
+                                empresaId = Number((emp as any)?.id ?? (emp as any)?.[0]?.id);
+                                if (!empresaId) throw new Error("Falha ao criar a empresa terceira.");
+                              }
+                              const novo = await criarTerceiroMut.mutateAsync({
+                                companyId, empresaTerceiraId: empresaId,
+                                nome, cpf: empCadCpf.trim(), rg: empCadRg.trim(),
+                                fotoBase64: empCadFotoB64, fotoFileName: empCadFotoName || "foto.jpg", fotoContentType: empCadFotoType,
+                              } as any);
+                              const empresaNome = empCadEmpresaId === 0
+                                ? empCadEmpresaNome.trim()
+                                : ((empresasTerceirasList as any[]).find((et: any) => et.id === empresaId)?.nomeFantasia || (empresasTerceirasList as any[]).find((et: any) => et.id === empresaId)?.razaoSocial || null);
+                              setEmpTerceiroSel({ id: Number((novo as any).id), nome: nome.toUpperCase(), fotoUrl: null, empresa: empresaNome });
+                              setEmpCadOpen(false);
+                            } catch (e: any) {
+                              setEmpCadErr(e?.message || "Falha ao cadastrar.");
+                            } finally {
+                              setEmpCadSaving(false);
+                            }
+                          }}>
+                          {empCadSaving ? "Cadastrando…" : "Cadastrar e usar no empréstimo"}
+                        </button>
+                      </div>
+                    )}
+                    {/* Card do terceiro selecionado */}
+                    {empTerceiroSel && (
+                      <div className="bg-violet-50 border-2 border-violet-300 rounded-2xl p-4 flex flex-col items-center gap-2 relative">
+                        <button type="button" onClick={() => { setEmpTerceiroSel(null); setEmpTerceiroSearch(""); }}
+                          className="absolute top-2 right-2 text-gray-400 hover:text-red-500 transition"><X className="w-4 h-4" /></button>
+                        {empTerceiroSel.fotoUrl
+                          ? <img src={empTerceiroSel.fotoUrl} alt={empTerceiroSel.nome} className="w-24 h-24 rounded-full object-cover border-4 border-violet-400 shadow-md" />
+                          : <div className="w-24 h-24 rounded-full bg-violet-100 border-4 border-violet-300 flex items-center justify-center shadow-md"><User className="w-12 h-12 text-violet-400" /></div>}
+                        <p className="font-bold text-violet-800 text-center text-base leading-tight">{empTerceiroSel.nome}</p>
+                        <p className="text-sm text-violet-600 text-center">🏢 {empTerceiroSel.empresa || "Sem empresa vinculada"}</p>
+                        {(!empTerceiroSel.cpf || !empTerceiroSel.fotoUrl) && empTerceiroSel.cpf !== undefined && (
+                          <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1 text-center">
+                            ⚠️ Cadastro incompleto ({[!empTerceiroSel.cpf && "CPF", !empTerceiroSel.fotoUrl && "foto"].filter(Boolean).join(", ")}) — o empréstimo será bloqueado até completar em Terceiros.
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </div>
                   )}
                   {(() => {
@@ -4159,7 +4400,7 @@ export default function AlmoxarifadoPage() {
                         {empErr && <p className="text-sm text-red-600 bg-red-50 rounded-lg p-2">{empErr}</p>}
                         <button
                           className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 rounded-xl text-lg disabled:opacity-50 transition"
-                          disabled={(empTipo === "mao_obra" ? !empSelecionado : !empTerceiroNome.trim()) || (empItens.length === 0 && !podeAdicionar) || empSubmitting}
+                          disabled={(empTipo === "mao_obra" ? !empSelecionado : !empTerceiroSel) || (empItens.length === 0 && !podeAdicionar) || empSubmitting}
                           onClick={async () => {
                             // Junta o item "em digitação" + a lista
                             const lista = [...empItens];
@@ -4174,7 +4415,7 @@ export default function AlmoxarifadoPage() {
                             try {
                               for (const it of lista) {
                                 const params = empTipo === "terceiro"
-                                  ? { companyId, itemId: it.itemId, quantidade: parseFloat(it.qtd), obraId: obraIdParam, terceiroNome: empTerceiroNome.trim(), terceiroEmpresa: empTerceiroEmpresa.trim() || undefined, observacoes: empObservacoes.trim() || undefined }
+                                  ? { companyId, itemId: it.itemId, quantidade: parseFloat(it.qtd), obraId: obraIdParam, terceiroId: empTerceiroSel!.id, observacoes: empObservacoes.trim() || undefined }
                                   : { companyId, itemId: it.itemId, quantidade: parseFloat(it.qtd), funcionarioCodigo: codFunc, obraId: obraIdParam, observacoes: empObservacoes.trim() || undefined };
                                 const r = await registerLoan.mutateAsync(params);
                                 lastNome = r.funcionarioNome || lastNome;
@@ -4386,11 +4627,47 @@ export default function AlmoxarifadoPage() {
                       ) : null;
                     })()}
                   </div>
-                  {/* Quantidade */}
-                  <div>
-                    <label className="text-sm font-semibold text-gray-700 block mb-1">Quantidade</label>
-                    <input type="number" inputMode="numeric" min="1" step="1" className="w-full border-2 rounded-xl p-4 text-xl font-bold text-center" value={insQtd} onChange={e => setInsQtd(String(Math.round(parseFloat(e.target.value) || 1)))} />
+                  {/* Quantidade — Rev. 5033: digitação livre (apaga o 1 e digita) */}
+                  <div className="flex gap-3">
+                    <div className="flex-1">
+                      <label className="text-sm font-semibold text-gray-700 block mb-1">Quantidade</label>
+                      <input type="number" inputMode="numeric" min="1" step="1" className="w-full border-2 rounded-xl p-4 text-xl font-bold text-center" value={insQtd}
+                        onChange={e => setInsQtd(e.target.value.replace(/[^0-9]/g, ""))}
+                        onBlur={() => { if (!insQtd || parseInt(insQtd) < 1) setInsQtd("1"); }} />
+                    </div>
+                    <div className="flex items-end">
+                      <button
+                        type="button"
+                        className="bg-amber-100 hover:bg-amber-200 text-amber-800 border-2 border-amber-300 font-bold py-4 px-4 rounded-xl text-sm disabled:opacity-40 transition whitespace-nowrap"
+                        disabled={!insItemId || !insQtd || parseInt(insQtd) < 1}
+                        onClick={() => {
+                          const it = itens.find((i: any) => i.id === insItemId);
+                          if (!it) return;
+                          const q = parseInt(insQtd) || 1;
+                          setInsCart(prev => {
+                            const ex = prev.find(c => c.itemId === insItemId);
+                            return ex ? prev.map(c => c.itemId === insItemId ? { ...c, qtd: c.qtd + q } : c)
+                                      : [...prev, { itemId: insItemId, nome: it.nome, unidade: it.unidade || "un", qtd: q }];
+                          });
+                          setInsItemId(0); setInsItemSearch(""); setInsQtd("1"); setInsErr(null);
+                        }}
+                      >
+                        + Adicionar item
+                      </button>
+                    </div>
                   </div>
+                  {/* Carrinho — Rev. 5033 */}
+                  {insCart.length > 0 && (
+                    <div className="rounded-xl border-2 border-amber-200 bg-amber-50/50 divide-y divide-amber-100">
+                      {insCart.map((c) => (
+                        <div key={c.itemId} className="flex items-center gap-2 px-3 py-2">
+                          <span className="flex-1 text-sm font-medium text-gray-800 min-w-0 truncate">{c.nome}</span>
+                          <span className="text-sm font-bold text-amber-700 whitespace-nowrap">{c.qtd} {c.unidade}</span>
+                          <button type="button" onClick={() => setInsCart(prev => prev.filter(x => x.itemId !== c.itemId))} className="text-gray-400 hover:text-red-500 flex-shrink-0"><X className="w-4 h-4" /></button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   {/* Obra */}
                   {typeof obraContexto === "number" ? (
                     <div>
@@ -4418,13 +4695,19 @@ export default function AlmoxarifadoPage() {
                   {insErr && <p className="text-sm text-red-600 bg-red-50 rounded-lg p-2">{insErr}</p>}
                   <button
                     className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-4 rounded-xl text-lg disabled:opacity-50 transition"
-                    disabled={(insTipo === "mao_obra" ? !insSelecionado : (!insTerceiroNome.trim() || !insCustoDe || (insCustoDe === "terceiro" && !insContratoId))) || !insItemId || !insQtd || (typeof obraContexto !== "number" && !insObraId) || registerInsumo.isPending}
-                    onClick={() => {
+                    disabled={(insTipo === "mao_obra" ? !insSelecionado : (!insTerceiroNome.trim() || !insCustoDe || (insCustoDe === "terceiro" && !insContratoId))) || (insCart.length === 0 && (!insItemId || !insQtd || parseInt(insQtd) < 1)) || (typeof obraContexto !== "number" && !insObraId) || registerInsumo.isPending}
+                    onClick={async () => {
                       const efectiveObraId = typeof obraContexto === "number" ? obraContexto : insObraId;
                       const obraSel = (obrasAtivas as any[]).find((o: any) => o.id === efectiveObraId);
-                      registerInsumo.mutate({
-                        companyId, itemId: insItemId,
-                        quantidade: parseFloat(insQtd),
+                      // Rev. 5033 — envia o carrinho + o item ainda selecionado (se houver)
+                      const fila = [...insCart];
+                      if (insItemId && parseInt(insQtd) >= 1 && !fila.find(c => c.itemId === insItemId)) {
+                        const it = itens.find((i: any) => i.id === insItemId);
+                        fila.push({ itemId: insItemId, nome: it?.nome || "", unidade: it?.unidade || "un", qtd: parseInt(insQtd) });
+                      }
+                      if (fila.length === 0) return;
+                      const base = {
+                        companyId,
                         ...(insTipo === "terceiro"
                           ? {
                               terceiroNome: insTerceiroNome.trim(), terceiroEmpresa: insTerceiroEmpresa.trim() || undefined,
@@ -4435,10 +4718,26 @@ export default function AlmoxarifadoPage() {
                         obraId: efectiveObraId || undefined,
                         obraNome: obraSel ? (obraSel.codigo ? `${obraSel.codigo} – ${obraSel.nome}` : obraSel.nome) : undefined,
                         motivo: insMotivo || undefined,
-                      });
+                      };
+                      const feitos: string[] = [];
+                      let nomeDest = "";
+                      for (const c of fila) {
+                        try {
+                          const d: any = await registerInsumo.mutateAsync({ ...base, itemId: c.itemId, quantidade: c.qtd } as any);
+                          feitos.push(`${c.qtd} ${c.unidade} — ${c.nome}`);
+                          nomeDest = d?.funcionarioNome || nomeDest;
+                          setInsCart(prev => prev.filter(x => x.itemId !== c.itemId)); // sai da fila só o que gravou
+                        } catch (e: any) {
+                          setInsErr(`${c.nome}: ${e?.message || "falha ao registrar"}${feitos.length ? ` (já registrados: ${feitos.join("; ")})` : ""}`);
+                          setInsOk(null);
+                          return;
+                        }
+                      }
+                      setInsErr(null);
+                      setInsOk({ nome: nomeDest || insSelecionado?.nomeCompleto || insTerceiroNome, item: feitos.join(" · ") });
                     }}
                   >
-                    {registerInsumo.isPending ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : "🛒 CONFIRMAR INSUMO"}
+                    {registerInsumo.isPending ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : `🛒 CONFIRMAR ${insCart.length > 1 ? `${insCart.length} ITENS` : "INSUMO"}`}
                   </button>
                 </div>
               </>
@@ -4482,29 +4781,24 @@ export default function AlmoxarifadoPage() {
                         const v = e.target.value;
                         if (v === "central") { setTransfOrigemTipo("central"); setTransfOrigemObraId(0); }
                         else { setTransfOrigemTipo("obra"); setTransfOrigemObraId(Number(v)); }
-                        setTransfItemId(0); setTransfBusca(""); setTransfDropOpen(false);
+                        setTransfSelecionados({}); setTransfBusca(""); setTransfDropOpen(false);
                       }}
                     >
                       <option value="central">🏢 Almoxarifado Central</option>
                       {(obrasAtivas as any[]).map((o: any) => <option key={o.id} value={o.id}>🏗️ {o.codigo ? `${o.codigo} – ${o.nome}` : o.nome}</option>)}
                     </select>
                     <div className="relative">
-                      <label className="text-sm font-semibold text-gray-700 block mb-1">Item a transferir *</label>
+                      <label className="text-sm font-semibold text-gray-700 block mb-1">Itens a transferir *</label>
                       <input
                         type="text"
                         className="w-full border-2 rounded-xl p-3 text-base"
                         placeholder="Digite código ou nome para buscar..."
-                        value={transfItemId ? (itensOrigem as any[]).find((i: any) => i.id === transfItemId)?.nome || "" : transfBusca ?? ""}
-                        onChange={e => { setTransfBusca(e.target.value); setTransfItemId(0); setTransfDropOpen(true); }}
+                        value={transfBusca ?? ""}
+                        onChange={e => { setTransfBusca(e.target.value); setTransfDropOpen(true); }}
                         onFocus={() => setTransfDropOpen(true)}
                         onBlur={() => setTimeout(() => setTransfDropOpen(false), 200)}
                       />
-                      {transfItemId > 0 && (
-                        <button type="button" className="absolute right-3 top-9 text-gray-400 hover:text-gray-600" onClick={() => { setTransfItemId(0); setTransfBusca(""); }}>
-                          <X className="w-4 h-4" />
-                        </button>
-                      )}
-                      {transfDropOpen && !transfItemId && (
+                      {transfDropOpen && (
                         <div className="absolute z-50 w-full mt-1 bg-white border-2 border-purple-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
                           {(itensOrigem as any[])
                             .filter((i: any) => {
@@ -4518,9 +4812,23 @@ export default function AlmoxarifadoPage() {
                               <button
                                 key={i.id}
                                 type="button"
-                                className="w-full text-left px-3 py-2 hover:bg-purple-50 text-sm border-b last:border-b-0 flex items-center gap-2"
-                                onClick={() => { setTransfItemId(i.id); setTransfBusca(""); setTransfDropOpen(false); }}
+                                disabled={Number(i.quantidadeAtual) <= 0}
+                                className="w-full text-left px-3 py-2 hover:bg-purple-50 disabled:bg-gray-50 disabled:cursor-not-allowed text-sm border-b last:border-b-0 flex items-center gap-2"
+                                onMouseDown={e => e.preventDefault()}
+                                onClick={() => setTransfSelecionados(prev => {
+                                  const next = { ...prev };
+                                  if (next[i.id] !== undefined) delete next[i.id];
+                                  else next[i.id] = String(Math.max(1, Math.floor(Number(i.quantidadeAtual) || 1)));
+                                  return next;
+                                })}
                               >
+                                <input
+                                  type="checkbox"
+                                  checked={transfSelecionados[i.id] !== undefined}
+                                  readOnly
+                                  className="h-4 w-4 shrink-0 accent-purple-600 pointer-events-none"
+                                  aria-label={`Selecionar ${i.nome}`}
+                                />
                                 {/* Rev. 4568 — foto do produto no dropdown de transferência */}
                                 {i.fotoUrl ? (
                                   <img src={i.fotoUrl} alt="" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} className="w-9 h-9 rounded-lg object-cover border border-gray-200 flex-shrink-0 bg-white" />
@@ -4529,7 +4837,7 @@ export default function AlmoxarifadoPage() {
                                     <Package className="w-4 h-4" />
                                   </span>
                                 )}
-                                <span className="truncate flex-1 min-w-0">
+                                <span className="flex-1 min-w-0">
                                   {i.codigoInterno ? <span className="text-purple-600 font-mono mr-1">{i.codigoInterno}</span> : null}
                                   {i.nome}
                                 </span>
@@ -4546,10 +4854,44 @@ export default function AlmoxarifadoPage() {
                         </div>
                       )}
                     </div>
-                    <div>
-                      <label className="text-sm font-semibold text-gray-700 block mb-1">Quantidade</label>
-                      <input type="number" inputMode="numeric" min="1" step="1" className="w-full border-2 rounded-xl p-4 text-xl font-bold text-center" value={transfQtd} onChange={e => setTransfQtd(String(Math.round(parseFloat(e.target.value) || 1)))} />
-                    </div>
+                    {Object.entries(transfSelecionados).length > 0 && (
+                      <div className="border border-purple-200 bg-white rounded-xl overflow-hidden">
+                        <div className="px-3 py-2 bg-purple-50 text-xs font-bold text-purple-700">
+                          {Object.keys(transfSelecionados).length} item(ns) selecionado(s) · informe quantidades inteiras
+                        </div>
+                        <div className="divide-y divide-gray-100 max-h-44 overflow-y-auto">
+                          {Object.entries(transfSelecionados).map(([id, quantidade]) => {
+                            const item = (itensOrigem as any[]).find((i: any) => i.id === Number(id));
+                            if (!item) return null;
+                            return (
+                              <div key={id} className="flex items-center gap-2 px-3 py-2">
+                                <span className="flex-1 min-w-0 text-sm text-gray-700 truncate">{item.nome}</span>
+                                <input
+                                  type="number"
+                                  inputMode="numeric"
+                                  min="1"
+                                  max={Math.floor(Number(item.quantidadeAtual) || 0)}
+                                  step="1"
+                                  value={quantidade}
+                                  onChange={e => setTransfSelecionados(prev => ({
+                                    ...prev,
+                                    [item.id]: e.target.value === "" ? "" : String(Math.max(1, Math.floor(Number(e.target.value) || 1))),
+                                  }))}
+                                  className="w-20 border border-purple-300 rounded-lg px-2 py-1 text-sm text-right font-semibold"
+                                  aria-label={`Quantidade de ${item.nome}`}
+                                />
+                                <span className="w-14 text-[11px] text-gray-500">{item.unidade || "un"}</span>
+                                <button type="button" onClick={() => setTransfSelecionados(prev => {
+                                  const next = { ...prev }; delete next[item.id]; return next;
+                                })} className="text-gray-400 hover:text-red-500" title="Remover item">
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* DESTINO */}
@@ -4583,30 +4925,52 @@ export default function AlmoxarifadoPage() {
                   <button
                     className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-4 rounded-xl text-lg disabled:opacity-50 transition"
                     disabled={
-                      !transfItemId || !transfQtd || parseFloat(transfQtd) <= 0 ||
+                      Object.keys(transfSelecionados).length === 0 ||
                       (transfDestinoTipo === "obra" && !transfDestinoObraId) ||
                       (transfOrigemTipo === "central" && transfDestinoTipo === "central") ||
                       (transfOrigemTipo === "obra" && transfDestinoTipo === "obra" && transfOrigemObraId === transfDestinoObraId) ||
-                      createTransferencia.isPending
+                      createTransferenciaLoteMut.isPending
                     }
-                    onClick={() => {
-                      const origemObraSel = (obrasAtivas as any[]).find((o: any) => o.id === transfOrigemObraId);
+                    onClick={async () => {
                       const destinoObraSel = (obrasAtivas as any[]).find((o: any) => o.id === transfDestinoObraId);
-                      createTransferencia.mutate({
-                        companyId,
-                        itemIdOrigem: transfItemId,
-                        quantidade: parseFloat(transfQtd),
-                        origemTipo: transfOrigemTipo,
-                        origemObraId: transfOrigemTipo === "obra" ? transfOrigemObraId : undefined,
-                        origemObraNome: origemObraSel ? (origemObraSel.codigo ? `${origemObraSel.codigo} – ${origemObraSel.nome}` : origemObraSel.nome) : undefined,
-                        destinoTipo: transfDestinoTipo,
-                        destinoObraId: transfDestinoTipo === "obra" ? transfDestinoObraId : undefined,
-                        destinoObraNome: destinoObraSel ? (destinoObraSel.codigo ? `${destinoObraSel.codigo} – ${destinoObraSel.nome}` : destinoObraSel.nome) : undefined,
-                        motivo: transfMotivo || undefined,
+                      const linhas = Object.entries(transfSelecionados).map(([itemIdOrigem, quantidade]) => {
+                        const item = (itensOrigem as any[]).find((i: any) => i.id === Number(itemIdOrigem));
+                        return { itemIdOrigem: Number(itemIdOrigem), quantidade: Number(quantidade), item };
                       });
+                      const invalida = linhas.find(linha =>
+                        !Number.isInteger(linha.quantidade) || linha.quantidade <= 0 ||
+                        !linha.item || linha.quantidade > Math.floor(Number(linha.item.quantidadeAtual) || 0)
+                      );
+                      if (invalida) {
+                        setTransfErr(`Informe uma quantidade inteira disponível para "${invalida.item?.nome || "o item"}".`);
+                        return;
+                      }
+                      try {
+                        const resultado = await createTransferenciaLoteMut.mutateAsync({
+                          companyId,
+                          itens: linhas.map(({ itemIdOrigem, quantidade }) => ({ itemIdOrigem, quantidade })),
+                          destinoTipo: transfDestinoTipo,
+                          destinoObraId: transfDestinoTipo === "obra" ? transfDestinoObraId : undefined,
+                          destinoObraNome: destinoObraSel ? (destinoObraSel.codigo ? `${destinoObraSel.codigo} – ${destinoObraSel.nome}` : destinoObraSel.nome) : undefined,
+                          motivo: transfMotivo || undefined,
+                        });
+                        utils.compras.listarItens.invalidate();
+                        utils.compras.listarItensConsolidado.invalidate();
+                        refetch();
+                        if (resultado.falhas.length > 0) {
+                          setTransfErr(`${resultado.sucessos.length} transferido(s). ${resultado.falhas.map((falha: any) => `${falha.itemNome || "Item"}: ${falha.motivo}`).join(" · ")}`);
+                          return;
+                        }
+                        const origemLabel = transfOrigemTipo === "central" ? "Central" : (obrasAtivas as any[]).find((o: any) => o.id === transfOrigemObraId)?.nome ?? "Obra";
+                        const destinoLabel = transfDestinoTipo === "central" ? "Central" : destinoObraSel?.nome ?? "Obra";
+                        setTransfOk({ item: `${resultado.sucessos.length} item(ns)`, origem: origemLabel, destino: destinoLabel });
+                        setTransfErr(null);
+                      } catch (error: any) {
+                        setTransfErr(error?.message || "Falha ao transferir os itens.");
+                      }
                     }}
                   >
-                    {createTransferencia.isPending ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : "↔ CONFIRMAR TRANSFERÊNCIA"}
+                    {createTransferenciaLoteMut.isPending ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : "↔ CONFIRMAR TRANSFERÊNCIA"}
                   </button>
                 </div>
               </>
@@ -5111,6 +5475,96 @@ export default function AlmoxarifadoPage() {
 
             {/* INSUMOS */}
             {abaRegistros === "insumos" && (
+              <div className="space-y-3">
+                {/* Rev. 5033 — filtro por material (histórico completo) */}
+                <div className="relative">
+                  {insRegFiltroItem ? (
+                    <div className="w-full border-2 border-amber-300 bg-amber-50 rounded-xl p-3 text-sm font-semibold flex items-center justify-between">
+                      <span className="truncate">🔍 {insRegFiltroItem.nome}</span>
+                      <button type="button" onClick={() => { setInsRegFiltroItem(null); setInsRegFiltroBusca(""); }} className="ml-2 text-gray-400 hover:text-red-500 flex-shrink-0"><X className="w-4 h-4" /></button>
+                    </div>
+                  ) : (
+                    <input
+                      type="text"
+                      className="w-full border-2 rounded-xl p-3 text-sm"
+                      placeholder="🔍 Filtrar por material (quem retirou e total já saído)..."
+                      value={insRegFiltroBusca}
+                      autoComplete="off"
+                      onChange={e => { setInsRegFiltroBusca(e.target.value); setInsRegFiltroFocus(true); }}
+                      onFocus={() => setInsRegFiltroFocus(true)}
+                      onBlur={() => setTimeout(() => setInsRegFiltroFocus(false), 180)}
+                    />
+                  )}
+                  {insRegFiltroFocus && !insRegFiltroItem && insRegFiltroBusca.length >= 2 && (() => {
+                    const q = norm(insRegFiltroBusca);
+                    const filtered = itens.filter((i: any) => norm(i.nome).includes(q));
+                    return filtered.length > 0 ? (
+                      <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                        {filtered.slice(0, 50).map((i: any) => (
+                          <button key={i.id} type="button" className="w-full text-left px-3 py-2 hover:bg-amber-50 text-sm transition truncate" onMouseDown={() => { setInsRegFiltroItem({ id: i.id, nome: i.nome }); setInsRegFiltroFocus(false); }}>
+                            {i.nome}
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg p-3">
+                        <p className="text-xs text-red-500">Nenhum material encontrado</p>
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                {insRegFiltroItem ? (
+                  loadingInsumosItem ? <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-amber-500" /></div> :
+                  (insumosDoItem as any[]).length === 0 ? (
+                    <p className="text-center text-gray-400 py-12">Nenhuma saída registrada para este material.</p>
+                  ) : (() => {
+                    const rows = insumosDoItem as any[];
+                    const unidade = rows[0]?.unidade || "un";
+                    const total = rows.reduce((s, r) => s + (parseFloat(r.quantidade) || 0), 0);
+                    const porPessoa = new Map<string, { nome: string; codigo: string; qtd: number; ultima: string }>();
+                    for (const r of rows) {
+                      const key = r.funcionario_codigo || r.funcionario_nome || "—";
+                      const ex = porPessoa.get(key);
+                      const q = parseFloat(r.quantidade) || 0;
+                      if (ex) { ex.qtd += q; if (r.created_at > ex.ultima) ex.ultima = r.created_at; }
+                      else porPessoa.set(key, { nome: r.funcionario_nome || "—", codigo: r.funcionario_codigo || "", qtd: q, ultima: r.created_at || "" });
+                    }
+                    const pessoas = [...porPessoa.values()].sort((a, b) => b.qtd - a.qtd);
+                    return (
+                      <div className="space-y-3">
+                        <div className="bg-amber-500 text-white rounded-xl px-4 py-3 flex items-center justify-between">
+                          <span className="font-bold text-sm">Total já saído (todo o período)</span>
+                          <span className="font-extrabold text-lg">{fmtQtd(total)} {unidade}</span>
+                        </div>
+                        <div className="space-y-2">
+                          {pessoas.map(p => (
+                            <div key={p.codigo || p.nome} className="bg-amber-50 border border-amber-100 rounded-xl px-4 py-3 flex items-center gap-3">
+                              <User className="w-5 h-5 text-amber-500 shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <p className="font-semibold text-gray-900 text-sm truncate">{p.nome}{p.codigo ? ` (${p.codigo})` : ""}</p>
+                                <p className="text-[11px] text-gray-400">Última retirada: {p.ultima ? formatDateTime(p.ultima) : "—"}</p>
+                              </div>
+                              <span className="font-bold text-amber-700 text-sm whitespace-nowrap">{fmtQtd(p.qtd)} {unidade}</span>
+                            </div>
+                          ))}
+                        </div>
+                        <details className="rounded-xl border border-gray-200">
+                          <summary className="px-4 py-2.5 text-sm font-semibold text-gray-600 cursor-pointer select-none">Ver todas as retiradas ({rows.length})</summary>
+                          <div className="divide-y divide-gray-100">
+                            {rows.map((r: any) => (
+                              <div key={r.id} className="px-4 py-2 flex items-center gap-2 text-xs text-gray-600">
+                                <span className="flex-1 min-w-0 truncate">{r.funcionario_nome}{r.funcionario_codigo ? ` (${r.funcionario_codigo})` : ""}{r.obra_nome ? ` · ${r.obra_nome}` : ""}</span>
+                                <span className="font-semibold text-amber-700 whitespace-nowrap">{fmtQtd(r.quantidade)} {r.unidade || "un"}</span>
+                                <span className="text-gray-400 whitespace-nowrap">{r.created_at ? formatDateTime(r.created_at) : ""}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </details>
+                      </div>
+                    );
+                  })()
+                ) : (
               loadingInsumos ? <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-amber-500" /></div> :
               (insumosRegistros as any[]).length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 gap-2">
@@ -5134,6 +5588,8 @@ export default function AlmoxarifadoPage() {
                     </div>
                   </div>
                 ))}
+              </div>
+                )}
               </div>
             )}
 
@@ -5165,7 +5621,9 @@ export default function AlmoxarifadoPage() {
                       {t.motivo && <p className="text-[11px] text-gray-400 italic mt-1">{t.motivo}</p>}
                       <div className="flex items-center justify-between mt-0.5">
                         <p className="text-[11px] text-gray-400">{t.created_at ? formatDateTime(t.created_at) : ""}</p>
-                        {t.almoxarife_nome && <p className="text-[11px] text-purple-600 font-medium">Enviado por {t.almoxarife_nome}</p>}
+                        <p className="text-[11px] text-purple-600 font-medium">
+                          Enviado por {t.almoxarife_nome || t.almoxarifeNome || "remetente não registrado"}
+                        </p>
                       </div>
                     </div>
                   );
@@ -5810,16 +6268,16 @@ export default function AlmoxarifadoPage() {
                       </div>
                       <input
                         type="number"
-                        inputMode="decimal"
+                        inputMode="numeric"
                         min="0"
                         max={it.estoque}
-                        step="0.01"
+                        step="1"
                         value={it.qtd}
                         disabled={modalTransfLote.aplicando}
                         onChange={e => setModalTransfLote(s => {
                           if (!s) return s;
                           const itens = [...s.itens];
-                          itens[idx] = { ...itens[idx], qtd: e.target.value };
+                          itens[idx] = { ...itens[idx], qtd: e.target.value === "" ? "" : String(Math.max(0, Math.floor(Number(e.target.value) || 0))) };
                           return { ...s, itens };
                         })}
                         className="w-24 border border-gray-300 rounded-lg px-2 py-1.5 text-sm text-right font-semibold focus:ring-2 focus:ring-purple-400 focus:border-purple-400 outline-none"
@@ -6620,7 +7078,7 @@ export default function AlmoxarifadoPage() {
               <Sparkles className="h-5 w-5 text-white" />
               <div>
                 <h2 className="text-base font-semibold text-white">Importar Itens para o Catálogo (IA)</h2>
-                <p className="text-xs text-blue-100">Envie uma lista de materiais, planilha ou orçamento — a IA extrai os itens para cadastrar</p>
+                <p className="text-xs text-blue-100">Envie uma lista de materiais, planilha ou orçamento para revisar antes do cadastro</p>
               </div>
               <button onClick={() => setImportIAOpen(false)} className="ml-auto text-white/70 hover:text-white">
                 <X className="h-5 w-5" />
@@ -6641,11 +7099,11 @@ export default function AlmoxarifadoPage() {
                   >
                     <Sparkles className="h-10 w-10 text-blue-400 mx-auto mb-3" />
                     <p className="font-medium text-gray-700 mb-1">Arraste ou clique para selecionar</p>
-                    <p className="text-xs text-gray-500">PDF, JPG ou PNG · máx. 10 MB</p>
+                    <p className="text-xs text-gray-500">Excel, PDF, JPG ou PNG · máx. 10 MB</p>
                   </div>
-                  <input ref={importIAFileRef} type="file" accept="application/pdf,image/jpeg,image/jpg,image/png" className="hidden"
+                  <input ref={importIAFileRef} type="file" accept="application/pdf,image/jpeg,image/jpg,image/png,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.xls,.xlsx" className="hidden"
                     onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImportIAFile(f); }} />
-                  <p className="text-xs text-gray-400 mt-3 text-center">Funciona com listas de materiais, planilhas fotografadas, orçamentos PDF e catálogos.</p>
+                  <p className="text-xs text-gray-400 mt-3 text-center">Planilhas Excel são lidas em lote; PDF e imagens são interpretados para revisão.</p>
                 </div>
               )}
 
@@ -6662,11 +7120,16 @@ export default function AlmoxarifadoPage() {
               {importIAStep === "review" && (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <p className="text-sm font-semibold text-gray-700">{importIAItens.length} iten(s) extraído(s) — selecione os que deseja cadastrar:</p>
+                    <p className="text-sm font-semibold text-gray-700">{importIAItens.length} iten(s) extraído(s) — corrija os marcados e selecione os que deseja cadastrar:</p>
                     <button className="text-xs text-blue-600 hover:underline" onClick={() => setImportIASelected(
-                      importIASelected.size === importIAItens.length ? new Set() : new Set(importIAItens.map((_,i) => i))
+                      importIASelected.size === importIAItens.filter(item => errosDaLinhaImportIA(item).length === 0).length
+                        ? new Set()
+                        : new Set(importIAItens
+                          .map((item, index) => ({ item, index }))
+                          .filter(({ item }) => errosDaLinhaImportIA(item).length === 0)
+                          .map(({ index }) => index))
                     )}>
-                      {importIASelected.size === importIAItens.length ? "Desmarcar todos" : "Selecionar todos"}
+                      {importIASelected.size === importIAItens.filter(item => errosDaLinhaImportIA(item).length === 0).length ? "Desmarcar todos" : "Selecionar válidos"}
                     </button>
                   </div>
                   <div className="border border-gray-200 rounded-xl overflow-hidden">
@@ -6674,6 +7137,7 @@ export default function AlmoxarifadoPage() {
                       <thead className="bg-gray-50 border-b border-gray-200">
                         <tr>
                           <th className="w-8 px-3 py-2" />
+                          <th className="text-center px-2 py-2 font-semibold text-gray-600">Linha</th>
                           <th className="text-left px-3 py-2 font-semibold text-gray-600">Nome do Item</th>
                           <th className="text-center px-3 py-2 font-semibold text-gray-600">Un</th>
                           <th className="text-left px-3 py-2 font-semibold text-gray-600">Categoria</th>
@@ -6681,43 +7145,63 @@ export default function AlmoxarifadoPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {importIAItens.map((it, i) => (
-                          <tr key={i} className={`border-b border-gray-100 last:border-0 transition ${importIASelected.has(i) ? "" : "opacity-40"}`}>
+                        {importIAItens.map((it, i) => {
+                          const erros = errosDaLinhaImportIA(it);
+                          const nomeNormalizado = it.nome.trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR").replace(/\s+/g, " ");
+                          const duplicadaNaRevisao = !!nomeNormalizado && importIAItens.filter(outro =>
+                            outro.nome.trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR").replace(/\s+/g, " ") === nomeNormalizado
+                          ).length > 1;
+                          return (
+                          <tr key={i} className={`border-b border-gray-100 last:border-0 transition ${erros.length ? "bg-red-50" : importIASelected.has(i) ? "" : "opacity-40"}`}>
                             <td className="px-3 py-2 text-center">
-                              <input type="checkbox" className="cursor-pointer" checked={importIASelected.has(i)}
+                              <input type="checkbox" className="cursor-pointer disabled:cursor-not-allowed" disabled={erros.length > 0} checked={importIASelected.has(i)}
                                 onChange={() => setImportIASelected(prev => {
                                   const next = new Set(prev);
                                   if (next.has(i)) next.delete(i); else next.add(i);
                                   return next;
                                 })} />
                             </td>
+                            <td className="px-2 py-2 text-center text-[10px] text-gray-500">{it.linha ?? "—"}</td>
                             <td className="px-3 py-2">
                               <input className="w-full border-0 bg-transparent text-gray-800 focus:outline-none focus:ring-1 focus:ring-blue-300 rounded px-1"
                                 value={it.nome}
-                                onChange={(e) => setImportIAItens(p => p.map((x, j) => j === i ? { ...x, nome: e.target.value } : x))} />
+                                onChange={(e) => setImportIAItens(p => p.map((x, j) => j === i ? {
+                                  ...x, nome: e.target.value, erros: (x.erros || []).filter(erro => !erro.includes("Nome")),
+                                } : x))} />
+                              {it.possivelDuplicata && <p className="mt-1 text-[10px] font-medium text-amber-700">Possível duplicidade no catálogo</p>}
+                              {(it.duplicataImportacao || duplicadaNaRevisao) && <p className="mt-1 text-[10px] font-medium text-amber-700">Nome repetido nesta importação</p>}
+                              {erros.length > 0 && <p className="mt-1 text-[10px] font-medium text-red-700">{erros.join(" ")}</p>}
                             </td>
                             <td className="px-3 py-2 text-center">
                               <input className="w-14 text-center border-0 bg-transparent text-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-300 rounded px-1"
                                 value={it.unidade}
-                                onChange={(e) => setImportIAItens(p => p.map((x, j) => j === i ? { ...x, unidade: e.target.value } : x))} />
+                                onChange={(e) => setImportIAItens(p => p.map((x, j) => j === i ? {
+                                  ...x, unidade: e.target.value, erros: (x.erros || []).filter(erro => !erro.includes("Unidade")),
+                                } : x))} />
                             </td>
                             <td className="px-3 py-2">
                               <input className="w-full border-0 bg-transparent text-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-300 rounded px-1"
                                 value={it.categoria}
-                                onChange={(e) => setImportIAItens(p => p.map((x, j) => j === i ? { ...x, categoria: e.target.value } : x))} />
+                                onChange={(e) => setImportIAItens(p => p.map((x, j) => j === i ? {
+                                  ...x, categoria: e.target.value, erros: (x.erros || []).filter(erro => !erro.includes("Categoria")),
+                                } : x))} />
                             </td>
                             <td className="px-3 py-2 text-center">
-                              <input type="number" min={0} className="w-16 text-center border-0 bg-transparent text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-300 rounded px-1"
+                              <input type="number" inputMode="numeric" min={0} step={1} className="w-16 text-center border-0 bg-transparent text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-300 rounded px-1"
                                 value={it.quantidade}
-                                onChange={(e) => setImportIAItens(p => p.map((x, j) => j === i ? { ...x, quantidade: parseInt(e.target.value) || 0 } : x))} />
+                                onChange={(e) => setImportIAItens(p => p.map((x, j) => j === i ? {
+                                  ...x,
+                                  quantidade: e.target.value === "" ? 0 : Number(e.target.value),
+                                  erros: (x.erros || []).filter(erro => !erro.includes("Quantidade")),
+                                } : x))} />
                             </td>
                           </tr>
-                        ))}
+                        )})}
                       </tbody>
                     </table>
                   </div>
                   <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                    ⚠ Edite os campos diretamente na tabela antes de criar. Itens já cadastrados com o mesmo nome serão criados como duplicatas.
+                    ⚠ A criação só é liberada para linhas válidas. Duplicidades são sinalizadas para conferência e não alteram itens existentes automaticamente.
                   </p>
                 </div>
               )}

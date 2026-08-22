@@ -37,6 +37,9 @@ export default function ContratosList() {
   const [busca, setBusca] = useState("");
   const [filtroStatus, setFiltroStatus] = useState("todos");
   const [selecionados, setSelecionados] = useState<Set<number>>(new Set());
+  // Rev. 4998 — exclusão exige motivo (auditoria) + senha do admin master
+  const [motivoExcluir, setMotivoExcluir] = useState("");
+  const [senhaExcluir, setSenhaExcluir] = useState("");
   const [editContrato, setEditContrato] = useState<{
     id: number; descricao: string; numeroContrato: string; status: string;
     valorOrcamento: string; valorTotal: string; dataInicio: string; dataTermino: string; observacoes: string;
@@ -54,12 +57,12 @@ export default function ContratosList() {
   );
 
   const excluirMut = trpc.terceiroContratos.excluirContrato.useMutation({
-    onSuccess: () => { toast.success("Contrato excluído"); utils.terceiroContratos.listarContratos.invalidate(); utils.terceiroContratos.dashboardTerceiroContratos.invalidate(); },
+    onSuccess: () => { toast.success("Contrato excluído"); setMotivoExcluir(""); setSenhaExcluir(""); utils.terceiroContratos.listarContratos.invalidate(); utils.terceiroContratos.dashboardTerceiroContratos.invalidate(); },
     onError: (e) => toast.error(e.message),
   });
 
   const excluirLoteMut = trpc.terceiroContratos.excluirContratosLote.useMutation({
-    onSuccess: (r) => { toast.success(`${r.deleted} contrato(s) excluído(s)`); setSelecionados(new Set()); utils.terceiroContratos.listarContratos.invalidate(); utils.terceiroContratos.dashboardTerceiroContratos.invalidate(); },
+    onSuccess: (r) => { toast.success(`${r.deleted} contrato(s) excluído(s)`); setSelecionados(new Set()); setMotivoExcluir(""); setSenhaExcluir(""); utils.terceiroContratos.listarContratos.invalidate(); utils.terceiroContratos.dashboardTerceiroContratos.invalidate(); },
     onError: (e) => toast.error(e.message),
   });
 
@@ -201,11 +204,25 @@ export default function ContratosList() {
                     Esta ação é <strong className="text-red-700">irreversível</strong>. Todas as <strong>medições</strong>, <strong>itens</strong> e <strong>documentos</strong> vinculados aos contratos selecionados serão removidos permanentemente.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
+                <div className="space-y-3">
+                  <div>
+                    <Label className="text-xs font-semibold text-gray-600">Motivo da exclusão *</Label>
+                    <Input value={motivoExcluir} onChange={e => setMotivoExcluir(e.target.value)} placeholder="Ex: contrato lançado em duplicidade" className="mt-1" />
+                  </div>
+                  <div>
+                    <Label className="text-xs font-semibold text-gray-600">Senha do admin master</Label>
+                    <Input type="password" value={senhaExcluir} onChange={e => setSenhaExcluir(e.target.value)} placeholder="Sua senha de acesso" className="mt-1" />
+                  </div>
+                </div>
                 <AlertDialogFooter>
-                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogCancel onClick={() => { setMotivoExcluir(""); setSenhaExcluir(""); }}>Cancelar</AlertDialogCancel>
                   <AlertDialogAction
                     className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
-                    onClick={() => excluirLoteMut.mutate({ ids: [...selecionados], companyId })}
+                    disabled={motivoExcluir.trim().length < 5 || excluirLoteMut.isPending}
+                    onClick={(e) => {
+                      if (motivoExcluir.trim().length < 5) { e.preventDefault(); toast.error("Informe o motivo (mín. 5 caracteres)."); return; }
+                      excluirLoteMut.mutate({ ids: [...selecionados], companyId, motivo: motivoExcluir.trim(), password: senhaExcluir || undefined });
+                    }}
                   >
                     Sim, excluir {selecionados.size} contrato(s)
                   </AlertDialogAction>
@@ -333,11 +350,26 @@ export default function ContratosList() {
                             O contrato <strong className="text-gray-900">{c.numeroContrato || c.descricao}</strong> será excluído permanentemente. Esta ação é <strong className="text-red-700">irreversível</strong> e remove todas as <strong>medições</strong>, <strong>itens</strong> e <strong>documentos</strong> vinculados.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
+                        <div className="space-y-3" onClick={(e) => e.stopPropagation()}>
+                          <div>
+                            <Label className="text-xs font-semibold text-gray-600">Motivo da exclusão *</Label>
+                            <Input value={motivoExcluir} onChange={e => setMotivoExcluir(e.target.value)} placeholder="Ex: contrato lançado em duplicidade" className="mt-1" />
+                          </div>
+                          <div>
+                            <Label className="text-xs font-semibold text-gray-600">Senha do admin master</Label>
+                            <Input type="password" value={senhaExcluir} onChange={e => setSenhaExcluir(e.target.value)} placeholder="Sua senha de acesso" className="mt-1" />
+                          </div>
+                        </div>
                         <AlertDialogFooter>
-                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                          <AlertDialogCancel onClick={(e) => { e.stopPropagation(); setMotivoExcluir(""); setSenhaExcluir(""); }}>Cancelar</AlertDialogCancel>
                           <AlertDialogAction
                             className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
-                            onClick={() => excluirMut.mutate({ id: c.id, companyId })}
+                            disabled={motivoExcluir.trim().length < 5 || excluirMut.isPending}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (motivoExcluir.trim().length < 5) { e.preventDefault(); toast.error("Informe o motivo (mín. 5 caracteres)."); return; }
+                              excluirMut.mutate({ id: c.id, companyId, motivo: motivoExcluir.trim(), password: senhaExcluir || undefined });
+                            }}
                           >
                             Sim, excluir
                           </AlertDialogAction>

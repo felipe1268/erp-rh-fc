@@ -1015,6 +1015,20 @@ export function ProgramacaoSemanal({
             >Padrão LOTUS</span>
           )}
         </div>
+        {/* Rev. 5151 — Estimativa de MO também no Padrão LOTUS (antes só existia no
+            Padrão FC; obras com LOTUS forçado nunca viam o painel). print:hidden
+            para não poluir o relatório padronizado da gerenciadora. */}
+        {semanaAtual && (
+          <div className="print:hidden">
+            <EstimativaMaoObraPanel
+              projetoId={projetoId}
+              revisaoId={revisaoId}
+              semanaIni={dateStr(semanaAtual.ini)}
+              semanaFim={dateStr(semanaAtual.fim)}
+              semanaNumero={semanaAtual.numero}
+            />
+          </div>
+        )}
         <ProgramacaoSemanalLotus
           avancosOverride={avancosListaProp}
           projetoId={projetoId}
@@ -1175,6 +1189,17 @@ export function ProgramacaoSemanal({
               );
             })}
           </div>
+
+          {/* Rev. 5146 — Estimativa consultiva de mão de obra da semana */}
+          {semanaAtual && (
+            <EstimativaMaoObraPanel
+              projetoId={projetoId}
+              revisaoId={revisaoId}
+              semanaIni={dateStr(semanaAtual.ini)}
+              semanaFim={dateStr(semanaAtual.fim)}
+              semanaNumero={semanaAtual.numero}
+            />
+          )}
 
           {/* Rev. 1532 — Banner unificado: Previsto + Realizado + Aderência (SPI sem.)
               em paridade total com a aba Avanço Semanal. Mesmo número, mesmo nome. */}
@@ -2560,6 +2585,272 @@ function RelatorioTresSemanas({
           @page { size: A4 landscape; margin: 10mm; }
         }
       `}</style>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Rev. 5146 — Painel CONSULTIVO de estimativa de mão de obra da semana.
+// Cruza demanda (composições do orçamento; fallback produtividade média
+// TCPO/SINAPI quando a EAP não casa) com o efetivo alocado na obra, por
+// função, para enxergar sobra/falta e apoiar realocação. Não é vinculante.
+function EstimativaMaoObraPanel({ projetoId, revisaoId, semanaIni, semanaFim, semanaNumero }: {
+  projetoId: number; revisaoId: number; semanaIni: string; semanaFim: string; semanaNumero: number;
+}) {
+  const [aberto, setAberto] = useState(false);
+  const [verAtvs, setVerAtvs] = useState(false);
+  // Rev. 5158 — clique na foto amplia (overlay simples, toque fecha)
+  const [fotoZoom, setFotoZoom] = useState<{ url: string; nome: string } | null>(null);
+  const q = trpc.planejamento.estimativaMaoObraSemana.useQuery(
+    { projetoId, revisaoId, semanaIni, semanaFim },
+    { enabled: projetoId > 0 && revisaoId > 0 && !!semanaIni, staleTime: 60_000 }
+  );
+  const d: any = q.data;
+  if (q.isLoading) {
+    return (
+      <div className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 flex items-center gap-2 text-xs text-slate-400">
+        <Loader2 className="h-3.5 w-3.5 animate-spin" /> Estimando mão de obra da semana...
+      </div>
+    );
+  }
+  if (!d || (d.totalHH <= 0 && d.efetivoTotal <= 0)) return null;
+
+  // Rev. 5156 — conta em pessoas INTEIRAS (precisa=ceil, falta=precisa-tem)
+  const faltas = (d.funcoes || []).filter((f: any) => f.hh > 0 && f.disponiveis != null && (f.disponiveis - Math.max(1, Math.ceil(f.pessoas))) < 0);
+  const sobras = (d.funcoes || []).filter((f: any) => (f.hh > 0 ? (f.disponiveis ?? 0) - Math.max(1, Math.ceil(f.pessoas)) : (f.disponiveis ?? 0)) >= 1);
+  const semMatch = (d.funcoes || []).filter((f: any) => f.semMatch && f.hh > 0);
+  const nRef = (d.atividades || []).filter((a: any) => a.origem === "referencia").length;
+  const nSem = (d.atividades || []).filter((a: any) => a.origem === "sem_estimativa").length;
+  const corGeral = faltas.length > 0 ? "border-red-200 bg-red-50/50" : "border-emerald-200 bg-emerald-50/40";
+
+  return (
+    <div className={`rounded-lg border ${corGeral}`}>
+      {fotoZoom && (
+        <div className="fixed inset-0 z-[100] bg-black/70 flex items-center justify-center p-6 cursor-zoom-out" onClick={() => setFotoZoom(null)}>
+          <div className="flex flex-col items-center gap-2 max-w-full">
+            <img src={fotoZoom.url} alt={fotoZoom.nome} className="max-h-[70vh] max-w-full rounded-xl object-contain shadow-2xl" />
+            <p className="text-white text-sm font-semibold text-center">{fotoZoom.nome}</p>
+            <p className="text-white/60 text-[10px]">toque para fechar</p>
+          </div>
+        </div>
+      )}
+      <button className="w-full px-4 py-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-left" onClick={() => setAberto(!aberto)}>
+        <div className="flex items-center gap-2">
+          <HardHat className={`h-4 w-4 ${faltas.length > 0 ? "text-red-600" : "text-emerald-600"}`} />
+          <span className="text-xs font-semibold text-slate-800">Mão de Obra — Semana {semanaNumero}</span>
+          <span className="text-[9px] font-bold uppercase tracking-wide bg-slate-200 text-slate-600 rounded-full px-2 py-0.5">Consultivo</span>
+        </div>
+        <span className="text-[11px] text-slate-600">
+          Precisa de <strong className="tabular-nums">{Math.ceil(d.totalPessoas)}</strong> pessoa{Math.ceil(d.totalPessoas) !== 1 ? "s" : ""} na semana
+        </span>
+        {d.temObra && (
+          <span className="text-[11px] text-slate-600">
+            Tem <strong className="tabular-nums">{d.efetivoTotal}</strong> disponíve{d.efetivoTotal !== 1 ? "is" : "l"}
+          </span>
+        )}
+        {faltas.length > 0 ? (
+          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-red-700">
+            <AlertTriangle className="h-3.5 w-3.5" /> Falta em {faltas.length} {faltas.length !== 1 ? "funções" : "função"}
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700">
+            <CheckCircle2 className="h-3.5 w-3.5" /> Efetivo comporta a semana
+          </span>
+        )}
+        {sobras.length > 0 && (
+          <span className="text-[11px] text-blue-700 font-medium">{sobras.length} {sobras.length !== 1 ? "funções" : "função"} com sobra p/ realocar</span>
+        )}
+        <ChevronRight className={`h-4 w-4 text-slate-400 ml-auto transition-transform ${aberto ? "rotate-90" : ""}`} />
+      </button>
+
+      {aberto && (
+        <div className="px-4 pb-3 space-y-3">
+          {(nRef > 0 || nSem > 0 || semMatch.length > 0) && (
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-[10px] text-amber-800 space-y-0.5">
+              {nRef > 0 && <p>⚠️ {nRef} atividade{nRef !== 1 ? "s" : ""} fora do orçamento (EAP não casa ou sem CPU) — estimada{nRef !== 1 ? "s" : ""} por produtividade média <strong>TCPO/SINAPI</strong>.</p>}
+              {nSem > 0 && <p>• {nSem} atividade{nSem !== 1 ? "s" : ""} sem estimativa possível (sem composição, quantidade ou referência) — confira nos detalhes.</p>}
+              {semMatch.length > 0 && <p>• {semMatch.length !== 1 ? "Funções" : "Função"} sem correspondente no efetivo da obra: {semMatch.map((f: any) => f.funcao).join(", ")}.</p>}
+            </div>
+          )}
+          {(() => {
+            // Rev. 5152 — layout agrupado: 1) funções com demanda casada com o
+            // efetivo; 2) demanda sem correspondente na obra; 3) sobras (na obra
+            // sem demanda na semana). Some com a "parede de ?" no meio da tabela.
+            const todas = (d.funcoes || []) as any[];
+            const comMatch = todas.filter((f) => f.hh > 0 && !f.semMatch);
+            const semCorresp = todas.filter((f) => f.hh > 0 && f.semMatch);
+            const sobrasG = todas.filter((f) => !(f.hh > 0));
+            // Rev. 5153 — nomes dos alocados na função, com nº de atestados (12 meses).
+            const nomes = (f: any) => {
+              const lista = (f.alocados || []) as any[];
+              if (lista.length === 0) return null;
+              return (
+                <div className="flex flex-wrap gap-1 mt-0.5">
+                  {lista.map((p: any, j: number) => (
+                    <span key={j} className={`inline-flex items-center gap-1 text-[9px] font-normal border rounded-full pl-0.5 pr-1.5 py-px ${p.indisponivel ? "bg-orange-50 border-orange-200 text-orange-700 line-through decoration-orange-400" : "bg-slate-100 border-slate-200 text-slate-600"}`}>
+                      {p.foto ? (
+                        <img
+                          src={`${p.foto}${p.foto.includes("?") ? "&" : "?"}w=128`}
+                          loading="lazy" alt=""
+                          className="h-4 w-4 rounded-full object-cover shrink-0 cursor-zoom-in"
+                          onClick={(ev) => { ev.stopPropagation(); setFotoZoom({ url: p.foto, nome: p.nome }); }}
+                        />
+                      ) : (
+                        <span className="h-4 w-4 rounded-full bg-slate-200 text-slate-500 text-[7px] font-bold flex items-center justify-center shrink-0">{String(p.nome || "?").trim().split(/\s+/).map((s: string) => s[0]).slice(0, 2).join("").toUpperCase()}</span>
+                      )}
+                      {p.nome}
+                      {p.indisponivel && <span className="font-bold no-underline" style={{ textDecoration: "none" }}>{p.indisponivel}</span>}
+                      {p.terceiro && <span className="text-blue-600 font-semibold">terceiro</span>}
+                      {p.atestados12m > 0 && (
+                        <span className={`font-bold ${p.atestados12m >= 3 ? "text-red-600" : "text-amber-600"}`} title={`${p.atestados12m} atestado(s) nos últimos 12 meses`}>
+                          {p.atestados12m} atest.
+                        </span>
+                      )}
+                    </span>
+                  ))}
+                </div>
+              );
+            };
+            // Rev. 5156 — poka-yoke: tudo em PESSOAS INTEIRAS. "Precisa 3, tem 1,
+            // faltam 2" — legível de bater o olho. As horas ficam pequenas, só
+            // como referência de onde veio a conta.
+            const linha = (f: any, i: number) => {
+              const precisa = f.hh > 0 ? Math.max(1, Math.ceil(f.pessoas)) : 0;
+              const tem = f.disponiveis ?? 0;
+              const dif = tem - precisa;
+              return (
+                <tr key={`${f.funcao}-${i}`} className={`border-b last:border-0 ${precisa > 0 && dif < 0 ? "bg-red-50/60" : ""}`}>
+                  <td className="py-1.5 px-3 font-medium">{f.funcao}{nomes(f)}</td>
+                  <td className="text-right py-1.5 px-2 tabular-nums font-semibold align-top">
+                    {precisa > 0 ? precisa : "—"}
+                    {f.hh > 0 && <span className="block text-[8px] font-normal text-slate-400">{f.hh}h</span>}
+                  </td>
+                  <td className="text-right py-1.5 px-2 tabular-nums font-semibold align-top">{tem > 0 ? tem : "—"}</td>
+                  <td className={`text-right py-1.5 px-3 align-top font-bold ${precisa > 0 && dif < 0 ? "text-red-600" : precisa > 0 ? "text-emerald-700" : dif > 0 ? "text-blue-700" : "text-slate-400"}`}>
+                    {precisa > 0 && dif < 0 && `Falta${dif < -1 ? "m" : ""} ${-dif}`}
+                    {precisa > 0 && dif >= 0 && (dif === 0 ? "OK" : `OK · sobra${dif > 1 ? "m" : ""} ${dif}`)}
+                    {precisa === 0 && tem > 0 && `Sobra${tem > 1 ? "m" : ""} ${tem}`}
+                    {precisa === 0 && tem === 0 && "—"}
+                  </td>
+                </tr>
+              );
+            };
+            // Rev. 5153 — sugestão nominal: quem está em função com sobra (candidato
+            // a realocar/liberar), priorizando quem tem mais atestados em 12 meses.
+            // Rev. 5154 — só quem está DISPONÍVEL na semana entra como candidato;
+            // quem está de férias/atestado/afastado aparece riscado na tabela.
+            const candidatos = sobrasG
+              .flatMap((f: any) => ((f.alocados || []) as any[]).map((p: any) => ({ ...p, funcao: f.funcao })))
+              .filter((p: any) => !p.indisponivel)
+              .sort((a: any, b: any) => b.atestados12m - a.atestados12m || a.nome.localeCompare(b.nome, "pt-BR"));
+            const indisponiveis = todas
+              .flatMap((f: any) => ((f.alocados || []) as any[]).map((p: any) => ({ ...p, funcao: f.funcao })))
+              .filter((p: any) => p.indisponivel);
+            const faltamTxt = todas
+              .filter((f: any) => f.hh > 0 && f.disponiveis != null && (f.disponiveis - Math.max(1, Math.ceil(f.pessoas))) < 0)
+              .map((f: any) => {
+                const n = Math.max(1, Math.ceil(f.pessoas)) - (f.disponiveis ?? 0);
+                return `${n} ${f.funcao}`;
+              });
+            const sugestaoBloco = (candidatos.length > 0 || faltamTxt.length > 0 || indisponiveis.length > 0) ? (
+              <div className="rounded-md border border-blue-200 bg-blue-50/60 px-3 py-2 text-[10px] text-slate-700 space-y-1">
+                <p className="font-bold text-blue-800 uppercase tracking-wide text-[9px]">Sugestão da semana</p>
+                {faltamTxt.length > 0 && (
+                  <p>🔴 <strong>Falta:</strong> {faltamTxt.join(" · ")} — completar com realocação de outra obra, contratação ou subempreita.</p>
+                )}
+                {indisponiveis.length > 0 && (
+                  <p>
+                    🟠 <strong>Fora da conta nesta semana:</strong>{" "}
+                    {indisponiveis.map((p: any, j: number) => (
+                      <span key={j}>{j > 0 && " · "}<strong>{p.nome}</strong> ({p.funcao} — {p.indisponivel})</span>
+                    ))}
+                  </p>
+                )}
+                {candidatos.length > 0 && (
+                  <p>
+                    🔄 <strong>Sugestão de realocação:</strong> {candidatos.map((p: any) => p.nome.split(" ")[0]).slice(0, 5).join(", ")}{" "}
+                    {candidatos.length === 1 ? "está em função sem atividade programada" : "estão em funções sem atividade programada"} nesta semana — dá para realocar para outra obra/projeto.{" "}
+                    {candidatos.map((p: any, j: number) => (
+                      <span key={j}>
+                        {j > 0 && " · "}
+                        <strong>{p.nome}</strong> ({p.funcao}{p.terceiro ? ", terceiro" : ""}{p.atestados12m > 0 ? `, ${p.atestados12m} atest./12m` : ""})
+                      </span>
+                    ))}
+                    <span className="text-slate-500"> — quem tem mais atestados aparece primeiro.</span>
+                  </p>
+                )}
+              </div>
+            ) : null;
+            const grupoHeader = (titulo: string, cor: string) => (
+              <tr className={`${cor} border-b`}>
+                <td colSpan={4} className="py-1 px-3 text-[9px] font-bold uppercase tracking-wider">{titulo}</td>
+              </tr>
+            );
+            return (
+              <>
+              {sugestaoBloco}
+              <div className="overflow-x-auto rounded-md border border-slate-200 bg-white">
+                <table className="w-full text-[11px]">
+                  <thead>
+                    <tr className="bg-slate-50 border-b text-[9px] text-slate-500 uppercase tracking-wider">
+                      <th className="text-left py-1.5 px-3">Função</th>
+                      <th className="text-right py-1.5 px-2">Precisa</th>
+                      <th className="text-right py-1.5 px-2">Tem na obra</th>
+                      <th className="text-right py-1.5 px-3">Situação</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {comMatch.length > 0 && grupoHeader("Demanda da semana × efetivo da obra", "bg-slate-100/80 text-slate-500")}
+                    {comMatch.map(linha)}
+                    {semCorresp.length > 0 && grupoHeader("Demanda sem função correspondente na obra (contratar / subempreitar?)", "bg-amber-50 text-amber-700")}
+                    {semCorresp.map(linha)}
+                    {sobrasG.length > 0 && grupoHeader("Na obra sem demanda na semana (possível realocação)", "bg-blue-50/70 text-blue-700")}
+                    {sobrasG.map(linha)}
+                  </tbody>
+                </table>
+              </div>
+              </>
+            );
+          })()}
+          <button className="text-[10px] text-slate-500 underline underline-offset-2" onClick={() => setVerAtvs(!verAtvs)}>
+            {verAtvs ? "Ocultar" : "Ver"} detalhe por atividade ({(d.atividades || []).length})
+          </button>
+          {verAtvs && (
+            <div className="overflow-x-auto rounded-md border border-slate-200 bg-white">
+              <table className="w-full text-[10px]">
+                <thead>
+                  <tr className="bg-slate-50 border-b text-[9px] text-slate-500 uppercase tracking-wider">
+                    <th className="text-left py-1.5 px-3">EAP / Atividade</th>
+                    <th className="text-left py-1.5 px-2">Fonte</th>
+                    <th className="text-right py-1.5 px-2">HH na semana</th>
+                    <th className="text-right py-1.5 px-3">≈ Pessoas</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(d.atividades || []).map((a: any) => (
+                    <tr key={a.id} className="border-b last:border-0">
+                      <td className="py-1.5 px-3">
+                        <span className="font-mono text-slate-400 mr-1.5">{a.eapCodigo || "—"}</span>{a.nome}
+                        {a.obs && <span className="block text-[9px] text-amber-700">{a.obs}</span>}
+                      </td>
+                      <td className="py-1.5 px-2">
+                        {a.origem === "orcamento" && <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5">Orçamento (CPU)</span>}
+                        {a.origem === "referencia" && <span className="text-[9px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">TCPO/SINAPI</span>}
+                        {a.origem === "sem_estimativa" && <span className="text-[9px] font-bold text-slate-500 bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5">Sem estimativa</span>}
+                      </td>
+                      <td className="text-right py-1.5 px-2 tabular-nums">{a.hh > 0 ? `${a.hh}h` : "—"}</td>
+                      <td className="text-right py-1.5 px-3 tabular-nums font-semibold">{a.pessoas > 0 ? a.pessoas : "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <p className="text-[9px] text-slate-400">
+            Estimativa consultiva: composições do orçamento quando a EAP casa; produtividade média TCPO/SINAPI quando não casa; jornada de {d.horasSemana}h/semana. Não altera cronograma nem % previsto.
+          </p>
+        </div>
+      )}
     </div>
   );
 }

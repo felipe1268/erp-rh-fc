@@ -9,7 +9,7 @@ import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { removeAccents } from "@/lib/searchUtils";
 import {
   ArrowLeft, User, TrendingUp, TrendingDown, Calendar, Clock, Search,
-  Share2, Printer, Eye, ChevronRight, ShieldCheck, Download, AlertTriangle,
+  Share2, Printer, Eye, ChevronRight, ShieldCheck, Download, AlertTriangle, Lock,
 } from "lucide-react";
 import { generateCertificadoIntegracaoSstPdf } from "@/lib/certificadoIntegracaoSstPdf";
 import { toast } from "sonner";
@@ -469,8 +469,68 @@ export default function RaioXFuncionario() {
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
 
-  const ranking = trpc.avaliacao.dashboard.employeeRanking.useQuery({ companyId, limit: 200 }, { enabled: companyId > 0 || companyIds.length > 0 });
+  // ── Controle de acesso backend (mesma política do Raio-X de relatórios) ──
+  // FAIL-CLOSED: enquanto o status não resolve, accessMode fica "unresolved" e
+  // nenhum ranking/detalhe é liberado. Erro na consulta → tratado como "none".
+  const { data: accessStatus, isLoading: accessLoading, error: accessError } = trpc.docs.raioXAccessStatus.useQuery(
+    undefined,
+    { retry: false }
+  );
+  const accessMode: "full" | "self" | "none" | "unresolved" =
+    accessError ? "none" : (accessStatus?.mode ?? "unresolved");
+  const accessResolved = accessMode !== "unresolved";
+  const selfEmployeeId = accessStatus?.employeeId ?? null;
 
+  // Rankings — só carregam para mode=full
+  const ranking = trpc.avaliacao.dashboard.employeeRanking.useQuery(
+    { companyId, limit: 200 },
+    { enabled: accessMode === "full" && (companyId > 0 || companyIds.length > 0) }
+  );
+
+  // FAIL-CLOSED: até o status resolver, mostra loading e não renderiza nada mais.
+  if (accessLoading || !accessResolved) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+      </div>
+    );
+  }
+
+  // mode 'none': bloqueio total
+  if (accessMode === "none") {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 gap-4">
+        <div className="h-14 w-14 rounded-full bg-slate-100 flex items-center justify-center">
+          <Lock className="h-7 w-7 text-slate-400" />
+        </div>
+        <p className="text-base font-semibold text-slate-700">Você não tem autorização pra isso</p>
+        <p className="text-sm text-slate-500 text-center max-w-xs">
+          Seu perfil não tem permissão para acessar o Raio-X de funcionários.
+        </p>
+      </div>
+    );
+  }
+
+  // mode 'self': só a própria ficha de avaliação. selfEmployeeId é o ÚNICO alvo
+  // permitido; jamais usamos o selectedEmployeeId arbitrário.
+  if (accessMode === "self") {
+    if (selfEmployeeId) {
+      return <RaioXDetail employeeId={selfEmployeeId} onBack={() => setSelectedEmployeeId(null)} />;
+    }
+    return (
+      <div className="flex flex-col items-center justify-center py-16 gap-4">
+        <div className="h-14 w-14 rounded-full bg-slate-100 flex items-center justify-center">
+          <Lock className="h-7 w-7 text-slate-400" />
+        </div>
+        <p className="text-base font-semibold text-slate-700">Você não tem autorização pra isso</p>
+        <p className="text-sm text-slate-500 text-center max-w-xs">
+          Nenhum funcionário vinculado ao seu perfil foi encontrado.
+        </p>
+      </div>
+    );
+  }
+
+  // mode 'full': UI completa com lista e busca
   if (selectedEmployeeId) {
     return <RaioXDetail employeeId={selectedEmployeeId} onBack={() => setSelectedEmployeeId(null)} />;
   }
@@ -494,7 +554,7 @@ export default function RaioXFuncionario() {
         <Input placeholder="Buscar por nome, função ou setor..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
       </div>
 
-      {ranking.isLoading ? (
+      {accessLoading || ranking.isLoading ? (
         <div className="flex items-center justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#1e3a5f]" /></div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-12 text-[#94A3B8]"><User className="w-12 h-12 mx-auto mb-3 opacity-50" /><p>Nenhum funcionário avaliado ainda.</p></div>

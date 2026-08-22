@@ -18,7 +18,7 @@ import {
   Wifi, WifiOff, RefreshCw, Download, HardDrive, AlertTriangle, CheckCircle2, CloudOff, History,
   RectangleHorizontal, PencilLine, ListOrdered, BrickWall, Undo2, Contrast, Magnet, Palette, Settings2, BadgeCheck, HelpCircle,
   Layers, Maximize, Link as LinkIcon, Lock, LockOpen, FileSignature, Printer,
-  Route, Wand2,
+  Route, Wand2, DoorOpen, Search as SearchIcon, MapPin,
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import SignaturePad from "@/components/SignaturePad";
@@ -27,10 +27,15 @@ import {
   type GeoPonto, type TipoContorno, UNIDADE_POR_TIPO, LABEL_TIPO,
   calcularContorno, distancia, fatorCalibracao, simplificarPontos,
 } from "@shared/levantamentoGeo";
-import { unidadesCompativeis } from "@shared/unidadeCompat";
+import { cn } from "@/lib/utils";
+import { unidadesCompativeis, normalizarUnidade } from "@shared/unidadeCompat";
+import { parseItensExtras, quantidadeExtra, type VinculoExtra } from "@shared/levantamentoConsolidado";
 import { useLevantamentoOffline } from "@/hooks/useLevantamentoOffline";
 import { VincularItemCombobox, buildItensVinculaveis } from "./VincularItemCombobox";
+import ApontamentoDialog, { type NovoApontamento } from "../apontamento/ApontamentoDialog";
 import { parseDxfPlanta, type DxfPlanta } from "./dxfPlanta";
+import { VaosContornoDialog } from "./VaosContornoDialog";
+import { RodapeContornoDialog } from "./RodapeContornoDialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { appPrompt } from "@/lib/appDialog";
@@ -422,14 +427,69 @@ export default function MedicaoLevantamento() {
     try { return new URLSearchParams(window.location.search).get("origem") === "terceiro" ? "terceiro" : "cliente"; }
     catch { return "cliente"; }
   }, []);
-  const isTerceiro = origem === "terceiro";
+  // Rev. 4862 — biblioteca da obra (contrato 0) nunca é terceiro: origem
+  // 'terceiro' sem contrato deixava o combobox da EAP eternamente vazio
+  // (itens viriam de um contrato de terceiro que não existe).
+  const isTerceiro = origem === "terceiro" && parseInt(params.contratoId || "0") > 0;
+
+  // Task 150 — modo RONDA: a tela do Apontamento de Campo abre ESTE MESMO
+  // editor (réplica zero — sem duplicar código) com ?ronda=1&obra=N. Nesse
+  // modo: pintura por status de produção, toque com a ferramenta de seleção
+  // abre o apontamento, botões de consolidação/boletim ficam ocultos e o
+  // Voltar retorna pra Ronda. Tudo que se desenha grava no MESMO levantamento.
+  const rondaParams = useMemo(() => {
+    try {
+      const q = new URLSearchParams(window.location.search);
+      return {
+        ronda: q.get("ronda") === "1",
+        obraId: Number(q.get("obra")) || 0,
+        pavimentoId: Number(q.get("pav")) || 0,
+        pdfId: Number(q.get("pdf")) || 0,
+      };
+    } catch { return { ronda: false, obraId: 0, pavimentoId: 0, pdfId: 0 }; }
+  }, []);
+  const rondaMode = rondaParams.ronda && rondaParams.obraId > 0;
 
   // --- dados ---
   const { data: contratoCliente } = trpc.medicao.getContrato.useQuery({ id: contratoId }, { enabled: !isTerceiro && contratoId > 0 });
   const { data: contratoTerceiro } = trpc.terceiroContratos.getContrato.useQuery({ id: contratoId }, { enabled: isTerceiro && contratoId > 0 });
   const contrato: any = isTerceiro ? contratoTerceiro : contratoCliente;
-  const orcamentoId = (contrato as any)?.orcamentoId ?? 0;
-  const voltarHref = isTerceiro ? `/terceiros/contratos/${contratoId}?tab=medicoes` : `/medicao/${contratoId}`;
+  // Ronda com biblioteca da OBRA (contratoId=0): não há contrato pra dar o
+  // orçamento — busca o orçamento da própria obra (aprovado tem prioridade).
+  const orcObraQ = trpc.apontamentoCampo.getOrcamentoDaObra.useQuery(
+    { companyId, obraId: rondaParams.obraId },
+    { enabled: rondaMode && contratoId <= 0 && companyId > 0 },
+  );
+  const orcamentoId = (contrato as any)?.orcamentoId ?? ((orcObraQ.data as any)?.orcamentoId || 0);
+  const voltarHref = rondaMode
+    ? `/apontamento?obra=${rondaParams.obraId}`
+    : isTerceiro ? `/terceiros/contratos/${contratoId}?tab=medicoes` : `/medicao/${contratoId}`;
+
+  // Task 150 — dados da ronda (produção acumulada por contorno) p/ pintar a
+  // planta por status e alimentar o dialog de apontamento.
+  const rondaQ = trpc.apontamentoCampo.getRonda.useQuery(
+    { companyId, obraId: rondaParams.obraId },
+    { enabled: rondaMode && companyId > 0 },
+  );
+  const rondaAcumulado: any[] = (rondaQ.data as any)?.acumulado ?? [];
+  const rondaServicos: any[] = (rondaQ.data as any)?.servicos ?? [];
+  const rondaPctDe = useCallback((contornoId: number, servico: string) => {
+    const row = rondaAcumulado.find((a: any) => Number(a.contornoId) === contornoId && a.servico === servico);
+    return Math.min(100, Number(row?.pct || 0));
+  }, [rondaAcumulado]);
+  // dialog de apontamento (compartilhado com a tela da Ronda)
+  const [rondaNovo, setRondaNovo] = useState<NovoApontamento | null>(null);
+  // busca overlay: a planta é a única navegação — a busca localiza/centra o ambiente
+  const [rondaBuscaOpen, setRondaBuscaOpen] = useState(false);
+  const [rondaBusca, setRondaBusca] = useState("");
+
+  // Task 150 — vínculos EAP APRENDIDOS por obra: categoria já vinculada antes
+  // → o item vem sugerido/pré-selecionado (1 toque confirma; nunca sozinho).
+  const obraIdVinculos = rondaParams.obraId || Number(contrato?.obraId) || 0;
+  const vinculosQ = trpc.apontamentoCampo.vinculosAprendidos.useQuery(
+    { companyId, obraId: obraIdVinculos },
+    { enabled: companyId > 0 && obraIdVinculos > 0 },
+  );
 
   // Rev. 3102 — Medição de TERCEIROS não tem orçamento de obra: os itens
   // mensuráveis vêm do PRÓPRIO contrato (terceiro_contrato_itens). Buscamos esses
@@ -460,6 +520,24 @@ export default function MedicaoLevantamento() {
     { enabled: companyId > 0 && campoId > 0 },
   );
   const servicos: any[] = (servicosQ.data as any[]) ?? [];
+  // Task 150 — opções do dialog de apontamento no modo Ronda. O IDENTIFICADOR
+  // canônico é a CHAVE do catálogo do levantamento (a mesma gravada em
+  // medicao_campo_contornos.servico e no ledger de apontamentos por contorno),
+  // exibida pelo NOME humano; critérios de medição avulsos entram depois, sem
+  // colidir, p/ manter compatibilidade com apontamentos livres da Ronda.
+  const rondaDialogServicos = useMemo(() => {
+    const out: any[] = [];
+    const seen = new Set<string>();
+    for (const s of servicos) {
+      const k = String(s?.chave ?? "");
+      if (k && !seen.has(k)) { seen.add(k); out.push({ servico: k, nome: s.nome ?? k, unidade: s.unidade ?? "m2", derivaDe: s.derivaDe ?? null }); }
+    }
+    for (const s of rondaServicos) {
+      const k = String(s?.servico ?? "");
+      if (k && !seen.has(k)) { seen.add(k); out.push({ servico: k, nome: s.servico, unidade: s.unidade }); }
+    }
+    return out;
+  }, [servicos, rondaServicos]);
   const salvarServicoMut = trpc.medicao.salvarServicoLevantamento.useMutation({
     onSuccess: () => utils.medicao.listServicosLevantamento.invalidate({ companyId, medicaoCampoId: campoId }),
   });
@@ -503,6 +581,37 @@ export default function MedicaoLevantamento() {
   // Rev. 3094 — Itens MENSURÁVEIS do orçamento (folhas da árvore EAP), já com o
   // caminho de pavimento/etapa, p/ o combobox de busca + agrupamento.
   const itensVinculaveis = useMemo(() => buildItensVinculaveis(itensOrcamento as any[]), [itensOrcamento]);
+
+  // Task 150 — SUGESTÃO de item da EAP por CATEGORIA de serviço, mesmo com EAP
+  // gigante: (1) histórico da obra (categoria já vinculada → item mais usado
+  // vem PRÉ-SELECIONADO, 1 toque confirma); (2) casamento de texto do nome do
+  // serviço vs descrição do item. Sugestão nunca vincula sozinha.
+  const sugestoesPorServico = useMemo(() => {
+    const map = new Map<string, { preId: number | null; ids: number[] }>();
+    if (!itensVinculaveis.length) return map;
+    const byId = new Set(itensVinculaveis.map((i) => i.id));
+    const aprendidos = ((vinculosQ.data as any[]) ?? []).filter((v) => byId.has(Number(v.orcamentoItemId)));
+    const normTxt = (s: string) => String(s || "").toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    for (const s of (servicos as any[])) {
+      const chave = String(s.chave ?? "");
+      if (!chave) continue;
+      const ids: number[] = [];
+      // 1) aprendido nesta obra (mais usado primeiro — server já ordena)
+      for (const v of aprendidos) if (String(v.servico) === chave && !ids.includes(Number(v.orcamentoItemId))) ids.push(Number(v.orcamentoItemId));
+      const preId = ids.length ? ids[0] : null;
+      // 2) casamento por texto: tokens do NOME do serviço na descrição do item
+      const toks = normTxt(s.nome ?? chave).split(/[^a-z0-9]+/).filter((t) => t.length >= 4);
+      if (toks.length) {
+        const matched = itensVinculaveis
+          .filter((i) => !ids.includes(i.id) && toks.some((t) => normTxt(i.search).includes(t)))
+          .slice(0, 8);
+        for (const m of matched) ids.push(m.id);
+      }
+      if (ids.length) map.set(chave, { preId, ids: ids.slice(0, 10) });
+    }
+    return map;
+  }, [itensVinculaveis, vinculosQ.data, servicos]);
   const vincularEmptyHint = useMemo(() => {
     if (isTerceiro) {
       if (terceiroItensQ.error) return "Não foi possível carregar os itens do contrato. Verifique a conexão e tente novamente.";
@@ -784,6 +893,14 @@ export default function MedicaoLevantamento() {
   // --- estado de UI ---
   const pdfs = (campo?.pdfs ?? []) as any[];
   const [pdfSelId, setPdfSelId] = useState<number | null>(null);
+  // Rev. — dialog "Descontar vãos" (mapa de vãos da obra) do contorno
+  const [vaosDlgContorno, setVaosDlgContorno] = useState<any | null>(null);
+  // Rev. 4863 — MÚLTIPLOS itens da EAP no mesmo contorno (checkbox): contrapiso
+  // = lona + brita + tela + concreto na MESMA área.
+  const [multiDlgContorno, setMultiDlgContorno] = useState<any | null>(null);
+  // Rev. — dialog "Rodapé pela planta" (perímetro × altura, descontando portas)
+  const [rodapeDlgContorno, setRodapeDlgContorno] = useState<any | null>(null);
+  const [rodapeSaving, setRodapeSaving] = useState(false);
   // Rev. 4805 — pé-direito do pavimento da planta selecionada (altura default
   // nas medições de parede; o servidor anexa peDireito nas plantas importadas
   // de um projeto da obra).
@@ -794,10 +911,31 @@ export default function MedicaoLevantamento() {
   }, [pdfs, pdfSelId]);
   useEffect(() => {
     if (pdfs.length && (pdfSelId == null || !pdfs.some((p) => p.id === pdfSelId))) {
-      setPdfSelId(pdfs[0].id);
+      // Task 150 — modo Ronda: abre já na PLANTA DO PAVIMENTO tocado (?pdf=/&pav=);
+      // o campo pode ter várias plantas e a primeira pode ser de outro pavimento.
+      const alvo =
+        (rondaParams.pdfId ? pdfs.find((p: any) => Number(p.id) === rondaParams.pdfId) : null)
+        ?? (rondaParams.pavimentoId ? pdfs.find((p: any) => Number(p.pavimentoId) === rondaParams.pavimentoId) : null)
+        ?? pdfs[0];
+      setPdfSelId(alvo.id);
     }
-  }, [pdfs, pdfSelId]);
+  }, [pdfs, pdfSelId, rondaParams]);
   const pdfSel = pdfs.find((p) => p.id === pdfSelId) || null;
+  // Rev. 4855 — PRÉ-FILTRO do combobox (decisão do user): abrir o "Vincular
+  // item" já filtrado pela CATEGORIA do serviço + PAVIMENTO da planta atual
+  // (orçamentos por andar). "Ver todos" no próprio combobox tira o filtro.
+  const preFiltroDe = useCallback((servicoChave?: string | null) => {
+    const svc = servicoChave ? (servicos as any[]).find((s: any) => s.chave === servicoChave) : null;
+    const nome = String(svc?.nome ?? "");
+    // tokens ≥4 letras do nome do serviço (basta UM casar — ex.: "Reboco Interno")
+    const tokens = nome.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .split(/[^a-z0-9]+/).filter((t) => t.length >= 4);
+    const pid = Number((pdfSel as any)?.pavimentoId) || 0;
+    const pv = pid ? (((pavimentosQ.data as any)?.pavimentos ?? []) as any[]).find((p: any) => p.id === pid) : null;
+    const pavimento = String(pv?.nome ?? "");
+    if (!tokens.length && !pavimento) return undefined;
+    return { tokens: tokens.length ? tokens : undefined, pavimento: pavimento || undefined };
+  }, [servicos, pdfSel, pavimentosQ.data]);
   // Rev. — DXF: detecta planta vetorial (.dxf) — render por SVG + escala automática.
   const isDxf = useMemo(() => {
     const n = (pdfSel?.arquivoNome || pdfSel?.nome || "").toLowerCase();
@@ -876,6 +1014,14 @@ export default function MedicaoLevantamento() {
   const askNumber = useCallback(
     (opts: { title: string; hint?: string; suffix?: string; initial?: string }) =>
       new Promise<number | null>((resolve) => setNumPrompt({ ...opts, resolve })),
+    [],
+  );
+
+  // Rev. 4859 — Polyline pergunta ao finalizar: o contorno mede ÁREA (m²) ou
+  // PERÍMETRO (m)? O usuário escolhe (e pode trocar depois no cartão).
+  const [tipoPrompt, setTipoPrompt] = useState<{ resolve: (v: "area" | "perimetro" | null) => void } | null>(null);
+  const askAreaOuPerimetro = useCallback(
+    () => new Promise<"area" | "perimetro" | null>((resolve) => setTipoPrompt({ resolve })),
     [],
   );
 
@@ -1051,6 +1197,10 @@ export default function MedicaoLevantamento() {
     () => ((campo?.contornos ?? []) as any[]).filter((c) => c.pdfId === pdfSelId && (c.pagina ?? 1) === pagina),
     [campo, pdfSelId, pagina],
   );
+  // Task 153 — ref sempre atual dos contornos: o toast de sugestão (closure)
+  // precisa achar o contorno recém-criado pelo uuid SEM capturar estado velho.
+  const contornosLiveRef = useRef<any[]>([]);
+  useEffect(() => { contornosLiveRef.current = (campo?.contornos ?? []) as any[]; }, [campo]);
 
   // --- geometria → metros (PDF points) ---
   const normToPt = useCallback((p: GeoPonto): GeoPonto => ({ x: p.x * pageDims.w, y: p.y * pageDims.h }), [pageDims]);
@@ -1170,6 +1320,9 @@ export default function MedicaoLevantamento() {
 
   // ===================== OSnap (Object Snap estilo AutoCAD) =====================
   const [osnapOn, setOsnapOn] = useState(true);
+  // Rev. 4848 — ORTO (F8, estilo AutoCAD): trava o próximo ponto da polilinha
+  // na horizontal/vertical do último vértice (OSnap tem prioridade).
+  const [ortoOn, setOrtoOn] = useState(false);
   const [osnapModes, setOsnapModes] = useState<Record<SnapKind, boolean>>(OSNAP_TODOS);
   const [snapHit, setSnapHit] = useState<{ p: GeoPonto; kind: SnapKind } | null>(null);
 
@@ -1231,6 +1384,9 @@ export default function MedicaoLevantamento() {
   const [catDialogOpen, setCatDialogOpen] = useState(false);
   const [catNome, setCatNome] = useState("");
   const [catTipo, setCatTipo] = useState<string>("area");
+  // Poka-yoke: se o usuário ainda não escolheu o tipo à mão, o NOME sugere o
+  // tipo certo (ex.: "concretagem" → volume m³, senão nasce medindo m² errado).
+  const [catTipoManual, setCatTipoManual] = useState(false);
   // Rev. 4792 — subcategoria: opcionalmente vinculada a uma categoria "mãe"
   // (Chapisco Teto, Reboco Parede, Pastilha…) — herda a cor e fica agrupada.
   const [catPai, setCatPai] = useState<string>("");
@@ -1340,6 +1496,7 @@ export default function MedicaoLevantamento() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "F3") { e.preventDefault(); setOsnapOn((v) => !v); }
+      if (e.key === "F8") { e.preventDefault(); setOrtoOn((v) => !v); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -1575,6 +1732,13 @@ export default function MedicaoLevantamento() {
     if (tool === "retangulo") mode = "rect";
     else if (tool === "livre") mode = "free";
     else if (tool === "parede") mode = "line"; // arrastou = estica a linha; toque = ponto
+    // Rev. 4858 — Polyline/Linha-Polyline/Volume arrastáveis (pedido do user):
+    // arrasta a caneta = estica a linha a partir do ÚLTIMO vértice; soltou =
+    // fixa o ponto e continua dali. Toque simples continua marcando ponto.
+    else if (TOOLS_POLILINHA.includes(tool as FerramentaDesenho)) {
+      mode = "line";
+      if (draft.length) startNorm = draft[draft.length - 1];
+    }
     gestRef.current = {
       mode, pointerId: e.pointerId, startClient: { x: e.clientX, y: e.clientY },
       startNorm, startPan: panRef.current ?? { x: 0, y: 0 }, moved: false,
@@ -1700,7 +1864,20 @@ export default function MedicaoLevantamento() {
     if (g.mode === "pan") return;          // só arrastou (pan)
     if (g.mode === "rect") { finalizarRetangulo(); return; }
     if (g.mode === "free") { finalizarLivre(); return; }
-    if (g.mode === "line" && g.moved) { void finalizarLinha(); return; }
+    if (g.mode === "line" && g.moved) {
+      if (tool === "parede") { void finalizarLinha(); return; }
+      // Rev. 4858 — Polyline arrastável: soltou a caneta = FIXA o vértice e a
+      // próxima linha continua de onde parou. Soltar em cima do 1º ponto fecha.
+      const l = dragLineRef.current;
+      dragLineRef.current = null; setDragLine(null); setSnapHit(null);
+      if (l && distancia(l.a, l.b) >= 0.004) {
+        const fecha = draft.length >= 3 &&
+          Math.hypot((l.b.x - draft[0].x) * pageDims.w, (l.b.y - draft[0].y) * pageDims.h) < 0.015 * Math.max(pageDims.w, pageDims.h);
+        if (fecha) void finalizarDesenho(tool === "perimetro" ? [...draft, draft[0]] : undefined);
+        else setDraft((d) => (d.length ? [...d, l.b] : [l.a, l.b]));
+      }
+      return;
+    }
     if (!g.moved) onTap(g.startNorm);      // toque limpo = adiciona ponto
   }
 
@@ -1845,11 +2022,34 @@ export default function MedicaoLevantamento() {
       // handles de ajuste). Tocar no vazio limpa a seleção.
       const hit = contornoSobPonto(ptRaw);
       setSelContornos(hit ? new Set([hit.id]) : new Set());
+      // Task 150 — modo RONDA: tocar num ambiente com a seleção abre o
+      // APONTAMENTO DE PRODUÇÃO (como na tela da Ronda), além de selecionar.
+      if (rondaMode && hit && Number(hit.id) > 0) {
+        const svcChave = String(hit.servico || "");
+        const pct = rondaPctDe(Number(hit.id), svcChave);
+        if (pct >= 99.99) { toast.info(`${hit.rotulo || "Trecho"} já está 100% apontado.`); return; }
+        setRondaNovo({
+          contornoId: Number(hit.id),
+          pavimentoId: Number((pdfSel as any)?.pavimentoId) || null,
+          servico: svcChave || (servicos[0]?.chave ?? rondaServicos[0]?.servico ?? ""),
+          unidade: hit.unidade || "m2",
+          quantidadeTotal: parseFloat(String(hit.quantidade ?? "")) || null,
+          rotulo: hit.rotulo || null,
+          percentual: Math.max(0, 100 - pct),
+          data: new Date().toISOString().slice(0, 10),
+        });
+      }
       return;
     }
     // OSnap: prende o ponto à geometria notável mais próxima (se houver).
     const hit = toolUsaSnap(tool) ? applySnap(ptRaw, snapFromPt()) : null;
-    const pt = hit ? hit.p : ptRaw;
+    let pt = hit ? hit.p : ptRaw;
+    // ORTO (F8): sem snap, o novo ponto trava na horizontal/vertical do último vértice.
+    if (!hit && ortoOn && TOOLS_POLILINHA.includes(tool as FerramentaDesenho) && draft.length > 0) {
+      const last = draft[draft.length - 1];
+      const dx = Math.abs((pt.x - last.x) * pageDims.w), dy = Math.abs((pt.y - last.y) * pageDims.h);
+      pt = dx >= dy ? { x: pt.x, y: last.y } : { x: last.x, y: pt.y };
+    }
     setSnapHit(null);
     if (tool === "calibrar" || tool === "conferir") {
       const next = [...calibDraft, pt];
@@ -1866,6 +2066,19 @@ export default function MedicaoLevantamento() {
       if (assist === "varinha") { varinhaFill(ptRaw); return; }
       if (assist === "cad") { if (pickCadPolyline(ptRaw)) return; /* sem traço perto → ponto normal */ }
       if (assist === "arco") { arcTap(pt); return; }
+    }
+    // Fechar tocando no 1º vértice (estilo AutoCAD "close"): polígono ≥3 pontos.
+    // Rev. 4857 — vale também p/ Linha (L×A) e Linha/Polyline: fecha o contorno
+    // repetindo o 1º ponto (o trecho de fechamento ENTRA na conta — perímetro
+    // em m, ou m² = perímetro × altura quando o serviço é de parede).
+    if (
+      TOOLS_POLILINHA.includes(tool as FerramentaDesenho) &&
+      draft.length >= 3 &&
+      Math.hypot((pt.x - draft[0].x) * pageDims.w, (pt.y - draft[0].y) * pageDims.h) < 0.015 * Math.max(pageDims.w, pageDims.h)
+    ) {
+      if (tool === "parede" || tool === "perimetro") void finalizarDesenho([...draft, draft[0]]);
+      else void finalizarDesenho();
+      return;
     }
     setDraft((d) => [...d, pt]); // area | parede | perimetro | volume (ponto-a-ponto)
   }
@@ -2087,7 +2300,17 @@ export default function MedicaoLevantamento() {
       if (recentesRef.current.length > 30) recentesRef.current.shift();
     }
     const r = calcularContorno(tipo, ptsPt, calibAtualEff.metrosPorUnidade, espessura, contagem);
-    off.saveContorno({
+    // Task 153 — uuid ESTÁVEL gerado aqui: permite completar o mesmo contorno
+    // (vínculo sugerido) depois, mesmo com a fila offline (upsert por uuid).
+    const uuid = (() => {
+      try { if (crypto?.randomUUID) return crypto.randomUUID(); } catch { /* */ }
+      return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+        const n = (Math.random() * 16) | 0;
+        return (c === "x" ? n : (n & 0x3) | 0x8).toString(16);
+      });
+    })();
+    const payloadBase = {
+      uuid,
       pdfId: pdfSel.id,
       pagina,
       tipo,
@@ -2103,14 +2326,47 @@ export default function MedicaoLevantamento() {
       contagem: tipo === "contagem" ? r.contagem : null,
       quantidade: String(r.quantidade),
       unidade: r.unidade,
-    });
+    };
+    off.saveContorno(payloadBase);
     setDraft([]);
+
+    // Task 153 — SUGESTÃO no ato do desenho: se a categoria escolhida tem
+    // vínculo APRENDIDO na obra (item mais usado), oferece vincular o contorno
+    // recém-criado com 1 toque (nunca automático). Só quando:
+    //  • a categoria não tem item fixo já configurado (aí o vínculo já é dela);
+    //  • a unidade do item é compatível com a do trecho (poka-yoke de unidade).
+    if (!svcAtivoObj?.orcamentoItemId && servicoAtivo) {
+      const preId = sugestoesPorServico.get(servicoAtivo)?.preId ?? null;
+      const it = preId != null ? (itensOrcamento as any[]).find((i) => i.id === preId) : null;
+      if (it && unidadesCompativeis(r.unidade, it.unidade)) {
+        toast(`Vincular ao item usado nesta obra p/ "${svcAtivoObj.nome}"?`, {
+          description: `${it.eapCodigo ? it.eapCodigo + " — " : ""}${it.descricao}`,
+          duration: 8000,
+          action: {
+            label: "Vincular",
+            onClick: () => {
+              // Reencontra o contorno pelo uuid p/ preservar id/numero já
+              // atribuídos (sem isso o upsert recalcularia o numero).
+              const c = contornosLiveRef.current.find((x: any) => x.uuid === uuid);
+              void off.saveContorno({
+                ...payloadBase,
+                ...(c ? { id: c.id > 0 ? c.id : undefined, numero: c.numero ?? undefined } : {}),
+                orcamentoItemId: it.id,
+                itemEapCodigo: it.eapCodigo ?? null,
+                itemDescricao: it.descricao ?? null,
+              });
+              toast.success("Item vinculado ao contorno.");
+            },
+          },
+        });
+      }
+    }
   }
 
   // Retângulo: 2 cantos arrastados → área retangular (tipo "area").
   // Rev. 4792 — em categoria de PERÍMETRO, o retângulo vira perímetro (m
   // linear do contorno fechado), não área.
-  function finalizarRetangulo() {
+  async function finalizarRetangulo() {
     const r = dragRectRef.current ?? dragRect; // ref síncrono: o flush do pointerup pode ainda não ter re-renderizado
     dragRectRef.current = null;
     setDragRect(null);
@@ -2120,7 +2376,14 @@ export default function MedicaoLevantamento() {
     const corners: GeoPonto[] = [
       { x: a.x, y: a.y }, { x: b.x, y: a.y }, { x: b.x, y: b.y }, { x: a.x, y: b.y },
     ];
-    if (svcAtivoObj?.tipoMedida === "perimetro") {
+    // Rev. 4860 — Retângulo também pergunta (pedido do user): área ou perímetro?
+    // Categoria já declarada como perímetro pula a pergunta (resposta óbvia).
+    let escolha: "area" | "perimetro" | null = svcAtivoObj?.tipoMedida === "perimetro" ? "perimetro" : null;
+    if (!escolha) {
+      escolha = await askAreaOuPerimetro();
+      if (!escolha) return; // cancelou
+    }
+    if (escolha === "perimetro") {
       // fecha o laço repetindo o 1º ponto (o cálculo de perímetro é de linha aberta)
       finalizarContorno("perimetro", [...corners, { ...corners[0] }], 0, 0);
       return;
@@ -2148,7 +2411,7 @@ export default function MedicaoLevantamento() {
   }
 
   // Desenho livre: traço da caneta/dedo → polígono simplificado (tipo "area").
-  function finalizarLivre() {
+  async function finalizarLivre() {
     const pts = freePts;
     setFreePts([]);
     if (pts.length < 3) return;
@@ -2160,16 +2423,37 @@ export default function MedicaoLevantamento() {
       finalizarContorno("perimetro", [...simp, { ...simp[0] }], 0, 0);
       return;
     }
+    // Rev. 4860 — desenho livre também pergunta: área ou perímetro?
+    const esc = await askAreaOuPerimetro();
+    if (!esc) return;
+    if (esc === "perimetro") { finalizarContorno("perimetro", [...simp, { ...simp[0] }], 0, 0); return; }
     finalizarContorno("area", simp, 0, 0); // ferramenta permanece ativa
   }
 
-  async function finalizarDesenho() {
+  async function finalizarDesenho(ptsOverride?: GeoPonto[]) {
     if (!TOOLS_POLILINHA.includes(tool as FerramentaDesenho)) return;
+    const pts = ptsOverride ?? draft;
     const minPts = MIN_PTS(tool);
-    if (draft.length < minPts) { alert(`Marque ao menos ${minPts} pontos.`); return; }
+    if (pts.length < minPts) { alert(`Marque ao menos ${minPts} pontos.`); return; }
+    // Rev. 4859/4860 — todo contorno FECHADO pergunta o que mede (área × perímetro):
+    // vale p/ Polyline, Varinha, "Seguir linha" e Linha/Polyline que fechou o laço.
+    const fechadoPts = pts.length >= 4 &&
+      pts[0].x === pts[pts.length - 1].x && pts[0].y === pts[pts.length - 1].y;
+    if (tool === "area" || (tool === "perimetro" && fechadoPts)) {
+      const esc = await askAreaOuPerimetro();
+      if (!esc) return; // cancelou — rascunho continua na tela
+      if (esc === "perimetro") {
+        // fecha o laço repetindo o 1º ponto (perímetro é calculado como linha aberta)
+        finalizarContorno("perimetro", fechadoPts ? pts : [...pts, { ...pts[0] }], 0, 0);
+        return;
+      }
+      // área: polígono é fechado por definição — remove o ponto duplicado do fecho
+      finalizarContorno("area", fechadoPts ? pts.slice(0, -1) : pts, 0, 0);
+      return;
+    }
     let espessura = 0;
     if (tool === "volume") {
-      const v = await askNumber({ title: "Volume", hint: "Espessura / altura da camada.", suffix: "m" });
+      const v = await askNumber({ title: "Volume", hint: "Espessura média / altura da camada — volume = área do contorno × espessura.", suffix: "m" });
       if (!(v && v > 0)) return;
       espessura = v;
     } else if (tool === "parede") {
@@ -2184,7 +2468,7 @@ export default function MedicaoLevantamento() {
       if (!(v && v > 0)) return;
       espessura = v;
     }
-    finalizarContorno(tool as TipoContorno, draft, espessura, 0); // ferramenta permanece ativa
+    finalizarContorno(tool as TipoContorno, pts, espessura, 0); // ferramenta permanece ativa
   }
 
   function desfazerPonto() {
@@ -2422,6 +2706,32 @@ export default function MedicaoLevantamento() {
     } finally { setBulkBusy(false); }
   }
 
+  // Rev. 4863 — salva a lista de vínculos MÚLTIPLOS do contorno (itensJson).
+  function salvarItensMultiplos(c: any, extras: VinculoExtra[]) {
+    return off.saveContorno({
+      id: c.id, uuid: c.uuid, pdfId: pdfSelId!,
+      pagina: c.pagina ?? pagina,
+      tipo: c.tipo as TipoContorno,
+      cor: c.cor ?? COR_TIPO[c.tipo as TipoContorno],
+      geometriaJson: c.geometriaJson ?? "[]",
+      espessura: c.espessura ?? null,
+      metrosPorUnidade: c.metrosPorUnidade ?? null,
+      area: c.area ?? null,
+      perimetro: c.perimetro ?? null,
+      volume: c.volume ?? null,
+      contagem: c.contagem ?? null,
+      quantidade: c.quantidade ?? null,
+      unidade: c.unidade ?? null,
+      numero: c.numero,
+      orcamentoItemId: c.orcamentoItemId ?? null,
+      itemEapCodigo: c.itemEapCodigo ?? null,
+      itemDescricao: c.itemDescricao ?? null,
+      rotulo: c.rotulo ?? null,
+      servico: c.servico ?? null,
+      itensJson: extras.length ? JSON.stringify(extras) : null,
+    });
+  }
+
   function bindItem(contornoId: number, orcamentoItemId: string) {
     const c = contornosPagina.find((x) => x.id === contornoId);
     if (!c) return;
@@ -2593,6 +2903,54 @@ export default function MedicaoLevantamento() {
     });
   }
 
+  // Rev. — Serviço de RODAPÉ: detectado pelo nome/chave da categoria ("rodapé",
+  // "rodape"...). Habilita o cálculo perímetro × altura direto na planta.
+  const ehServicoRodape = useCallback((c: any) => {
+    const svc = c?.servico ? servicos.find((s: any) => s.chave === c.servico) : null;
+    const alvo = `${svc?.chave ?? c?.servico ?? ""} ${svc?.nome ?? ""}`
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    return alvo.includes("rodap");
+  }, [servicos]);
+
+  // Grava a quantidade (m²) calculada pelo rodapé, preservando TODOS os demais
+  // campos do contorno (mesmo caminho do recolor/rotulo → UPDATE). A memória de
+  // cálculo vai para observações (linha "Rodapé: ..." — substitui a anterior).
+  async function salvarRodape(c: any, areaM2: number, memoria: string) {
+    const obsBase = String(c.observacoes ?? "")
+      .split("\n").filter((l: string) => !/^rodap[eé]:/i.test(l.trim())).join("\n").trim();
+    setRodapeSaving(true);
+    try {
+      await off.saveContorno({
+        id: c.id, uuid: c.uuid, pdfId: c.pdfId ?? pdfSelId!,
+        pagina: c.pagina ?? pagina,
+        tipo: c.tipo as TipoContorno,
+        cor: c.cor ?? COR_TIPO[c.tipo as TipoContorno],
+        geometriaJson: c.geometriaJson ?? "[]",
+        espessura: c.espessura ?? null,
+        metrosPorUnidade: c.metrosPorUnidade ?? null,
+        area: c.area ?? null,
+        perimetro: c.perimetro ?? null,
+        volume: c.volume ?? null,
+        contagem: c.contagem ?? null,
+        quantidade: String(areaM2),
+        unidade: "m2",
+        numero: c.numero,
+        orcamentoItemId: c.orcamentoItemId ?? null,
+        itemEapCodigo: c.itemEapCodigo ?? null,
+        itemDescricao: c.itemDescricao ?? null,
+        rotulo: c.rotulo ?? null,
+        servico: c.servico ?? null,
+        observacoes: obsBase ? `${obsBase}\n${memoria}` : memoria,
+      });
+      toast.success(`Rodapé gravado: ${areaM2.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m².`);
+      setRodapeDlgContorno(null);
+    } catch (e: any) {
+      toast.error(e?.message || "Erro ao gravar o rodapé.");
+    } finally {
+      setRodapeSaving(false);
+    }
+  }
+
   async function recolorSelecionados(cor: string) {
     if (bulkBusy) return;
     const alvos = contornosPagina.filter((c) => selContornos.has(c.id));
@@ -2626,9 +2984,66 @@ export default function MedicaoLevantamento() {
     return null;
   }
 
+  // Rev. — Contorno com RODAPÉ gravado (linha "Rodapé: ..." nas observações):
+  // o recálculo genérico de geometria NUNCA pode sobrescrever o m² do rodapé
+  // com a área do ambiente. Este helper re-deriva quantidade = (novo perímetro
+  // − portas) × altura a partir da memória de cálculo e reescreve a linha; se a
+  // memória não der pra ler, PRESERVA quantidade/unidade/observações atuais.
+  function rodapeOverride(c: any, novoPerimetroStr: string | null): { quantidade?: string | null; unidade?: string | null; observacoes?: string | null } {
+    const obs = String(c.observacoes ?? "");
+    const linhas = obs.split("\n");
+    const idx = linhas.findIndex((l) => /^rodap[eé]:/i.test(l.trim()));
+    if (idx < 0) return {};
+    const linha = linhas[idx];
+    const pega = (re: RegExp) => {
+      const m = linha.match(re);
+      if (!m) return null;
+      const v = parseFloat(m[1].replace(/\./g, "").replace(",", "."));
+      return isFinite(v) ? v : null;
+    };
+    const altura = pega(/altura\s*([\d.,]+)\s*m/i);
+    const portas = pega(/portas\s*([\d.,]+)\s*m/i) ?? 0;
+    const novoPer = parseFloat(novoPerimetroStr ?? "0");
+    if (!(altura! > 0) || !(novoPer > 0)) {
+      // sem dados p/ recalcular — mantém o valor do rodapé e a memória intactos
+      return { quantidade: c.quantidade ?? null, unidade: c.unidade ?? null, observacoes: c.observacoes ?? null };
+    }
+    const liq = Math.max(0, novoPer - portas);
+    const area = +(liq * altura!).toFixed(4);
+    const fmt = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    linhas[idx] = `Rodapé: perímetro ${fmt(novoPer)} m${portas > 0 ? ` − portas ${fmt(portas)} m` : ""} = ${fmt(liq)} m × altura ${fmt(altura!)} m = ${fmt(area)} m² (recalculado após edição do contorno)`;
+    return { quantidade: String(area), unidade: "m2", observacoes: linhas.join("\n") };
+  }
+
   // Salva UM contorno preservando TODOS os campos (cor/vínculo/etc.), com nova
   // geometria + recálculo de área/perímetro/volume/quantidade. Mesmo caminho do
   // recolorContorno/bind (off.saveContorno por id/uuid → UPDATE).
+  // Rev. 4848 — "Retificar" (estilo AutoCAD): endireita contorno desenhado à
+  // mão — simplifica os vértices e trava segmentos quase horizontais/verticais
+  // exatamente no eixo. Reusa salvarGeometriaContorno (recalcula área etc.).
+  function retificarContorno(c: any) {
+    if (travado) { toast.error("Levantamento consolidado — desconsolide para editar."); return; }
+    let pts: GeoPonto[] = [];
+    try { pts = JSON.parse(c.geometriaJson || "[]"); } catch { /* */ }
+    if (pts.length < 3) { toast.error("Este contorno não tem vértices suficientes."); return; }
+    const fechado = Math.hypot(pts[0].x - pts[pts.length - 1].x, pts[0].y - pts[pts.length - 1].y) < 1e-6;
+    let base = fechado ? pts.slice(0, -1) : pts.slice();
+    base = simplificarPontos(base, 0.005);
+    const TOL = Math.tan((12 * Math.PI) / 180); // até ~12° de desvio vira reto
+    const out: GeoPonto[] = [base[0]];
+    for (let i = 1; i < base.length; i++) {
+      const prev = out[out.length - 1]; const p = base[i];
+      const dx = Math.abs((p.x - prev.x) * pageDims.w), dy = Math.abs((p.y - prev.y) * pageDims.h);
+      if (dx >= dy && dy <= dx * TOL) out.push({ x: p.x, y: prev.y });
+      else if (dy > dx && dx <= dy * TOL) out.push({ x: prev.x, y: p.y });
+      else out.push({ ...p });
+    }
+    if (out.length < (fechado || c.tipo !== "perimetro" ? 3 : 2)) { toast.error("Retificar reduziria demais o contorno — ajuste manualmente."); return; }
+    if (fechado) out.push({ ...out[0] });
+    void salvarGeometriaContorno(c, out);
+    toast.success("Contorno retificado!");
+  }
+
   function salvarGeometriaContorno(c: any, ptsNorm: GeoPonto[]) {
     // Rev. 4792 — mpu auto-calibrado pela área salva (calcula sobre a geometria
     // ORIGINAL do contorno): edição de pontos em planta DXF recalcula certo.
@@ -2660,7 +3075,56 @@ export default function MedicaoLevantamento() {
       itemDescricao: c.itemDescricao ?? null,
       rotulo: c.rotulo ?? null,
       servico: c.servico ?? null,
+      // rodapé gravado: quantidade segue perímetro × altura, nunca a área genérica
+      ...rodapeOverride(c, r ? (r.perimetro ? String(r.perimetro) : null) : (c.perimetro ?? null)),
     });
+  }
+
+  // Rev. 4859 — trocar o que o contorno mede DEPOIS de criado (área ↔ perímetro):
+  // caso o usuário tenha escolhido errado, o cartão permite corrigir com 1 toque.
+  async function alternarAreaPerimetro(c: any, novo: "area" | "perimetro") {
+    if (travado) { toast.error("Levantamento consolidado — desconsolide para editar."); return; }
+    if (c.tipo === novo) return;
+    let pts: GeoPonto[] = [];
+    try { pts = JSON.parse(c.geometriaJson || "[]"); } catch { /* */ }
+    if (pts.length < 3) { toast.error("Contorno sem pontos suficientes para converter."); return; }
+    const mpu = mpuEfetivo(c, pts);
+    if (!(mpu > 0)) { toast.error("Escala do contorno indisponível — recalibre a planta."); return; }
+    // fecha/abre o laço conforme o tipo (perímetro soma o trecho de fechamento)
+    const fechado = distancia(pts[0], pts[pts.length - 1]) < 1e-6;
+    let novos = pts;
+    if (novo === "perimetro" && !fechado) novos = [...pts, { ...pts[0] }];
+    if (novo === "area" && fechado) novos = pts.slice(0, -1);
+    const r = calcularContorno(novo, novos.map(normToPt), mpu, 0, 0);
+    await off.saveContorno({
+      id: c.id, uuid: c.uuid, pdfId: pdfSelId!,
+      pagina: c.pagina ?? pagina,
+      tipo: novo,
+      cor: c.cor ?? COR_TIPO[novo],
+      geometriaJson: JSON.stringify(novos),
+      espessura: null,
+      metrosPorUnidade: c.metrosPorUnidade ?? String(mpu),
+      area: r.area ? String(r.area) : null,
+      perimetro: r.perimetro ? String(r.perimetro) : null,
+      volume: r.volume ? String(r.volume) : null,
+      contagem: c.contagem ?? null,
+      quantidade: String(r.quantidade),
+      unidade: r.unidade,
+      numero: c.numero,
+      orcamentoItemId: c.orcamentoItemId ?? null,
+      itemEapCodigo: c.itemEapCodigo ?? null,
+      itemDescricao: c.itemDescricao ?? null,
+      rotulo: c.rotulo ?? null,
+      servico: c.servico ?? null,
+    });
+    // poka-yoke: a unidade mudou — se há item vinculado com unidade diferente, avisa
+    if (c.orcamentoItemId) {
+      const it = (itensOrcamento as any[]).find((i) => i.id === c.orcamentoItemId);
+      if (it && !unidadesCompativeis(r.unidade, it.unidade)) {
+        toast.warning(`A unidade virou ${r.unidade}, mas o item vinculado é em ${it.unidade} — confira o vínculo.`, { duration: 7000 });
+      }
+    }
+    toast.success(novo === "area" ? "Agora medindo ÁREA (m²)." : "Agora medindo PERÍMETRO (m).");
   }
 
   // Calcula os pontos resultantes de arrastar um handle até `p` ([0..1]).
@@ -2701,7 +3165,7 @@ export default function MedicaoLevantamento() {
     return cantosDoBox({ x0, y0, x1, y1 });
   }
 
-  function onHandleDown(e: React.PointerEvent, c: any, kind: "vertex" | "corner" | "edge" | "move", idx: number) {
+  function onHandleDown(e: React.PointerEvent, c: any, kind: "vertex" | "corner" | "edge" | "move" | "mid", idx: number) {
     e.stopPropagation();
     e.preventDefault();
     if (travado) return; // Rev. 4797 — consolidado = geometria intocável
@@ -2719,7 +3183,17 @@ export default function MedicaoLevantamento() {
     ptrsRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     let base: GeoPonto[] = [];
     try { base = JSON.parse(c.geometriaJson || "[]"); } catch { /* */ }
-    editRef.current = { cont: c, kind, idx, base, rect: detectRectBox(base), cur: base, p0: getPtFromClient(e.clientX, e.clientY), pid: e.pointerId };
+    // Rev. 4861 — alça no MEIO da linha: tocar insere um vértice novo ali e já
+    // sai arrastando (idx = segmento; o novo ponto entra depois dele).
+    let kindEf: "vertex" | "corner" | "edge" | "move" = kind === "mid" ? "vertex" : kind;
+    let idxEf = idx;
+    if (kind === "mid" && base[idx]) {
+      const a = base[idx], b = base[(idx + 1) % base.length];
+      const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      base = [...base.slice(0, idx + 1), mid, ...base.slice(idx + 1)];
+      idxEf = idx + 1;
+    }
+    editRef.current = { cont: c, kind: kindEf, idx: idxEf, base, rect: kind === "mid" ? null : detectRectBox(base), cur: base, p0: getPtFromClient(e.clientX, e.clientY), pid: e.pointerId };
     setEditDrag({ contId: c.id, pts: base });
   }
   function onHandleMove(e: React.PointerEvent) {
@@ -2840,6 +3314,8 @@ export default function MedicaoLevantamento() {
       itemDescricao: c.itemDescricao ?? null,
       rotulo: c.rotulo ?? null,
       servico: c.servico ?? null,
+      // rodapé gravado: quantidade segue perímetro × altura, nunca a área genérica
+      ...rodapeOverride(c, r.perimetro ? String(r.perimetro) : null),
     });
   }
 
@@ -3301,6 +3777,38 @@ export default function MedicaoLevantamento() {
     return m;
   }, [campo]);
 
+  // Task 150 — busca overlay (modo Ronda): localizar um ambiente pelo rótulo e
+  // CENTRAR a planta nele (a planta é a única navegação — sem lista de cards).
+  const rondaContornosBusca = useMemo(() => {
+    if (!rondaMode) return [] as any[];
+    const f = rondaBusca.trim().toLowerCase();
+    const vivos = ((campo?.contornos ?? []) as any[]).filter((c) => !c.deletedAt && Number(c.id) > 0);
+    if (!f) return vivos.slice(0, 20);
+    return vivos.filter((c) =>
+      String(c.rotulo || "").toLowerCase().includes(f)
+      || String(c.servico || "").toLowerCase().includes(f)
+      || String(c.numero ?? "").includes(f)).slice(0, 30);
+  }, [rondaMode, rondaBusca, campo]);
+  const rondaCentrar = (c: any) => {
+    if (c.pdfId && c.pdfId !== pdfSelId) setPdfSelId(c.pdfId);
+    setSelContornos(new Set([Number(c.id)]));
+    setRondaBuscaOpen(false);
+    let pts: GeoPonto[] = [];
+    try { pts = JSON.parse(c.geometriaJson || "[]"); } catch { /* */ }
+    if (!pts.length) return;
+    const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
+    const cy = pts.reduce((s, p) => s + p.y, 0) / pts.length;
+    setTimeout(() => {
+      const el = canvasWrapRef.current;
+      if (!el) return;
+      el.scrollTo({
+        left: Math.max(0, cx * el.scrollWidth - el.clientWidth / 2),
+        top: Math.max(0, cy * el.scrollHeight - el.clientHeight / 2),
+        behavior: "smooth",
+      });
+    }, 300);
+  };
+
   if (loadingCampo) {
     return <DashboardLayout><div className="flex justify-center py-20"><Loader2 className="h-6 w-6 animate-spin text-gray-400" /></div></DashboardLayout>;
   }
@@ -3323,7 +3831,9 @@ export default function MedicaoLevantamento() {
               <span className="truncate">Levantamento {String(campo.numero).padStart(3, "0")}{campo.titulo ? ` — ${campo.titulo}` : ""}</span>
             </h1>
             <p className="text-[11px] text-gray-500 truncate leading-tight">
-              {isTerceiro
+              {rondaMode
+                ? "Ronda do Dia — levantamento e produção na planta"
+                : isTerceiro
                 ? `${contrato?.numero ?? ""}${contrato?.objeto ? ` · ${contrato.objeto}` : ""}${contrato?.empresaTerceiraNome ? ` · ${contrato.empresaTerceiraNome}` : ""}`
                 : `${contrato?.nomeProjeto ?? ""} · ${contrato?.cliente ?? ""}`}
             </p>
@@ -3401,8 +3911,18 @@ export default function MedicaoLevantamento() {
                 )}
               </PopoverContent>
             </Popover>
+            {/* Task 150 — modo RONDA: busca overlay (a planta é a única
+                navegação) e sem Consolidar/Memória/Boletim — isso continua na
+                tela do Medição. */}
+            {rondaMode && (
+              <Button size="sm" variant={rondaBuscaOpen ? "default" : "outline"} className="h-9 gap-1.5"
+                onClick={() => { setRondaBuscaOpen((v) => !v); setRondaBusca(""); }}>
+                <SearchIcon className="h-4 w-4" />
+                <span className="hidden md:inline">Buscar ambiente</span>
+              </Button>
+            )}
             {/* Rev. 4797 — Consolidar/Desconsolidar (Poka-Yoke) */}
-            {travado ? (
+            {rondaMode ? null : travado ? (
               <Button size="sm" variant="outline" className="gap-1.5 h-9 border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
                 disabled={desconsolidarM.isPending}
                 onClick={() => askConfirm({
@@ -3472,15 +3992,15 @@ export default function MedicaoLevantamento() {
             )}
             {/* Rev. 4837 — um botão só: abre o visualizador da memória com o
                 campo de assinatura embaixo (terceiros). Cliente: viewer puro. */}
-            <Button size="sm" variant="outline"
+            {!rondaMode && <Button size="sm" variant="outline"
               className={`gap-1.5 h-9 ${isTerceiro && memoriaAssinada ? "border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100" : isTerceiro && !travado && envelopeLev ? "border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100" : ""}`}
               onClick={abrirMemoriaDlg}>
               {isTerceiro && memoriaAssinada ? <BadgeCheck className="h-4 w-4" /> : <Calculator className="h-4 w-4" />}
               <span className="hidden md:inline">Memória de cálculo{isTerceiro && !travado && envelopeLev && !memoriaAssinada ? ` (${(envelopeLev.signatarios || []).filter((s: any) => s.status === "assinado").length}/${(envelopeLev.signatarios || []).filter((s: any) => s.papel !== "testemunha").length})` : ""}</span>
-            </Button>
+            </Button>}
             {/* "Gerar boletim" é exclusivo da Medição de Cliente. No fluxo de Terceiros o
                 levantamento é vinculado à medição na aba "Medições" do contrato. */}
-            {!isTerceiro && (
+            {!isTerceiro && !rondaMode && (
               <Button size="sm" className="gap-1.5 h-9" disabled={gerarBoletimM.isPending} onClick={handleGerarBoletim}>
                 {gerarBoletimM.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
                 Gerar boletim
@@ -3488,6 +4008,41 @@ export default function MedicaoLevantamento() {
             )}
           </div>
         </div>
+
+        {/* Task 150 — overlay de BUSCA do modo Ronda: digita o rótulo, toca no
+            resultado e a planta centraliza/destaca o ambiente. */}
+        {rondaMode && rondaBuscaOpen && (
+          <div className="shrink-0 rounded-lg border bg-white shadow-sm p-2 space-y-1.5">
+            <div className="relative">
+              <SearchIcon className="h-4 w-4 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <Input autoFocus className="h-10 pl-8 rounded-lg" placeholder="Buscar ambiente (rótulo, serviço ou nº)…"
+                value={rondaBusca} onChange={(e) => setRondaBusca(e.target.value)} />
+            </div>
+            <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto">
+              {rondaContornosBusca.length === 0 ? (
+                <span className="text-xs text-gray-400 px-1 py-1">Nenhum ambiente encontrado.</span>
+              ) : rondaContornosBusca.map((c: any) => {
+                const pctR = rondaPctDe(Number(c.id), String(c.servico || ""));
+                const done = pctR >= 99.99;
+                return (
+                  <button key={c.id} type="button" onClick={() => rondaCentrar(c)}
+                    className={`rounded-full border px-3 py-1.5 text-[12px] font-medium active:scale-95 flex items-center gap-1 ${done ? "border-emerald-300 bg-emerald-50 text-emerald-700" : pctR > 0 ? "border-amber-300 bg-amber-50 text-amber-700" : "border-slate-200 bg-white text-gray-600"}`}>
+                    <MapPin className="h-3 w-3" />
+                    {c.rotulo || `${c.servico || c.tipo} nº ${c.numero ?? c.id}`}
+                    <span className="text-[10px] opacity-70">{done ? "100%" : pctR > 0 ? `${pctR.toFixed(0)}%` : ""}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+        {rondaMode && (
+          <div className="shrink-0 flex items-center gap-3 text-[10px] text-gray-500 px-1">
+            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-500/60 border border-emerald-500" /> feito</span>
+            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-amber-500/50 border border-amber-500" /> parcial</span>
+            <span className="flex items-center gap-1"><MousePointer2 className="w-3 h-3" /> Selecionar + toque no ambiente = apontar produção; demais ferramentas desenham o levantamento</span>
+          </div>
+        )}
 
         {/* <md (tablet em pé): 2 LINHAS de altura travada — planta em cima (~62%),
             painel embaixo com rolagem própria. md+: 2 colunas lado a lado. */}
@@ -3707,15 +4262,15 @@ export default function MedicaoLevantamento() {
                   {/* Rev. 4792 — categorias de PERÍMETRO (ex.: sanca, tabica, rodapé)
                       também ganham Retângulo e Desenho livre: a forma fechada vira
                       metros lineares do contorno. */}
-                  {svcAtivoObj && ["area", "parede", "perimetro", ""].includes(String(svcAtivoObj.tipoMedida ?? "")) && (
+                  {svcAtivoObj && (
                     <>
                       <div className="h-6 w-px bg-border mx-1" />
+                      {/* Rev. 4849 — decisão do user: TODAS as ferramentas de desenho em
+                          QUALQUER categoria (ele escolhe o que usar): Polilinha (área),
+                          Linha L×A, Linha/Polilinha linear, Retângulo, Desenho livre —
+                          + Volume quando a categoria é de volume. */}
                       {FERRAMENTAS_DESENHO.filter((f) =>
-                        (svcAtivoObj.tipoMedida === "parede"
-                          ? ["parede", "area", "retangulo", "livre"]
-                          : svcAtivoObj.tipoMedida === "perimetro"
-                            ? ["perimetro", "retangulo", "livre"]
-                            : ["area", "retangulo", "livre"]).includes(f.key),
+                        ["area", "parede", "perimetro", "retangulo", "livre", ...(svcAtivoObj.tipoMedida === "volume" ? ["volume"] : [])].includes(f.key),
                       ).map((f) => (
                         <Button
                           key={f.key} size="sm" variant={tool === f.key ? "default" : "ghost"} className="h-9 gap-1"
@@ -3723,7 +4278,7 @@ export default function MedicaoLevantamento() {
                           style={tool === f.key ? { backgroundColor: (svcAtivoObj?.cor as string) || f.cor } : {}}
                           title={f.label}
                         >
-                          {f.icon}{f.key === "area" ? "Pontos" : f.key === "perimetro" ? "Pontos (linear)" : f.key === "parede" ? "Linha (L×A)" : f.label}
+                          {f.icon}{f.key === "area" ? "Polyline" : f.key === "perimetro" ? "Linha/Polyline" : f.key === "parede" ? "Linha (L×A)" : f.label}
                         </Button>
                       ))}
                       {/* Rev. 4847 — assistentes de traçado (só DXF, ferramentas ponto-a-ponto) */}
@@ -3795,6 +4350,13 @@ export default function MedicaoLevantamento() {
                       </div>
                     </PopoverContent>
                   </Popover>
+                  <Button
+                    size="sm" variant={ortoOn ? "default" : "ghost"} className="h-9 gap-1"
+                    onClick={() => setOrtoOn((v) => !v)}
+                    title="ORTO (F8): o próximo ponto da polilinha trava na horizontal/vertical do último vértice — linha sempre reta."
+                  >
+                    <PencilLine className="h-4 w-4" />Orto
+                  </Button>
                   <div className="h-6 w-px bg-border mx-1" />
                   {/* Estilo do desenho: cor (novos contornos) + opacidade do preenchimento */}
                   <Popover>
@@ -4119,8 +4681,16 @@ export default function MedicaoLevantamento() {
                                 </g>
                               );
                             }
+                            // Task 150 — modo RONDA: pintura por STATUS de produção
+                            // (verde = 100%, âmbar = parcial, cor normal = pendente).
+                            let fillCor = cor, fillOp = fecha ? (sel ? Math.min(0.55, fillOpacity + 0.18) : fillOpacity) : 0;
+                            if (rondaMode && fecha && Number(c.id) > 0) {
+                              const pctR = rondaPctDe(Number(c.id), String(c.servico || ""));
+                              if (pctR >= 99.99) { fillCor = "#10b981"; fillOp = sel ? 0.6 : 0.45; }
+                              else if (pctR > 0) { fillCor = "#f59e0b"; fillOp = sel ? 0.55 : 0.4; }
+                            }
                             return (
-                              <path key={c.id} d={d} fill={fecha ? cor : "none"} fillOpacity={fecha ? (sel ? Math.min(0.55, fillOpacity + 0.18) : fillOpacity) : 0} stroke={sel ? "#1d4ed8" : cor} strokeWidth={(fecha ? 0.003 : 0.004) + (sel ? 0.0025 : 0)} vectorEffect="non-scaling-stroke" {...moveProps} />
+                              <path key={c.id} d={d} fill={fecha ? fillCor : "none"} fillOpacity={fillOp} stroke={sel ? "#1d4ed8" : cor} strokeWidth={(fecha ? 0.003 : 0.004) + (sel ? 0.0025 : 0)} vectorEffect="non-scaling-stroke" {...moveProps} />
                             );
                           })}
                           {/* Rev. 3111 — handles de ajuste do contorno selecionado (só 1).
@@ -4138,7 +4708,7 @@ export default function MedicaoLevantamento() {
                             // na tela (~7px de raio), independente do zoom — antes eram fração
                             // da planta e viravam bolões ao aproximar.
                             const hr = 7 / Math.max(pageWidth, 1);
-                            const hp = (kind: "vertex" | "corner" | "edge", idx: number) => ({
+                            const hp = (kind: "vertex" | "corner" | "edge" | "mid", idx: number) => ({
                               onPointerDown: (e: React.PointerEvent) => onHandleDown(e, c, kind, idx),
                               onPointerMove: onHandleMove,
                               onPointerUp: onHandleUp,
@@ -4167,8 +4737,22 @@ export default function MedicaoLevantamento() {
                                 </g>
                               );
                             }
+                            // Rev. 4861 — alça no MEIO de cada linha: tocar insere um vértice
+                            // novo ali e já sai arrastando (edição fácil pedida pelo user).
+                            const fechaPoly = FECHA_POLIGONO(c.tipo);
+                            const nSegs = fechaPoly ? pts.length : pts.length - 1;
+                            const mids: { p: GeoPonto; i: number }[] = [];
+                            for (let i = 0; i < nSegs; i++) {
+                              const a = pts[i], b = pts[(i + 1) % pts.length];
+                              if (Math.hypot(a.x - b.x, a.y - b.y) < hr * 3) continue; // segmento curto: sem alça (não sobrepor)
+                              mids.push({ p: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, i });
+                            }
                             return (
                               <g>
+                                {mids.map(({ p, i }) => (
+                                  <rect key={`em-${i}`} x={p.x - hr * 0.6} y={p.y - hr * 0.6} width={hr * 1.2} height={hr * 1.2}
+                                    fill="#fff" stroke="#1d4ed8" strokeWidth={1.8} strokeDasharray="3 2" vectorEffect="non-scaling-stroke" {...hp("mid", i)} />
+                                ))}
                                 {pts.map((p, i) => (
                                   <circle key={`ev-${i}`} cx={p.x} cy={p.y} r={hr}
                                     fill="#fff" stroke="#1d4ed8" strokeWidth={2.6} vectorEffect="non-scaling-stroke" {...hp("vertex", i)} />
@@ -4514,6 +5098,7 @@ export default function MedicaoLevantamento() {
                         onChange={(v) => { void vincularItemSelecionados(v); }}
                         jaMedidoMap={jaMedidoMap}
                         emptyHint={vincularEmptyHint}
+                        preFiltro={preFiltroDe(null)}
                         placeholder={bulkBusy ? "Aplicando…" : "Vincular item a todos os selecionados…"}
                         disabled={bulkBusy}
                       />
@@ -4610,6 +5195,21 @@ export default function MedicaoLevantamento() {
                           onCommit={(v) => { void salvarRotulo(c, v); }}
                         />
                       </div>
+                      {/* Rev. 4859 — trocar o que o contorno mede (área ↔ perímetro) */}
+                      {(c.tipo === "area" || c.tipo === "perimetro") && !travado && (
+                        <div className="mt-1.5 flex items-center gap-1">
+                          <span className="text-[10px] text-gray-500 mr-0.5">Medindo:</span>
+                          {(["area", "perimetro"] as const).map((t) => (
+                            <button
+                              key={t}
+                              className={`rounded-full px-2 py-0.5 text-[10px] font-semibold border ${c.tipo === t ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-300 hover:border-blue-400"}`}
+                              onClick={() => { if (c.tipo !== t) void alternarAreaPerimetro(c, t); }}
+                            >
+                              {t === "area" ? "Área (m²)" : "Perímetro (m)"}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                       {/* Rev. 4792 — MEDIDAS editáveis no cartão (Poka-Yoke): editar a
                           medida re-escala o desenho e recalcula a área junto — o número
                           nunca desgruda da planta. */}
@@ -4638,7 +5238,14 @@ export default function MedicaoLevantamento() {
                         const parse = (s: string) => parseFloat(s.includes(",") ? s.replace(/\./g, "").replace(",", ".") : s);
                         return (
                           <div className="mt-1.5 rounded-md border border-dashed border-gray-300 bg-gray-50/60 px-2 py-1.5">
-                            <div className="text-[10px] font-medium text-gray-500 mb-1 flex items-center gap-1"><PencilLine className="h-3 w-3" />Medidas (editar recalcula o desenho e a área)</div>
+                            <div className="text-[10px] font-medium text-gray-500 mb-1 flex items-center gap-1">
+                              <PencilLine className="h-3 w-3" />Medidas (editar recalcula o desenho e a área)
+                              {!travado && (
+                                <button type="button" className="ml-auto text-[10px] font-bold text-lime-700 border border-lime-300 rounded px-1.5 py-0.5 active:scale-95"
+                                  title="Endireita o contorno: simplifica os pontos e deixa os traços quase retos exatamente na horizontal/vertical"
+                                  onClick={() => retificarContorno(c)}>Retificar</button>
+                              )}
+                            </div>
                             <div className="flex items-center gap-2 flex-wrap">
                               {rows.map((d) => (
                                 <label key={d.key} className="flex items-center gap-1 text-[11px] text-gray-600">
@@ -4657,15 +5264,103 @@ export default function MedicaoLevantamento() {
                           </div>
                         );
                       })()}
-                      <div className="mt-1.5">
+                      <div className="mt-1.5 space-y-1">
+                        {/* Task 150 — sugestão APRENDIDA: categoria já vinculada
+                            nesta obra → 1 toque confirma (nunca vincula sozinho). */}
+                        {!c.orcamentoItemId && !travado && (() => {
+                          const sug = sugestoesPorServico.get(String(c.servico || ""));
+                          const pre = sug?.preId ? itensVinculaveis.find((i) => i.id === sug.preId) : null;
+                          if (!pre) return null;
+                          return (
+                            <button type="button"
+                              className="w-full text-left rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-800 active:scale-[0.99]"
+                              onClick={() => bindItem(c.id, String(pre.id))}>
+                              ✨ Sugerido (já usado nesta obra): <b>{pre.eapCodigo}</b> · {pre.descricao} — toque para vincular
+                            </button>
+                          );
+                        })()}
                         <VincularItemCombobox
                           items={itensVinculaveis}
                           value={c.orcamentoItemId ? String(c.orcamentoItemId) : ""}
                           onChange={(v) => bindItem(c.id, v)}
                           jaMedidoMap={jaMedidoMap}
                           emptyHint={vincularEmptyHint}
+                          sugestaoIds={sugestoesPorServico.get(String(c.servico || ""))?.ids}
+                          preFiltro={preFiltroDe(c.servico)}
                         />
+                        {/* Rev. 4863 — MÚLTIPLOS itens na mesma área (checkbox):
+                            contrapiso = lona + brita + tela + concreto… */}
+                        {(() => {
+                          const extras = parseItensExtras(c.itensJson);
+                          const qtdC = parseFloat(String(c.quantidade ?? "0")) || 0;
+                          return (
+                            <div className="space-y-1">
+                              {extras.map((e) => (
+                                <div key={e.orcamentoItemId} className="flex items-start gap-1 rounded-md border border-violet-200 bg-violet-50 px-1.5 py-1 text-[11px] text-violet-900">
+                                  <span className="flex-1 break-words leading-tight">
+                                    <b>{e.eapCodigo}</b> · {e.descricao} — {quantidadeExtra(e, qtdC).toLocaleString("pt-BR", { maximumFractionDigits: 2 })} {e.unidade || ""}
+                                  </span>
+                                  {!travado && (
+                                    <button type="button" aria-label="Remover item"
+                                      className="shrink-0 p-0.5 text-violet-500 active:scale-95"
+                                      onClick={() => { void salvarItensMultiplos(c, extras.filter((x) => x.orcamentoItemId !== e.orcamentoItemId)); }}>
+                                      <X className="h-3 w-3" />
+                                    </button>
+                                  )}
+                                </div>
+                              ))}
+                              {!travado && itensVinculaveis.length > 0 && (
+                                <button type="button"
+                                  className="w-full rounded-md border border-dashed border-violet-300 px-2 py-1 text-left text-[11px] text-violet-700 active:scale-[0.99]"
+                                  onClick={() => setMultiDlgContorno(c)}>
+                                  ☑ Vários itens nesta área…{extras.length ? ` (${extras.length})` : ""}
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
+                      {/* Rev. — Desconto de vãos (mapa de vãos da obra) — só áreas em m² de planta vinculada a pavimento */}
+                      {(c.tipo === "area" || c.tipo === "parede") && (c.unidade || "m2") === "m2" && Number(c.id) > 0 && !(c as any).__pending && (
+                        <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+                          <Button size="sm" variant="outline" className="h-6 gap-1 text-[11px] px-2"
+                            onClick={() => setVaosDlgContorno(c)}>
+                            <DoorOpen className="h-3 w-3" />
+                            {c.vaosJson ? "Vãos aplicados" : "Descontar vãos"}
+                          </Button>
+                          {c.vaosJson && (
+                            <span className="text-[10px] text-indigo-600">
+                              −{numFmt(parseFloat(c.descontoVaos || "0"), 2)} m²
+                              {parseFloat(c.requadroMl || "0") > 0 ? ` · requadro ${numFmt(parseFloat(c.requadroMl || "0"), 2)} m` : ""}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      {/* Rev. — Rodapé pela planta: perímetro × altura vira m² (desconta portas do mapa) */}
+                      {c.tipo !== "contagem" && ehServicoRodape(c) && parseFloat(c.perimetro || "0") > 0 && Number(c.id) > 0 && !(c as any).__pending && (
+                        <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+                          <Button size="sm" variant="outline" className="h-6 gap-1 text-[11px] px-2 border-teal-300 text-teal-700"
+                            onClick={() => setRodapeDlgContorno(c)}>
+                            <Ruler className="h-3 w-3" />
+                            Rodapé pela planta (perímetro × altura)
+                          </Button>
+                        </div>
+                      )}
+                      {/* Rev. — Contar nichos do mapa de vãos (contorno de contagem, pago por un) */}
+                      {c.tipo === "contagem" && Number(c.id) > 0 && !(c as any).__pending && (
+                        <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+                          <Button size="sm" variant="outline" className="h-6 gap-1 text-[11px] px-2"
+                            onClick={() => setVaosDlgContorno(c)}>
+                            <Hash className="h-3 w-3" />
+                            {c.vaosJson ? "Nichos contados" : "Contar nichos (mapa)"}
+                          </Button>
+                          {c.vaosJson && (
+                            <span className="text-[10px] text-violet-600">
+                              {numFmt(parseFloat(c.quantidade || "0"), 0)} un pagos aqui
+                            </span>
+                          )}
+                        </div>
+                      )}
                       {/* Fotos vinculadas a este contorno (rastreio) */}
                       <div className="mt-2 border-t pt-2">
                         <div className="flex items-center justify-between">
@@ -4853,6 +5548,48 @@ export default function MedicaoLevantamento() {
         />
       )}
 
+      {/* Rev. 4863 — MÚLTIPLOS itens da EAP no mesmo contorno (checkbox) */}
+      {multiDlgContorno && (
+        <MultiVinculoDialog
+          contorno={multiDlgContorno}
+          items={itensVinculaveis}
+          askNumber={askNumber}
+          onClose={() => setMultiDlgContorno(null)}
+          onSave={(extras) => {
+            const c = multiDlgContorno;
+            setMultiDlgContorno(null);
+            void salvarItensMultiplos(c, extras);
+          }}
+        />
+      )}
+
+      {/* Rev. 4859 — Polyline: o contorno mede área ou perímetro? */}
+      {tipoPrompt && (
+        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/40 p-4" onClick={() => { tipoPrompt.resolve(null); setTipoPrompt(null); }}>
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-4" onClick={(e) => e.stopPropagation()}>
+            <div className="font-semibold text-gray-900">O que este contorno mede?</div>
+            <div className="text-xs text-gray-500 mt-1">Dá pra trocar depois no cartão do contorno, se escolher errado.</div>
+            <div className="grid grid-cols-2 gap-2 mt-3">
+              <button
+                className="rounded-lg border-2 border-blue-600 bg-blue-50 px-3 py-3 text-sm font-bold text-blue-700 active:scale-95"
+                onClick={() => { tipoPrompt.resolve("area"); setTipoPrompt(null); }}
+              >
+                Área
+                <span className="block text-[11px] font-medium text-blue-600">m² (piso, forro, pintura…)</span>
+              </button>
+              <button
+                className="rounded-lg border-2 border-emerald-600 bg-emerald-50 px-3 py-3 text-sm font-bold text-emerald-700 active:scale-95"
+                onClick={() => { tipoPrompt.resolve("perimetro"); setTipoPrompt(null); }}
+              >
+                Perímetro
+                <span className="block text-[11px] font-medium text-emerald-600">m (rodapé, requadro…)</span>
+              </button>
+            </div>
+            <button className="mt-3 w-full text-xs text-gray-500 py-1" onClick={() => { tipoPrompt.resolve(null); setTipoPrompt(null); }}>Cancelar</button>
+          </div>
+        </div>
+      )}
+
       <AlertDialog open={!!confirmDlg} onOpenChange={(o) => { if (!o) setConfirmDlg(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -5000,7 +5737,7 @@ export default function MedicaoLevantamento() {
       </Dialog>
 
       {/* Rev. 4783 — criação rápida de categoria (poka-yoke: nome + o que ela mede) */}
-      <Dialog open={catDialogOpen} onOpenChange={(v) => { setCatDialogOpen(v); if (!v) { setCatNome(""); setCatTipo("area"); setCatPai(""); } }}>
+      <Dialog open={catDialogOpen} onOpenChange={(v) => { setCatDialogOpen(v); if (!v) { setCatNome(""); setCatTipo("area"); setCatPai(""); setCatTipoManual(false); } }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><Plus className="h-4 w-4" />Incluir categoria</DialogTitle>
@@ -5008,7 +5745,15 @@ export default function MedicaoLevantamento() {
           <div className="space-y-3">
             <div>
               <p className="text-xs font-medium text-gray-600 mb-1">Nome da categoria</p>
-              <Input autoFocus value={catNome} onChange={(e) => setCatNome(e.target.value)} placeholder="Ex.: Revestimento, Pastilha, Teto, Parede, Piso…" />
+              <Input autoFocus value={catNome} onChange={(e) => {
+                const v = e.target.value;
+                setCatNome(v);
+                // sugestão automática pelo nome (só enquanto o tipo não foi escolhido à mão)
+                if (!catTipoManual && !catPai) {
+                  if (/concret|enchiment|grout|graute/i.test(v)) setCatTipo("volume");
+                  else if (/rodap|tubula|requadr/i.test(v)) setCatTipo("perimetro");
+                }
+              }} placeholder="Ex.: Revestimento, Pastilha, Teto, Parede, Piso…" />
             </div>
             <div>
               <p className="text-xs font-medium text-gray-600 mb-1">Subcategoria de (opcional)</p>
@@ -5045,7 +5790,7 @@ export default function MedicaoLevantamento() {
                   { v: "contagem", t: "Contagem (un)", d: "toques na planta — louças, metais, furos, pontos elétricos" },
                 ].map((o) => (
                   <button
-                    key={o.v} type="button" onClick={() => setCatTipo(o.v)}
+                    key={o.v} type="button" onClick={() => { setCatTipo(o.v); setCatTipoManual(true); }}
                     className={`text-left rounded-lg border-2 px-3 py-2 ${catTipo === o.v ? "border-blue-600 bg-blue-50" : "border-gray-200"}`}
                   >
                     <p className="text-sm font-semibold">{o.t}</p>
@@ -5077,7 +5822,7 @@ export default function MedicaoLevantamento() {
                 // Rev. 4819 — cria no catálogo GLOBAL: vale p/ todos os contratos.
                 salvarCatalogoMut.mutate(
                   { companyId, nome, cor, tipoMedida: catTipo as any, parentChave: catPai || null, ordem },
-                  { onSuccess: async (row: any) => { setCatDialogOpen(false); setCatNome(""); setCatTipo("area"); setCatPai(""); await utils.medicao.listServicosLevantamento.invalidate({ companyId, medicaoCampoId: campoId }); if (row?.chave) setServicoAtivo(row.chave); const t = (catTipo as FerramentaDesenho) || "area"; setTool(t); setDraft([]); } },
+                  { onSuccess: async (row: any) => { setCatDialogOpen(false); setCatNome(""); setCatTipo("area"); setCatPai(""); setCatTipoManual(false); await utils.medicao.listServicosLevantamento.invalidate({ companyId, medicaoCampoId: campoId }); if (row?.chave) setServicoAtivo(row.chave); const t = (catTipo as FerramentaDesenho) || "area"; setTool(t); setDraft([]); } },
                 );
               }}
             >
@@ -5178,6 +5923,7 @@ export default function MedicaoLevantamento() {
                     value={s.orcamentoItemId ? String(s.orcamentoItemId) : ""}
                     jaMedidoMap={jaMedidoMap}
                     emptyHint={vincularEmptyHint}
+                    preFiltro={preFiltroDe(s.chave)}
                     placeholder="Vincular item da EAP (1x por serviço)…"
                     onChange={(idStr) => {
                       const itemId = idStr ? parseInt(idStr) : null;
@@ -5278,12 +6024,180 @@ export default function MedicaoLevantamento() {
           </p>
         </DialogContent>
       </Dialog>
+
+      {/* Rev. — Descontar vãos do contorno (mapa de vãos da obra) */}
+      {vaosDlgContorno && (
+        <VaosContornoDialog
+          companyId={companyId}
+          contorno={((campo?.contornos ?? []) as any[]).find((x: any) => x.id === vaosDlgContorno.id) || vaosDlgContorno}
+          pavimentoId={(pdfs.find((p: any) => p.id === vaosDlgContorno.pdfId) as any)?.pavimentoId ?? null}
+          travado={travado}
+          onClose={() => setVaosDlgContorno(null)}
+          onApplied={() => { utils.medicao.getCampo.invalidate({ id: campoId, companyId }); }}
+        />
+      )}
+
+      {/* Rev. — Rodapé pela planta (perímetro × altura, descontando portas do Mapa de Vãos) */}
+      {rodapeDlgContorno && (
+        <RodapeContornoDialog
+          companyId={companyId}
+          contorno={((campo?.contornos ?? []) as any[]).find((x: any) => x.id === rodapeDlgContorno.id) || rodapeDlgContorno}
+          pavimentoId={(pdfs.find((p: any) => p.id === rodapeDlgContorno.pdfId) as any)?.pavimentoId ?? null}
+          travado={travado}
+          saving={rodapeSaving}
+          onClose={() => setRodapeDlgContorno(null)}
+          onAplicar={(area, memoria) => {
+            const alvo = ((campo?.contornos ?? []) as any[]).find((x: any) => x.id === rodapeDlgContorno.id) || rodapeDlgContorno;
+            void salvarRodape(alvo, area, memoria);
+          }}
+        />
+      )}
+
+      {/* Task 150 — dialog de APONTAMENTO DE PRODUÇÃO (modo Ronda): mesmo
+          componente da tela da Ronda; toque no ambiente com a seleção abre. */}
+      {rondaMode && rondaNovo && (
+        <ApontamentoDialog
+          companyId={companyId}
+          obraId={rondaParams.obraId}
+          novo={rondaNovo}
+          setNovo={setRondaNovo}
+          servicos={rondaDialogServicos}
+          jaPct={rondaNovo.contornoId ? rondaPctDe(rondaNovo.contornoId, rondaNovo.servico) : 0}
+        />
+      )}
     </DashboardLayout>
   );
 }
 
 // Rev. 3097 — Diálogo numérico no app (substitui window.prompt). Aceita vírgula
 // decimal pt-BR ("2,5" = 2.5) e remove separador de milhar.
+// Rev. 4863 — Dialog de MÚLTIPLOS itens da EAP por contorno (checkbox): a mesma
+// área carrega várias atividades (contrapiso = lona + brita + tela + concreto…).
+// Unidade diferente do contorno pede o fator na hora (m³ = espessura, kg = taxa,
+// un/m = quantidade) — poka-yoke: nada entra sem quantidade definida.
+function MultiVinculoDialog({
+  contorno, items, askNumber, onSave, onClose,
+}: {
+  contorno: any;
+  items: { id: number; eapCodigo: string; descricao: string; unidade: string; grupoPath: string; search: string }[];
+  askNumber: (opts: { title: string; hint?: string; suffix?: string; initial?: string }) => Promise<number | null>;
+  onSave: (extras: VinculoExtra[]) => void;
+  onClose: () => void;
+}) {
+  const iniciais = useMemo(() => parseItensExtras(contorno.itensJson), [contorno]);
+  const [sel, setSel] = useState<Map<number, VinculoExtra>>(
+    () => new Map(iniciais.map((e) => [e.orcamentoItemId, e])),
+  );
+  const [q, setQ] = useState("");
+  const qtdC = parseFloat(String(contorno.quantidade ?? "0")) || 0;
+  const uC = normalizarUnidade(contorno.unidade || "m2");
+  const principalId = contorno.orcamentoItemId ? Number(contorno.orcamentoItemId) : null;
+
+  const filtrados = useMemo(() => {
+    const toks = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const base = toks.length ? items.filter((i) => toks.every((t) => i.search.includes(t))) : items;
+    // selecionados sempre visíveis no topo
+    const selecionados = base.filter((i) => sel.has(i.id));
+    const resto = base.filter((i) => !sel.has(i.id));
+    return [...selecionados, ...resto].slice(0, 200);
+  }, [items, q, sel]);
+
+  const toggle = async (it: { id: number; eapCodigo: string; descricao: string; unidade: string }) => {
+    if (sel.has(it.id)) {
+      setSel((prev) => { const m = new Map(prev); m.delete(it.id); return m; });
+      return;
+    }
+    const uI = normalizarUnidade(it.unidade);
+    let e: VinculoExtra = {
+      orcamentoItemId: it.id, eapCodigo: it.eapCodigo, descricao: it.descricao,
+      unidade: it.unidade, modo: "fator", fator: 1,
+    };
+    if (uI && uC && uI !== uC) {
+      if (uI === "m3" && uC === "m2") {
+        const cm = await askNumber({ title: "Espessura da camada", hint: `${it.descricao} — m³ = área (${qtdC.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} m²) × espessura`, suffix: "cm" });
+        if (cm == null || cm <= 0) return;
+        e = { ...e, modo: "fator", fator: cm / 100 };
+      } else if (uI === "kg" && uC === "m2") {
+        const kg = await askNumber({ title: "Taxa de consumo", hint: `${it.descricao} — kg = área × taxa`, suffix: "kg/m²" });
+        if (kg == null || kg <= 0) return;
+        e = { ...e, modo: "fator", fator: kg };
+      } else if (uI === "m" && uC === "m2") {
+        const per = parseFloat(String(contorno.perimetro ?? "0")) || 0;
+        const m = await askNumber({ title: "Metros lineares", hint: `${it.descricao} — sugerido: perímetro do ambiente`, suffix: "m", initial: per > 0 ? String(per.toFixed(2)).replace(".", ",") : undefined });
+        if (m == null || m <= 0) return;
+        e = { ...e, modo: "fixo", quantidade: m };
+      } else {
+        const qd = await askNumber({ title: "Quantidade", hint: `${it.descricao} — unidade "${it.unidade}" difere do contorno ("${contorno.unidade || "m2"}")`, suffix: it.unidade || "" });
+        if (qd == null || qd <= 0) return;
+        e = { ...e, modo: "fixo", quantidade: qd };
+      }
+    }
+    setSel((prev) => new Map(prev).set(it.id, e));
+  };
+
+  return (
+    <div className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4" onClick={onClose}>
+      <div className="bg-white rounded-t-xl sm:rounded-xl shadow-xl w-full sm:max-w-lg flex flex-col max-h-[85vh]" onClick={(e) => e.stopPropagation()}>
+        <div className="p-3 pb-2 border-b">
+          <div className="font-semibold text-gray-900 text-sm break-words">
+            Vários itens nesta área — {contorno.rotulo || contorno.servico || `nº ${contorno.numero ?? ""}`}
+          </div>
+          <div className="text-[11px] text-gray-500 mt-0.5">
+            Marque tudo que acontece nesta área ({qtdC.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} {contorno.unidade || "m2"}). Item em m³/kg pergunta a espessura/taxa na hora.
+          </div>
+          <input
+            value={q} onChange={(e) => setQ(e.target.value)}
+            placeholder="Buscar por código, atividade ou pavimento…"
+            className="mt-2 w-full h-9 rounded-md border border-gray-300 px-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
+          />
+        </div>
+        <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
+          {filtrados.length === 0 && (
+            <div className="px-3 py-6 text-center text-xs text-gray-500">Nada encontrado{q.trim() ? ` para “${q.trim()}”` : ""}.</div>
+          )}
+          {filtrados.map((it) => {
+            const marcado = sel.has(it.id);
+            const ePrincipal = principalId === it.id;
+            const e = sel.get(it.id);
+            return (
+              <button key={it.id} type="button" disabled={ePrincipal}
+                className={cn(
+                  "w-full flex items-start gap-2 rounded-md px-2 py-1.5 text-left text-xs",
+                  ePrincipal ? "bg-gray-50 opacity-60" : marcado ? "bg-violet-50 border border-violet-200" : "active:bg-gray-50",
+                )}
+                onClick={() => { void toggle(it); }}>
+                <span className={cn(
+                  "mt-0.5 h-4 w-4 shrink-0 rounded border flex items-center justify-center",
+                  (marcado || ePrincipal) ? "bg-violet-600 border-violet-600 text-white" : "border-gray-300",
+                )}>
+                  {(marcado || ePrincipal) ? <Check className="h-3 w-3" /> : null}
+                </span>
+                <span className="flex-1 break-words leading-tight">
+                  <b>{it.eapCodigo}</b> · {it.descricao} <span className="text-gray-400">({it.unidade || "—"})</span>
+                  {it.grupoPath ? <span className="block text-[10px] text-gray-400">{it.grupoPath}</span> : null}
+                  {ePrincipal ? <span className="block text-[10px] text-gray-500">Item principal do contorno (já vinculado)</span> : null}
+                  {marcado && e ? (
+                    <span className="block text-[10px] text-violet-700">
+                      → {quantidadeExtra(e, qtdC).toLocaleString("pt-BR", { maximumFractionDigits: 2 })} {e.unidade || ""}
+                      {e.modo !== "fixo" && normalizarUnidade(e.unidade) === "m3" ? ` (espessura ${(parseFloat(String(e.fator)) * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} cm)` : ""}
+                    </span>
+                  ) : null}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        <div className="p-3 pt-2 border-t flex gap-2">
+          <Button variant="outline" className="flex-1 h-10" onClick={onClose}>Cancelar</Button>
+          <Button className="flex-1 h-10" onClick={() => onSave(Array.from(sel.values()))}>
+            Salvar {sel.size ? `(${sel.size} ${sel.size === 1 ? "item" : "itens"})` : ""}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function NumberPromptDialog({
   data,
   onResolve,

@@ -31,12 +31,46 @@ import {
 import { eq, and, isNull, desc, sql, inArray } from "drizzle-orm";
 import { storagePut } from "../storage";
 import { TRPCError } from "@trpc/server";
-import { consolidarContornos } from "../../shared/levantamentoConsolidado";
+import { consolidarContornos, parseItensExtras, quantidadeExtra } from "../../shared/levantamentoConsolidado";
 import { unidadesCompativeis } from "../../shared/unidadeCompat";
 import { aplicarLevantamentoNaMedicaoTerceiro } from "../terceiroLevantamentoSync";
 
 // Rev. 4792 — guard de UNIDADE no vínculo contorno → item da planilha.
 // Retorna mensagem de erro se as unidades divergem; null se ok/sem info.
+// Rev. 4863 — vínculos MÚLTIPLOS por contorno (itens_json): sanitização
+// estrutural server-side. Nunca confia no client: reconstrói cada entrada com
+// tipos/limites fixos e só mantém itens que pertencem a orçamentos DESTA
+// empresa (anti-IDOR / anti-burla de apropriação financeira).
+async function sanitizarItensJson(db: any, companyId: number, raw: unknown): Promise<string | null> {
+  const lista = parseItensExtras(raw as any).slice(0, 50);
+  if (!lista.length) return null;
+  const ids = Array.from(new Set(lista.map((e) => e.orcamentoItemId)));
+  const validos = await db
+    .select({ id: orcamentoItens.id })
+    .from(orcamentoItens)
+    .innerJoin(orcamentos, eq(orcamentos.id, orcamentoItens.orcamentoId))
+    .where(and(inArray(orcamentoItens.id, ids), eq(orcamentos.companyId, companyId)));
+  const ok = new Set(validos.map((v: any) => Number(v.id)));
+  const limpos = lista
+    .filter((e) => ok.has(e.orcamentoItemId))
+    .map((e) => {
+      const modo = e.modo === "fixo" ? "fixo" : "fator";
+      const fator = parseFloat(String(e.fator ?? "1"));
+      const quantidade = parseFloat(String(e.quantidade ?? "0"));
+      return {
+        orcamentoItemId: e.orcamentoItemId,
+        eapCodigo: typeof e.eapCodigo === "string" ? e.eapCodigo.slice(0, 50) : null,
+        descricao: typeof e.descricao === "string" ? e.descricao.slice(0, 500) : null,
+        unidade: typeof e.unidade === "string" ? e.unidade.slice(0, 15) : null,
+        modo,
+        fator: modo === "fator" ? (Number.isFinite(fator) && fator > 0 ? fator : 1) : null,
+        quantidade: modo === "fixo" ? (Number.isFinite(quantidade) && quantidade > 0 ? quantidade : 0) : null,
+      };
+    })
+    .filter((e) => e.modo === "fator" || (e.quantidade ?? 0) > 0);
+  return limpos.length ? JSON.stringify(limpos) : null;
+}
+
 async function checarUnidadeVinculo(db: any, campoId: number, orcamentoItemId: number | null | undefined, unidadeContorno: string | null | undefined): Promise<string | null> {
   if (!orcamentoItemId || !unidadeContorno) return null;
   const [campo] = await db.select({ origem: medicaoCampo.origem }).from(medicaoCampo).where(eq(medicaoCampo.id, campoId)).limit(1);
@@ -79,17 +113,94 @@ const origemCampoCond = (origem: "cliente" | "terceiro") =>
     ? eq(medicaoCampo.origem, "terceiro")
     : sql`(${medicaoCampo.origem} IS DISTINCT FROM 'terceiro')`;
 
+// ── PLANTA É DA OBRA ──────────────────────────────────────────────────────────
+// A biblioteca de plantas ancora na OBRA (medicao_campo.obra_id, contrato_id=0):
+// vale para TODOS os contratos (cliente e terceiros) e sobrevive à exclusão de
+// qualquer contrato. O contrato só entra no APONTAMENTO/levantamento (automático
+// quando há um contrato só; escolha do usuário quando há mais de um).
+// Migração lazy: adota a biblioteca legada (por contrato) cujas plantas apontam
+// pra pavimentos desta obra, re-ancorando-a; senão cria uma nova.
+async function resolverBibliotecaObra(
+  db: any,
+  companyId: number,
+  obraId: number,
+): Promise<{ id: number }> {
+  return await db.transaction(async (tx: any) => {
+    // lock por (company, -obra): keyspace separado dos locks legados contrato*2
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(${companyId}::int, ${-obraId}::int)`);
+    const [lib] = await tx
+      .select({ id: medicaoCampo.id })
+      .from(medicaoCampo)
+      .where(and(
+        eq(medicaoCampo.companyId, companyId),
+        eq(medicaoCampo.obraId, obraId),
+        eq(medicaoCampo.status, "biblioteca"),
+        isNull(medicaoCampo.deletedAt),
+      ))
+      .orderBy(medicaoCampo.id)
+      .limit(1);
+    if (lib) return lib;
+    // adoção de biblioteca legada (keyed por contrato) com plantas desta obra
+    const adotada = await tx.execute(sql`
+      SELECT mc.id FROM medicao_campo mc
+      WHERE mc.company_id = ${companyId} AND mc.status = 'biblioteca'
+        AND mc.deleted_at IS NULL AND mc.obra_id IS NULL
+        AND EXISTS (
+          SELECT 1 FROM medicao_campo_pdfs p
+          JOIN obra_pavimentos op ON op.id = p.pavimento_id
+          WHERE p.medicao_campo_id = mc.id AND p.deleted_at IS NULL
+            AND op.obra_id = ${obraId} AND op.company_id = ${companyId}
+        )
+      ORDER BY mc.id LIMIT 1
+    `).then((r: any) => (r.rows ?? r)[0] ?? null);
+    if (adotada) {
+      const id = Number(adotada.id);
+      await tx.update(medicaoCampo)
+        .set({ obraId, contratoId: 0, titulo: "Plantas da obra", atualizadoEm: new Date() })
+        .where(and(eq(medicaoCampo.id, id), eq(medicaoCampo.companyId, companyId)));
+      return { id };
+    }
+    const [novo] = await tx.insert(medicaoCampo).values({
+      companyId,
+      contratoId: 0,
+      obraId,
+      numero: 0,
+      titulo: "Plantas da obra",
+      status: "biblioteca",
+      origem: "cliente",
+      medicaoId: null,
+    }).returning({ id: medicaoCampo.id });
+    return novo;
+  });
+}
+
 async function resolverBibliotecaPlantas(
   db: any,
   companyId: number,
   contratoId: number,
   origem: "cliente" | "terceiro",
 ): Promise<{ id: number }> {
-  // Find-or-create da biblioteca. Sem UNIQUE no schema (regra de ouro: nenhum
-  // ALTER), a corrida "duas abas criam a biblioteca ao mesmo tempo" geraria 2
-  // bibliotecas — e `getCampo` lê só a de menor id, "sumindo" com PDFs gravados
-  // na outra. Serializa via pg_advisory_xact_lock por (company, contrato, origem)
-  // dentro de uma transação: o 2º chamador espera, depois encontra a já criada.
+  // Resolve a OBRA do contrato e delega pra biblioteca DA OBRA (planta é da
+  // obra, não do contrato). Fallback legado (contrato sem obra resolvível):
+  // biblioteca keyed por contrato+origem, como antes da mudança.
+  let obraId = 0;
+  try {
+    if (origem === "terceiro") {
+      const r = await db.execute(sql`
+        SELECT obra_id FROM terceiro_contratos
+        WHERE id = ${contratoId} AND company_id = ${companyId} LIMIT 1`);
+      obraId = Number(((r.rows ?? r)[0] ?? {}).obra_id) || 0;
+    } else {
+      const r = await db.execute(sql`
+        SELECT pp.obra_id FROM medicao_contratos mcc
+        JOIN planejamento_projetos pp ON pp.id = mcc.projeto_id AND pp.company_id = ${companyId}
+        WHERE mcc.id = ${contratoId} AND mcc.company_id = ${companyId} LIMIT 1`);
+      obraId = Number(((r.rows ?? r)[0] ?? {}).obra_id) || 0;
+    }
+  } catch { obraId = 0; }
+  if (obraId > 0) return resolverBibliotecaObra(db, companyId, obraId);
+
+  // ── fallback legado (contrato órfão/sem obra) ──
   const lockKey2 = contratoId * 2 + (origem === "terceiro" ? 1 : 0);
   return await db.transaction(async (tx: any) => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(${companyId}::int, ${lockKey2}::int)`);
@@ -181,9 +292,11 @@ async function assertCampoNaoConsolidado(db: any, campoId: number, companyId: nu
 // migração dos serviços custom já criados por levantamento (viram globais).
 const SEED_SERVICOS = [
   { chave: "alvenaria",  nome: "Alvenaria",  cor: "#dc2626", tipoMedida: "parede",   derivaDe: null,        fator: "1", parentChave: null, ordem: 1 },
-  { chave: "chapisco",   nome: "Chapisco",   cor: "#ea580c", tipoMedida: "area",     derivaDe: "alvenaria", fator: "2", parentChave: null, ordem: 2 },
-  { chave: "emboco",     nome: "Emboço",     cor: "#ca8a04", tipoMedida: "area",     derivaDe: "alvenaria", fator: "2", parentChave: null, ordem: 3 },
-  { chave: "reboco",     nome: "Reboco",     cor: "#059669", tipoMedida: "area",     derivaDe: "alvenaria", fator: "2", parentChave: null, ordem: 4 },
+  // Rev. 4837 — decisão do usuário: chapisco/emboço/reboco são serviços
+  // DESENHÁVEIS (equipes/lançamentos separados), não mais derivados da alvenaria.
+  { chave: "chapisco",   nome: "Chapisco",   cor: "#ea580c", tipoMedida: "area",     derivaDe: null,        fator: "1", parentChave: null, ordem: 2 },
+  { chave: "emboco",     nome: "Emboço",     cor: "#ca8a04", tipoMedida: "area",     derivaDe: null,        fator: "1", parentChave: null, ordem: 3 },
+  { chave: "reboco",     nome: "Reboco",     cor: "#059669", tipoMedida: "area",     derivaDe: null,        fator: "1", parentChave: null, ordem: 4 },
   { chave: "contrapiso", nome: "Contrapiso", cor: "#2563eb", tipoMedida: "area",     derivaDe: null,        fator: "1", parentChave: null, ordem: 5 },
   { chave: "forro",      nome: "Forro",      cor: "#7c3aed", tipoMedida: "area",     derivaDe: null,        fator: "1", parentChave: null, ordem: 6 },
   { chave: "pintura",        nome: "Pintura",        cor: "#db2777", tipoMedida: "area",   derivaDe: null, fator: "1", parentChave: null,      ordem: 7 },
@@ -1325,26 +1438,32 @@ export const medicaoRouter = router({
         .where(and(eq(obraPavimentos.id, input.pavimentoId), eq(obraPavimentos.companyId, input.companyId), isNull(obraPavimentos.deletedAt)));
       if (!pav) throw new TRPCError({ code: "NOT_FOUND", message: "Projeto/pavimento não encontrado." });
       if (!pav.arquivoKey || !pav.arquivoUrl) throw new TRPCError({ code: "BAD_REQUEST", message: "Este pavimento ainda não tem arquivo DXF. Envie o projeto no cadastro da obra." });
-      // Rev. 4805 (review) — o pavimento deve ser DA OBRA deste contrato
-      // (anti-IDOR de escopo: bloqueia importar projeto de outra obra do tenant).
-      let obraDoContrato: number | null = null;
-      if (campo.origem === "terceiro") {
-        const [tc] = await db.select({ obraId: terceiroContratos.obraId }).from(terceiroContratos)
-          .where(and(eq(terceiroContratos.id, campo.contratoId), eq(terceiroContratos.companyId, input.companyId)));
-        obraDoContrato = tc?.obraId ?? null;
+      let destinoCampoId: number;
+      if (campo.status === "biblioteca") {
+        // Planta é da OBRA: sempre resolve a biblioteca CANÔNICA da obra do
+        // pavimento (adota/normaliza a legada), nunca usa o campo cru — evita
+        // "split-brain" de duas bibliotecas com plantas diferentes.
+        destinoCampoId = (await resolverBibliotecaObra(db, input.companyId, Number(pav.obraId))).id;
       } else {
-        const [mc] = await db.select({ obraId: planejamentoProjetos.obraId }).from(medicaoContratos)
-          .leftJoin(planejamentoProjetos, eq(medicaoContratos.projetoId, planejamentoProjetos.id))
-          .where(and(eq(medicaoContratos.id, campo.contratoId), eq(medicaoContratos.companyId, input.companyId)));
-        obraDoContrato = mc?.obraId ?? null;
+        // Rev. 4805 (review) — o pavimento deve ser DA OBRA deste contrato
+        // (anti-IDOR de escopo: bloqueia importar projeto de outra obra do tenant).
+        let obraDoContrato: number | null = null;
+        if (campo.origem === "terceiro") {
+          const [tc] = await db.select({ obraId: terceiroContratos.obraId }).from(terceiroContratos)
+            .where(and(eq(terceiroContratos.id, campo.contratoId), eq(terceiroContratos.companyId, input.companyId)));
+          obraDoContrato = tc?.obraId ?? null;
+        } else {
+          const [mc] = await db.select({ obraId: planejamentoProjetos.obraId }).from(medicaoContratos)
+            .leftJoin(planejamentoProjetos, eq(medicaoContratos.projetoId, planejamentoProjetos.id))
+            .where(and(eq(medicaoContratos.id, campo.contratoId), eq(medicaoContratos.companyId, input.companyId)));
+          obraDoContrato = mc?.obraId ?? null;
+        }
+        if (!obraDoContrato || Number(pav.obraId) !== Number(obraDoContrato)) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Este projeto pertence a outra obra." });
+        }
+        const origemNorm: "cliente" | "terceiro" = campo.origem === "terceiro" ? "terceiro" : "cliente";
+        destinoCampoId = (await resolverBibliotecaPlantas(db, input.companyId, campo.contratoId, origemNorm)).id;
       }
-      if (!obraDoContrato || Number(pav.obraId) !== Number(obraDoContrato)) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Este projeto pertence a outra obra." });
-      }
-      const origemNorm: "cliente" | "terceiro" = campo.origem === "terceiro" ? "terceiro" : "cliente";
-      const destinoCampoId = campo.status === "biblioteca"
-        ? campo.id
-        : (await resolverBibliotecaPlantas(db, input.companyId, campo.contratoId, origemNorm)).id;
       // Rev. 4806 — idempotência POR REVISÃO: se a REV. vigente já está na
       // biblioteca, devolve; se só há REV. antiga, importa a nova como planta
       // ADICIONAL (as medições antigas continuam na antiga).
@@ -1644,16 +1763,16 @@ export const medicaoRouter = router({
       await assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const [campo] = await db
-        .select({ id: medicaoCampo.id, contratoId: medicaoCampo.contratoId, origem: medicaoCampo.origem, status: medicaoCampo.status })
+        .select({ id: medicaoCampo.id, contratoId: medicaoCampo.contratoId, origem: medicaoCampo.origem, status: medicaoCampo.status, obraId: medicaoCampo.obraId })
         .from(medicaoCampo)
         .where(and(eq(medicaoCampo.id, input.medicaoCampoId), eq(medicaoCampo.companyId, input.companyId)))
         .limit(1);
       if (!campo) throw new TRPCError({ code: "NOT_FOUND", message: "Medição não encontrada ou sem permissão." });
-      // Rev. 3093 — a planta é enviada à BIBLIOTECA do contrato (1x, compartilhada por
-      // todas as medições), não ao campo-medição que disparou o upload.
+      // Planta é da OBRA — envia à biblioteca CANÔNICA da obra (compartilhada
+      // por todas as medições/contratos); biblioteca legada sem obra usa a si mesma.
       const origemNorm: "cliente" | "terceiro" = campo.origem === "terceiro" ? "terceiro" : "cliente";
       const destinoCampoId = campo.status === "biblioteca"
-        ? campo.id
+        ? (campo.obraId ? (await resolverBibliotecaObra(db, input.companyId, Number(campo.obraId))).id : campo.id)
         : (await resolverBibliotecaPlantas(db, input.companyId, campo.contratoId, origemNorm)).id;
       let key: string;
       let url: string;
@@ -1798,6 +1917,9 @@ export const medicaoRouter = router({
       observacoes: z.string().nullable().optional(),
       // Rev. 4840 — posição customizada da etiqueta numerada ({x,y} 0..1)
       etiquetaJson: z.string().max(200).nullable().optional(),
+      // Rev. 4863 — múltiplos itens da EAP por contorno (checkbox): JSON de
+      // [{orcamentoItemId, eapCodigo, descricao, unidade, modo, fator?, quantidade?}]
+      itensJson: z.string().max(20000).nullable().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -1812,6 +1934,11 @@ export const medicaoRouter = router({
       // Rev. 4792 — Poka-Yoke: unidade do trecho ≠ unidade do item = NÃO salva.
       const erroUnidade = await checarUnidadeVinculo(db, input.medicaoCampoId, input.orcamentoItemId, input.unidade);
       if (erroUnidade) throw new TRPCError({ code: "BAD_REQUEST", message: erroUnidade });
+      // Rev. 4863 — vínculos MÚLTIPLOS: sanitiza estruturalmente e valida que
+      // cada item pertence a um orçamento DESTA empresa (nunca confiar no client).
+      if (input.itensJson !== undefined) {
+        (rest as any).itensJson = await sanitizarItensJson(db, companyId, input.itensJson);
+      }
       if (id) {
         await db.update(medicaoCampoContornos)
           // Rev. 4792 — numero agora persiste (patch parcial: só se veio no input)
@@ -1868,6 +1995,7 @@ export const medicaoRouter = router({
       return row;
     }),
 
+  // (Rev. 4863) — helper fica fora do router: ver sanitizarItensJson no topo do arquivo.
   excluirContorno: protectedProcedure
     .input(z.object({ id: z.number(), companyId: z.number() }))
     .mutation(async ({ input }) => {
@@ -1989,7 +2117,7 @@ export const medicaoRouter = router({
       // Rev. 4823 — POKA-YOKE: consolidar encerra o ciclo. Só passa se TODO
       // contorno tiver (a) pelo menos 1 foto/vídeo e (b) apropriação (vínculo
       // com item da planilha — no contorno OU herdado do serviço/categoria).
-      const vivos = await db.select({ id: medicaoCampoContornos.id, numero: medicaoCampoContornos.numero, rotulo: medicaoCampoContornos.rotulo, servico: medicaoCampoContornos.servico, tipo: medicaoCampoContornos.tipo, orcamentoItemId: medicaoCampoContornos.orcamentoItemId })
+      const vivos = await db.select({ id: medicaoCampoContornos.id, numero: medicaoCampoContornos.numero, rotulo: medicaoCampoContornos.rotulo, servico: medicaoCampoContornos.servico, tipo: medicaoCampoContornos.tipo, orcamentoItemId: medicaoCampoContornos.orcamentoItemId, itensJson: medicaoCampoContornos.itensJson })
         .from(medicaoCampoContornos)
         .where(and(eq(medicaoCampoContornos.medicaoCampoId, input.medicaoCampoId), eq(medicaoCampoContornos.companyId, input.companyId), isNull(medicaoCampoContornos.deletedAt)));
       if (vivos.length > 0) {
@@ -2003,7 +2131,9 @@ export const medicaoRouter = router({
         const svcVinculo = new Map(svcRows.map((s) => [s.chave, s.orcamentoItemId]));
         const nome = (c: any) => `${c.rotulo || c.servico || c.tipo} nº ${c.numero ?? "?"}`;
         const semFoto = vivos.filter((c) => !comFoto.has(c.id));
-        const semItem = vivos.filter((c) => !c.orcamentoItemId && !svcVinculo.get(String(c.servico ?? "")));
+        // Rev. 4863 — múltiplos itens (itensJson) também contam como apropriação
+        // (parse estrutural, não busca textual).
+        const semItem = vivos.filter((c) => !c.orcamentoItemId && !svcVinculo.get(String(c.servico ?? "")) && parseItensExtras((c as any).itensJson).length === 0);
         if (semFoto.length || semItem.length) {
           const partes: string[] = [];
           if (semFoto.length) partes.push(`${semFoto.length} sem foto/vídeo (${semFoto.slice(0, 3).map(nome).join(", ")}${semFoto.length > 3 ? "…" : ""})`);
@@ -2409,6 +2539,27 @@ export const medicaoRouter = router({
           grupos.set(chave, g);
         }
         g.valorPeriodo += qtd * preco;
+        // Rev. 4863 — vínculos MÚLTIPLOS do contorno também entram no boletim
+        // (mesma regra do consolidado: extra igual ao principal não duplica).
+        for (const e of parseItensExtras((c as any).itensJson)) {
+          if (c.orcamentoItemId != null && e.orcamentoItemId === c.orcamentoItemId) continue;
+          const orcE = orcMap.get(e.orcamentoItemId);
+          if (!orcE) continue; // fora do orçamento deste contrato = fora do boletim
+          const chaveE = `oi:${e.orcamentoItemId}`;
+          const precoE = parseFloat(String(orcE.vendaUnitTotal ?? "0")) || 0;
+          const qtdE = quantidadeExtra(e, qtd);
+          let gE = grupos.get(chaveE);
+          if (!gE) {
+            gE = {
+              eapCodigo: orcE.eapCodigo ?? null,
+              descricao: orcE.descricao ?? e.descricao ?? "Item do levantamento",
+              valorContratual: parseFloat(String(orcE.vendaTotal ?? "0")) || 0,
+              valorPeriodo: 0,
+            };
+            grupos.set(chaveE, gE);
+          }
+          gE.valorPeriodo += qtdE * precoE;
+        }
       }
       const linhas = Array.from(grupos.values()).filter((l) => l.valorPeriodo > 0);
       if (linhas.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhum contorno com valor para gerar boletim. Vincule contornos a itens do orçamento." });
@@ -2503,17 +2654,40 @@ export const medicaoRouter = router({
       // terceiro_contratos) e os IDs colidem entre as tabelas. A validação só
       // olhava medicao_contratos → TODA sync de levantamento de TERCEIROS
       // falhava com "Contrato não encontrado" e nada chegava ao servidor.
-      const [contratoCli] = await db
+      // Planta é da OBRA — contratoId=0 = biblioteca da obra (Ronda). Nesse caso
+      // a autorização é POR CAMPO (empresa + status biblioteca), nunca por
+      // contrato: não consulta as tabelas de contrato (um contrato real com
+      // id 0, ainda que improvável, não pode "sequestrar" esse caminho).
+      const [contratoCli] = contratoId > 0 ? await db
         .select({ id: medicaoContratos.id })
         .from(medicaoContratos)
         .where(and(eq(medicaoContratos.id, contratoId), eq(medicaoContratos.companyId, companyId)))
-        .limit(1);
-      const [contratoTer] = await db
+        .limit(1) : [undefined];
+      const [contratoTer] = contratoId > 0 ? await db
         .select({ id: terceiroContratos.id })
         .from(terceiroContratos)
         .where(and(eq(terceiroContratos.id, contratoId), eq(terceiroContratos.companyId, companyId)))
-        .limit(1);
-      if (!contratoCli && !contratoTer) throw new TRPCError({ code: "NOT_FOUND", message: "Contrato não encontrado ou sem permissão." });
+        .limit(1) : [undefined];
+      // Ronda/biblioteca — o campo-biblioteca guarda as plantas do CADASTRO DA
+      // OBRA e sobrevive à exclusão do contrato original. Se o contrato não
+      // existe mais (ou contratoId=0 = biblioteca da obra), aceita a sync desde
+      // que exista um campo 'biblioteca' desta empresa amarrado a esse
+      // contratoId (âncora de tenant = empresa+campo).
+      let bibliotecaOrfa = false;
+      if (!contratoCli && !contratoTer) {
+        const [bib] = await db
+          .select({ id: medicaoCampo.id })
+          .from(medicaoCampo)
+          .where(and(
+            eq(medicaoCampo.contratoId, contratoId),
+            eq(medicaoCampo.companyId, companyId),
+            eq(medicaoCampo.status, "biblioteca"),
+            isNull(medicaoCampo.deletedAt),
+          ))
+          .limit(1);
+        bibliotecaOrfa = !!bib;
+        if (!bibliotecaOrfa) throw new TRPCError({ code: "NOT_FOUND", message: "Contrato não encontrado ou sem permissão." });
+      }
 
       // cache de campos validados (medicaoCampoId → pertence à empresa+contrato)
       // Anti-colisão de IDs entre módulos: se o contratoId só existe num dos
@@ -2528,7 +2702,7 @@ export const medicaoRouter = router({
       async function campoValido(campoId: number): Promise<boolean> {
         if (camposOk.has(campoId)) return camposOk.get(campoId)!;
         const [c] = await db
-          .select({ id: medicaoCampo.id, origem: medicaoCampo.origem, consolidadoEm: medicaoCampo.consolidadoEm })
+          .select({ id: medicaoCampo.id, origem: medicaoCampo.origem, status: medicaoCampo.status, consolidadoEm: medicaoCampo.consolidadoEm })
           .from(medicaoCampo)
           .where(and(
             eq(medicaoCampo.id, campoId),
@@ -2538,9 +2712,14 @@ export const medicaoRouter = router({
           .limit(1);
         let ok = !!c;
         if (ok && c) {
+          const ehBiblioteca = (c as any).status === "biblioteca";
           const ehTerceiro = c.origem === "terceiro";
-          if (ehTerceiro && !contratoTer) ok = false;
-          if (!ehTerceiro && !contratoCli) ok = false;
+          // Biblioteca órfã (contrato excluído): o campo ∈ empresa+contratoId
+          // já é a âncora — pula o check de origem×contrato vivo.
+          if (!ehBiblioteca || !bibliotecaOrfa) {
+            if (ehTerceiro && !contratoTer) ok = false;
+            if (!ehTerceiro && !contratoCli) ok = false;
+          }
           if ((c as any).consolidadoEm) camposConsolidados.add(campoId);
         }
         camposOk.set(campoId, ok);
@@ -2639,6 +2818,9 @@ export const medicaoRouter = router({
               observacoes: d.observacoes ?? null,
               // Rev. 4840 — undefined = preserva no update (drizzle ignora), null = limpa
               etiquetaJson: d.etiquetaJson,
+              // Rev. 4863 — vínculos múltiplos: sanitizado server-side; undefined
+              // preserva (client antigo na fila não zera os extras).
+              itensJson: d.itensJson !== undefined ? await sanitizarItensJson(db, companyId, d.itensJson) : undefined,
             };
             // localizar existente por id (conhecido) OU por uuid
             let existing: any = null;

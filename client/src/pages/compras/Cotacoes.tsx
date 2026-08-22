@@ -1,4 +1,7 @@
 import DashboardLayout from "@/components/DashboardLayout";
+import { useConfirm } from "@/hooks/useConfirm";
+import FornecedorFormModal from "@/components/FornecedorFormModal";
+import { CartaoDisponivelCard } from "@/components/compras/CartaoDisponivelCard";
 import { DraggableCommandBar } from "@/components/DraggableCommandBar";
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
@@ -22,12 +25,22 @@ import { formatNumeroScDisplay } from "@shared/numeroSc";
 import { formatNumeroCotacaoDisplay } from "@shared/numeroCotacao";
 import { formatNumeroOcDisplay } from "@shared/numeroOc";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search, Trash2, FileText, ChevronRight, ChevronDown, Loader2, CheckCircle, X, XCircle, Building2, Trophy, UserPlus, Save, BarChart3, ChevronsUpDown, ArrowUp, ArrowDown, ArrowUpDown, Paperclip, ExternalLink, AlertTriangle, TrendingDown, TrendingUp, Package, Undo2, History, Link2, RefreshCw, Phone, Mail, User, Smartphone, Sparkles, Star, ShieldCheck, ShieldAlert, Settings, DollarSign, Pencil, Check, ClipboardList, FileSearch, ShoppingCart, RotateCcw, Pin, GitBranch, Zap, PenTool, CreditCard, Banknote, Calendar, Truck, Target, BarChart2, Clock, Wallet, Layers, ArrowLeftRight, Warehouse, HardHat, Info, Printer, Lock, Pause, Play, type LucideIcon } from "lucide-react";
+import { Plus, Search, Trash2, FileText, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Loader2, CheckCircle, X, XCircle, Building2, Trophy, UserPlus, Save, BarChart3, ChevronsUpDown, ArrowUp, ArrowDown, ArrowUpDown, Paperclip, ExternalLink, AlertTriangle, TrendingDown, TrendingUp, Package, Undo2, History, Link2, RefreshCw, Phone, Mail, User, Smartphone, Sparkles, Star, ShieldCheck, ShieldAlert, Settings, DollarSign, Pencil, Check, ClipboardList, FileSearch, ShoppingCart, RotateCcw, Pin, GitBranch, Zap, PenTool, CreditCard, Banknote, Calendar, Truck, Target, BarChart2, Clock, Wallet, Layers, ArrowLeftRight, Warehouse, HardHat, Info, Printer, Lock, Pause, Play, Download, Share2, FolderOpen, Scale, type LucideIcon } from "lucide-react";
 import { TIPOS_PAGAMENTO, getTipoPagamentoInfo, calcularParcelas, formatCurrency } from "../../../../shared/paymentConditions";
 import * as XLSX from "xlsx";
 import { PurchaseTimeline, TimelineBadge } from "@/components/compras/PurchaseTimeline";
-import { CartaoDisponivelCard } from "@/components/compras/CartaoDisponivelCard";
-import { useConfirm } from "@/hooks/useConfirm";
+import DOMPurify from "dompurify";
+import { buildFcDocument } from "@/lib/fcDocumentTemplate";
+import { buildContratoPreviewSrcDoc } from "@/lib/contratoSrcDoc";
+import { buildAnexoSections } from "@/lib/contratoAnexoPages";
+
+// Rev. 5006 — Prévia do contrato de serviço 100% fiel ao documento final: usa o
+// Rev. 5054 — buildContratoPreviewSrcDoc extraído p/ @/lib/contratoSrcDoc (reuso no ContratoDetalhe)
+
+
+function safeAnexoHref(u: any): string | undefined {
+  return typeof u === "string" && (/^https?:\/\//i.test(u) || u.startsWith("/")) ? u : undefined;
+}
 
 function parseBRNumber(v: string): number {
   if (!v) return 0;
@@ -43,6 +56,18 @@ function parseBRNumber(v: string): number {
 }
 
 const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+// Rev. 5098 — subtotais do Resumo Consolidado por CATEGORIA (nome do material) + unidade,
+// não só por unidade (cimento em kg não pode somar com aço em kg).
+const _catStopwords = new Set(["de", "da", "do", "das", "dos", "em", "para", "p/", "com", "a", "o", "e", "ou", "na", "no", "barra", "barras", "saco", "sacos"]);
+function categoriaResumo(descricao: string, unidade: string): { key: string; label: string } {
+  const norm = (descricao || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const tokens = norm.split(/[\s,;()/-]+/).filter(t => t.length >= 3 && !_catStopwords.has(t) && !/^\d/.test(t));
+  const primeira = tokens[0] ?? "outros";
+  const label = primeira.charAt(0).toUpperCase() + primeira.slice(1);
+  const un = unidade || "un";
+  return { key: `${primeira}|${un}`, label: `${label} (${un})` };
+}
 
 // Rev. 2799 — similaridade por sobreposição de tokens (p/ ranquear sugestões de match na Leitura IA).
 function _iaTokens(s: string): string[] {
@@ -712,7 +737,7 @@ const calcTotal = (it: ItemForm) => {
 // Mostra os itens da SC + saldo na obra-origem escolhida + flag de insuficiência por item.
 function TransferenciaEstoqueDialog({
   open, onOpenChange, companyId, obraDestinoId, obraDestinoNome,
-  itensSC, obras, obraOrigemId, onChangeObraOrigem, onConfirmar, isPending,
+  itensSC, respostaMap, obras, obraOrigemId, onChangeObraOrigem, onConfirmar, isPending,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -720,6 +745,7 @@ function TransferenciaEstoqueDialog({
   obraDestinoId: number | null;
   obraDestinoNome: string | null;
   itensSC: any[];
+  respostaMap: Record<string, { almoxarifadoItemId?: number | null }> | undefined;
   obras: any[];
   obraOrigemId: number | null | undefined;
   onChangeObraOrigem: (v: number | null | undefined) => void;
@@ -758,7 +784,14 @@ function TransferenciaEstoqueDialog({
     // Rev. 2091 — Backend ignora itens com qty <= 0 no plano de baixa; espelhar aqui pra
     // não bloquear o "Confirmar" por linha que o backend nem vai processar.
     const ignorado = qtdPedida <= 0;
-    const match = obraOrigemId !== undefined && !ignorado ? findAlmox(it.descricao ?? "", it.insumoCodigo) : null;
+    const almoxSelecionadoId = respostaMap?.[`${it.id}_0`]?.almoxarifadoItemId ?? null;
+    // Para uma seleção explícita, nunca refaz o vínculo por texto: o ID do
+    // card escolhido é a fonte de verdade. O fallback mantém cotações antigas.
+    const match = obraOrigemId !== undefined && !ignorado
+      ? (almoxSelecionadoId
+          ? (almoxQ.data ?? []).find((a: any) => a.id === almoxSelecionadoId) ?? null
+          : findAlmox(it.descricao ?? "", it.insumoCodigo))
+      : null;
     const saldo = match ? parseFloat(String(match.quantidadeAtual ?? "0")) || 0 : null;
     const insuficiente = !ignorado && saldo !== null && saldo + 1e-6 < qtdPedida;
     const semMatch = !ignorado && obraOrigemId !== undefined && !match;
@@ -924,10 +957,18 @@ export default function Cotacoes() {
   const [filtroDataInicio, setFiltroDataInicio] = useState("");
   const [filtroDataFim, setFiltroDataFim] = useState("");
   // Rev. 2487 — Ordenação clicável por coluna na tabela de Cotações.
-  type CotSortKey = "numeroCotacao" | "descricao" | "obra" | "fornecedor" | "total" | "validade" | "status";
-  const [sortKey, setSortKey] = useState<CotSortKey>("numeroCotacao");
+  type CotSortKey = "criadoEm" | "numeroCotacao" | "descricao" | "obra" | "fornecedor" | "total" | "validade" | "status";
+  const [sortKey, setSortKey] = useState<CotSortKey>("criadoEm");
+  // Rev. 5100 — toggle Meta × Melhor preço na lista (análise diária)
+  const [mostrarMeta, setMostrarMeta] = useState(false);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [pagina, setPagina] = useState(1);
+  const [buscaDebounced, setBuscaDebounced] = useState("");
+  // Rev. 5200 — gate do filtro de obra: só busca o catálogo de obras quando o
+  // usuário interage com o dropdown (mantém a abertura da tela sem catálogos).
+  const [obraFiltroAberto, setObraFiltroAberto] = useState(false);
   function toggleSort(k: CotSortKey) {
+    setPagina(1);
     if (sortKey === k) {
       setSortDir(d => (d === "asc" ? "desc" : "asc"));
     } else {
@@ -935,9 +976,20 @@ export default function Cotacoes() {
       setSortDir(["numeroCotacao", "total", "validade"].includes(k) ? "desc" : "asc");
     }
   }
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setBuscaDebounced(busca.trim());
+      setPagina(1);
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [busca]);
   const [showNova, setShowNova] = useState(false);
   const [showDetalhe, setShowDetalhe] = useState<number | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  useEffect(() => {
+    setPagina(1);
+    setSelectedIds(new Set());
+  }, [companyId, filtroStatus, filtroObraId, filtroTipo, filtroDataInicio, filtroDataFim]);
   const [confirmExcluirLote, setConfirmExcluirLote] = useState(false);
   const [abaAtiva, setAbaAtiva] = useState<"detalhes" | "mapa">("detalhes");
   const [showCancelarAprovacao, setShowCancelarAprovacao] = useState(false);
@@ -989,11 +1041,9 @@ export default function Cotacoes() {
   // (antes só dava pra incluir 1 fornecedor real por vez na cotação).
   const [mapaFornMultiIds, setMapaFornMultiIds] = useState<Set<number>>(new Set());
   const [addingFornMulti, setAddingFornMulti] = useState(false);
-  // Cadastro rápido de fornecedor sem sair da cotação (popup)
+  // Cadastro de fornecedor sem sair da cotação (modal compartilhado)
   const [showNovoForn, setShowNovoForn] = useState(false);
-  const [novoForn, setNovoForn] = useState({ cnpj: "", razaoSocial: "", nomeFantasia: "", telefone: "", email: "", cidade: "", estado: "" });
-  const [buscandoCnpjForn, setBuscandoCnpjForn] = useState(false);
-  const [cnpjFornErro, setCnpjFornErro] = useState<string | null>(null);
+  const [novoFornInitial, setNovoFornInitial] = useState<{ razaoSocial?: string } | undefined>(undefined);
   const [editPrecos, setEditPrecos] = useState<Record<string, string>>({});
   const [editMatMdo, setEditMatMdo] = useState<Record<string, { mat: string; mdo: string }>>({});
   const [editTotaisOverride, setEditTotaisOverride] = useState<Record<string, number>>({});
@@ -1021,6 +1071,9 @@ export default function Cotacoes() {
   const [editValorFrete, setEditValorFrete] = useState<Record<number, string>>({});
   const [editTransportadora, setEditTransportadora] = useState<Record<number, string>>({});
   const [editModuloMedicao, setEditModuloMedicao] = useState<Record<number, string>>({});
+  // Rev. 5012 — prazo do contrato definido nas Condições: início da mobilização + duração (dias)
+  const [editMobilizacaoData, setEditMobilizacaoData] = useState<Record<number, string>>({});
+  const [editDuracaoDias, setEditDuracaoDias] = useState<Record<number, string>>({});
   // Rev. 4284 — Adiantamento e Retenção de Garantia
   const [editAdiantamentoAtivo, setEditAdiantamentoAtivo] = useState<Record<number, boolean>>({});
   const [editAdiantamentoTipo, setEditAdiantamentoTipo] = useState<Record<number, string>>({});
@@ -1033,18 +1086,28 @@ export default function Cotacoes() {
   const [editRetencaoPct, setEditRetencaoPct] = useState<Record<number, string>>({});
   const [editRetencaoLiberacao, setEditRetencaoLiberacao] = useState<Record<number, string>>({});
   const [editingFornId, setEditingFornId] = useState<number | null>(null);
-  const [negociadoModal, setNegociadoModal] = useState<{ fornecedorId: number } | null>(null);
+  // Rev. 5132 — grupo (opcional) = negociar só uma região/trecho do mapa
+  // Rev. 5135 — itemIds (opcional) = negociar só os itens SELECIONADOS (checkbox)
+  const [negociadoModal, setNegociadoModal] = useState<{ fornecedorId: number; grupo?: string; itemIds?: number[]; label?: string } | null>(null);
   const [negociadoValor, setNegociadoValor] = useState("");
   const [negociadoPreviewing, setNegociadoPreviewing] = useState(false);
+  // Rev. 5134 — recolher/expandir regiões (grupos de EAP) no mapa
+  const [collapsedGrupos, setCollapsedGrupos] = useState<Set<string>>(new Set());
   // Rev. 4245 — editar/excluir/incluir item na cotação
   const [editItemDialog, setEditItemDialog] = useState<{ id: number; descricao: string; unidade: string; quantidade: string; somenteMo: boolean } | null>(null);
   const [addItemDialog, setAddItemDialog] = useState(false);
   const [addItemForm, setAddItemForm] = useState({ descricao: "", unidade: "un", quantidade: "1", somenteMo: false });
   // Rev. 4250 — busca/filtro no mapa + picker de itens da EAP
   const [mapaFiltro, setMapaFiltro] = useState("");
+  // Rev. 5084 — filtro clicável nos cards de Cobertura do Orçamento (total/parcial/sem)
+  const [coberturaFiltro, setCoberturaFiltro] = useState<"total" | "parcial" | "sem" | null>(null);
+  // Rev. 5090 — expandir/recolher etapas (EAP) na lista de Itens do detalhe
+  const [detalheGruposFechados, setDetalheGruposFechados] = useState<Record<string, boolean>>({});
   const [eapPickerOpen, setEapPickerOpen] = useState(false);
   const [eapPickerSearch, setEapPickerSearch] = useState("");
   const [eapPickerSelected, setEapPickerSelected] = useState<Set<number>>(new Set());
+  // Rev. 5071 — poka-yoke: dialog quando o item já está em SC/cotação/contratado
+  const [eapFaseDialog, setEapFaseDialog] = useState<any>(null);
   const [showGerenciarCond, setShowGerenciarCond] = useState(false);
   const [novaCondicao, setNovaCondicao] = useState("");
   const [anexoUrl, setAnexoUrl] = useState<Record<number, string>>({});
@@ -1064,6 +1127,8 @@ export default function Cotacoes() {
   const [semVerbaAutorizado, setSemVerbaAutorizado] = useState<{ adminId: number; adminNome: string; justificativa: string } | null>(null);
   const [semVerbaAba, setSemVerbaAba] = useState<"realocacao" | "autorizacao">("realocacao");
   const [iaExtracao, setIaExtracao] = useState<{ fornecedorId: number; dados: any } | null>(null);
+  // Rev. 5096 — filtro clicável dos cards da Conferência IA
+  const [iaFiltroStatus, setIaFiltroStatus] = useState<null | "ok" | "parcial" | "excedente" | "sem_vinculo">(null);
   const [iaFileBuffer, setIaFileBuffer] = useState<{ fornecedorId: number; base64: string; fileName: string; mimeType: string } | null>(null);
   const [iaTipoProposta, setIaTipoProposta] = useState<"complemento" | "revisao">("complemento");
   const [iaProgress, setIaProgress] = useState<{ fornecedorId: number; percent: number; etapa: string } | null>(null);
@@ -1073,8 +1138,9 @@ export default function Cotacoes() {
   const [showPropostas, setShowPropostas] = useState<number | null>(null);
   // Rev. 2799 — linhas editáveis da Conferência IA (match/preço/qtd livres por linha).
   const [iaLinhas, setIaLinhas] = useState<any[]>([]);
+  const [iaDescontoPct, setIaDescontoPct] = useState<number>(0);
   useEffect(() => {
-    if (!iaExtracao) { setIaLinhas([]); return; }
+    if (!iaExtracao) { setIaLinhas([]); setIaDescontoPct(0); return; }
     const arr = (iaExtracao.dados?.itensExtraidos ?? []).map((it: any, idx: number) => ({
       key: `l${idx}`,
       descricaoFornecedor: it.descricaoFornecedor ?? "",
@@ -1165,13 +1231,79 @@ export default function Cotacoes() {
     }
   }, [showDetalhe]);
 
-  // Rev. 2296 — filtro de status é feito client-side pra permitir contadores
-  // por status nos pills (UX pediu "fica visual as cotações finalizadas,
-  // pendentes.. enfim todos os status possíveis").
+  // Rev. 5200 — Abertura rápida (task #195): a lista pede SÓ a janela paginada de
+  // linhas; o resumo (total/contadores) e o enriquecimento (meta × melhor preço)
+  // só disparam DEPOIS que a lista carregou, e os catálogos de criação/edição
+  // (solicitações, fornecedores, obras, condições) ficam atrás de gates de diálogo.
+  const listaFiltros = React.useMemo(() => ({
+    companyId,
+    status: filtroStatus !== "todos" ? filtroStatus : undefined,
+    search: buscaDebounced || undefined,
+    obraId: filtroObraId ? parseInt(filtroObraId) : undefined,
+    tipo: filtroTipo !== "todos" ? filtroTipo : undefined,
+    dataInicio: filtroDataInicio || undefined,
+    dataFim: filtroDataFim || undefined,
+  }), [companyId, filtroStatus, buscaDebounced, filtroObraId, filtroTipo, filtroDataInicio, filtroDataFim]);
   const q = trpc.compras.listarCotacoes.useQuery(
-    { companyId, status: undefined },
+    {
+      ...listaFiltros,
+      page: pagina,
+      pageSize: 50,
+      sortKey,
+      sortDir,
+    },
     { enabled: companyId > 0 }
   );
+  // Rev. 5200 — resumo (total + contadores) roda em paralelo mas SEM segurar as
+  // linhas: só habilita depois que a lista carregou com sucesso (não no mesmo lote).
+  const listaCarregou = q.isSuccess && !!q.data;
+  // Rev. 5200 — timing focado e não intrusivo (Performance API): mede quanto o
+  // primeiro lote de linhas levou para chegar. Falha silenciosa se a API não existir.
+  const perfMarkedRef = React.useRef(false);
+  React.useEffect(() => {
+    if (listaCarregou && !perfMarkedRef.current && typeof performance !== "undefined" && typeof performance.mark === "function") {
+      perfMarkedRef.current = true;
+      try {
+        performance.mark("cotacoes:lista-carregada");
+        performance.measure("cotacoes:abertura", { start: 0, end: "cotacoes:lista-carregada" } as any);
+      } catch { /* no-op */ }
+    }
+  }, [listaCarregou]);
+  const resumoQ = trpc.compras.resumoCotacoes.useQuery(
+    listaFiltros,
+    { enabled: companyId > 0 && listaCarregou }
+  );
+  // Rev. 5200 — enriquecimento (meta × melhor preço) apenas das linhas visíveis,
+  // disparado após a lista carregar. Chave estável nos ids visíveis.
+  const cotacaoIdsVisiveis = React.useMemo(
+    () => (q.data?.items ?? []).map((it: any) => it.id as number),
+    [q.data?.items]
+  );
+  const enriquecerQ = trpc.compras.enriquecerCotacoesLista.useQuery(
+    { companyId, cotacaoIds: cotacaoIdsVisiveis },
+    { enabled: companyId > 0 && listaCarregou && cotacaoIdsVisiveis.length > 0 }
+  );
+  // Rev. 5200 — mapa id → dados de enriquecimento (meta/melhor preço) para merge
+  // sem perder as linhas já exibidas. Backend retorna items como Record<id, {...}>.
+  const enriquecerMap = React.useMemo(() => {
+    const m = new Map<number, any>();
+    const rows = (enriquecerQ.data as any)?.items ?? (enriquecerQ.data as any) ?? [];
+    if (Array.isArray(rows)) {
+      for (const r of rows) if (r && r.id != null) m.set(r.id as number, r);
+    } else if (rows && typeof rows === "object") {
+      for (const [k, v] of Object.entries(rows)) m.set(Number(k), v);
+    }
+    return m;
+  }, [enriquecerQ.data]);
+  // Rev. 5200 — após qualquer escrita que possa afetar uma cotação, o resumo e o
+  // enriquecimento da página precisam recarregar. IDs iguais não bastam para o cache:
+  // preço, itens e participantes podem mudar sem alterar a página visível.
+  const refetchResumo = React.useCallback(() => { if (resumoQ.isFetched) resumoQ.refetch(); }, [resumoQ.isFetched]);
+  const refetchEnriquecimento = React.useCallback(() => { if (enriquecerQ.isFetched) enriquecerQ.refetch(); }, [enriquecerQ.isFetched]);
+  const refetchListaDerivados = React.useCallback(() => {
+    refetchResumo();
+    refetchEnriquecimento();
+  }, [refetchResumo, refetchEnriquecimento]);
   const detalheQ = trpc.compras.getCotacao.useQuery({ id: showDetalhe! }, { enabled: showDetalhe !== null });
   // Rev. 2806 — Cobertura da SC (cotações irmãs + itens pendentes) p/ navegação e "cotar restantes".
   const detalheScId = (detalheQ.data as any)?.solicitacaoId as number | null | undefined;
@@ -1184,14 +1316,14 @@ export default function Cotacoes() {
       toast.success(`Cotação dividida! ${data.movidos} ${data.movidos === 1 ? "item movido" : "itens movidos"} para ${data.nova.numeroCotacao}.`);
       setShowDividirModal(false);
       setDividirSel(new Map());
-      detalheQ.refetch(); mapaQ.refetch(); q.refetch(); coberturaScQ.refetch();
+      detalheQ.refetch(); mapaQ.refetch(); q.refetch(); coberturaScQ.refetch(); refetchListaDerivados();
     },
     onError: (e) => toast.error(e.message),
   });
   const cotarRestantes = trpc.compras.cotarItensRestantes.useMutation({
     onSuccess: (data: any) => {
       toast.success(`Nova cotação ${data.nova.numeroCotacao} criada com ${data.itens} ${data.itens === 1 ? "item restante" : "itens restantes"}.`);
-      coberturaScQ.refetch(); q.refetch();
+      coberturaScQ.refetch(); q.refetch(); refetchListaDerivados();
       setShowDetalhe(data.nova.id);
     },
     onError: (e) => toast.error(e.message),
@@ -1199,21 +1331,15 @@ export default function Cotacoes() {
   const cancelarDivisao = trpc.compras.cancelarDivisaoCotacao.useMutation({
     onSuccess: (data: any) => {
       toast.success(`Divisão cancelada! ${data.devolvidos} ${data.devolvidos === 1 ? "item devolvido" : "itens devolvidos"} para ${data.originalNumero}.`);
-      q.refetch(); coberturaScQ.refetch();
+      q.refetch(); coberturaScQ.refetch(); refetchListaDerivados();
       setShowDetalhe(data.originalId);
     },
     onError: (e) => toast.error(e.message),
   });
-  const coberturaAutoQ = trpc.compras.buscarSaldosRealocacao.useQuery(
-    { companyId, obraId: (detalheQ.data as any)?.obraId, cotacaoId: showDetalhe ?? undefined, deficit: 1 },
-    { enabled: showDetalhe !== null && !!detalheQ.data }
+  const mapaQ = trpc.compras.getMapaCotacao.useQuery(
+    { cotacaoId: showDetalhe! },
+    { enabled: showDetalhe !== null && abaAtiva === "mapa" }
   );
-  useEffect(() => {
-    if (coberturaAutoQ.data?.cobertoPorRisco && coberturaAutoQ.data.totalDebitadoEstaCotacao > 0) {
-      setCobertoPorRisco(true);
-    }
-  }, [coberturaAutoQ.data?.cobertoPorRisco, coberturaAutoQ.data?.totalDebitadoEstaCotacao]);
-  const mapaQ = trpc.compras.getMapaCotacao.useQuery({ cotacaoId: showDetalhe! }, { enabled: showDetalhe !== null });
   const mapaItens = mapaQ.data?.itens ?? [];
   // Rev. 4258 — memoizar arrays para evitar chave de query instável a cada render
   const mapaDescricoes = React.useMemo(
@@ -1262,9 +1388,46 @@ export default function Cotacoes() {
   // Rev. 4258 — filtrar e agrupar itens do mapa UMA vez (useMemo); evita IIFE de 812 itens a cada render
   const itensParaRenderizarMemo = React.useMemo(() => {
     const data = mapaQ.data;
-    const rawItens = mapaFiltro
+    let rawItensBase = mapaFiltro
       ? (data?.itens ?? []).filter((it: any) => (it.descricao ?? "").toLowerCase().includes(mapaFiltro.toLowerCase()))
       : (data?.itens ?? []);
+    // Rev. 5084 — filtro por classificação de cobertura (mesma regra dos cards):
+    // total = solicitado ≥ orçado; parcial = 0 < solicitado < orçado; sem = solicitado 0.
+    if (coberturaFiltro) {
+      rawItensBase = rawItensBase.filter((it: any) => {
+        const orc = Number((it as any).qtdOrcada ?? 0);
+        if (!(orc > 0)) return false;
+        const sol = Number((it as any).qtdTotalSolicitada ?? 0);
+        // Rev. 5086 — mesma tolerância de arredondamento dos cards (SC 3 casas × orçamento 4)
+        const cobre = sol >= orc - Math.max(orc * 0.001, 0.01);
+        if (coberturaFiltro === "total") return cobre;
+        if (coberturaFiltro === "parcial") return sol > 0 && !cobre;
+        return sol <= 0;
+      });
+    }
+    // Rev. 5069 — ordenar pela numeração da planilha orçamentária (eapCodigo, ex.: 3.1.2),
+    // do menor pro maior, comparando segmento a segmento. Sem código = vai pro fim (ordem original).
+    const eapKey = (it: any): number[] | null => {
+      const cod = String(it.eapCodigo ?? "").trim();
+      if (!cod) return null;
+      const segs = cod.split(/[^0-9]+/).filter(Boolean).map(Number);
+      return segs.length ? segs : null;
+    };
+    const rawItens = rawItensBase.map((it: any, i: number) => ({ it, i, k: eapKey(it) }))
+      .sort((a: any, b: any) => {
+        if (a.k && b.k) {
+          const len = Math.max(a.k.length, b.k.length);
+          for (let s = 0; s < len; s++) {
+            const d = (a.k[s] ?? 0) - (b.k[s] ?? 0);
+            if (d !== 0) return d;
+          }
+          return a.i - b.i;
+        }
+        if (a.k) return -1;
+        if (b.k) return 1;
+        return a.i - b.i;
+      })
+      .map((x: any) => x.it);
     const isPacote = ((data as any)?.tipoEfetivo ?? data?.cotacao?.tipo) === "pacote";
     if (isPacote) {
       const compGroups: Record<string, any[]> = {};
@@ -1340,11 +1503,24 @@ export default function Cotacoes() {
       });
     }
     return rawItens;
-  }, [mapaQ.data, mapaFiltro, agruparItens]);
-  const scsQ = trpc.compras.listarSolicitacoes.useQuery({ companyId }, { enabled: companyId > 0 });
-  const fornQ = trpc.compras.listarFornecedores.useQuery({ companyId, ativo: true }, { enabled: companyId > 0 });
-  const obrasQ = trpc.obras.listActive.useQuery({ companyId }, { enabled: companyId > 0 });
-  const condPagQ = trpc.compras.listarCondicoesPagamento.useQuery({ companyId }, { enabled: companyId > 0 });
+  }, [mapaQ.data, mapaFiltro, coberturaFiltro, agruparItens]);
+  // Rev. 5200 — catálogos de criação/edição só carregam quando o diálogo/aba que os
+  // usa está aberto (task #195). Os gates cobrem: modal de criação (showNova),
+  // detalhe/mapa (showDetalhe/abaAtiva), gerenciador de pagamento (condModalFornId)
+  // e picker/edição de fornecedor (editFornId/showNovoForn/mapaFornOpen).
+  const catalogoDetalhe = showDetalhe !== null;
+  const scsNecessario = companyId > 0 && showNova;
+  // A página da lista já traz os nomes exibidos de fornecedor e obra. Os catálogos
+  // completos ficam reservados para ações que realmente precisam das opções/detalhes.
+  const fornNecessario = companyId > 0 && (showNova || catalogoDetalhe || editFornId !== null || showNovoForn || mapaFornOpen);
+  const condPagNecessario = companyId > 0 && (showNova || catalogoDetalhe || condModalFornId !== null);
+  // Obras completas são necessárias para o filtro e os formulários, não para desenhar
+  // a página (cada linha já vem com o seu nome de obra).
+  const obrasNecessario = companyId > 0 && (obraFiltroAberto || showNova || catalogoDetalhe || !!filtroObraId);
+  const scsQ = trpc.compras.listarSolicitacoes.useQuery({ companyId }, { enabled: scsNecessario });
+  const fornQ = trpc.compras.listarFornecedores.useQuery({ companyId, ativo: true }, { enabled: fornNecessario });
+  const obrasQ = trpc.obras.listActive.useQuery({ companyId }, { enabled: obrasNecessario });
+  const condPagQ = trpc.compras.listarCondicoesPagamento.useQuery({ companyId }, { enabled: condPagNecessario });
   const criarCondMut = trpc.compras.criarCondicaoPagamento.useMutation({
     onSuccess: () => { toast.success("Condição adicionada!"); setNovaCondicao(""); condPagQ.refetch(); },
     onError: (e) => toast.error(e.message),
@@ -1358,7 +1534,7 @@ export default function Cotacoes() {
     : COND_PAG_PADRAO;
 
   const criar = trpc.compras.criarCotacao.useMutation({
-    onSuccess: () => { toast.success("Cotação criada!"); setShowNova(false); resetForm(); q.refetch(); },
+    onSuccess: () => { toast.success("Cotação criada!"); setShowNova(false); resetForm(); q.refetch(); refetchListaDerivados(); },
     onError: (e) => toast.error(e.message),
   });
   const gerarOC = trpc.compras.criarOrdemDeCotacao.useMutation({
@@ -1368,7 +1544,7 @@ export default function Cotacoes() {
       setTimeout(() => setAprovacaoProgress(p => p ? { ...p, step: 2 } : p), 1200);
     },
     onSuccess: (data: any) => {
-      q.refetch(); detalheQ.refetch(); setSemVerbaAutorizado(null);
+      q.refetch(); detalheQ.refetch(); refetchListaDerivados(); setSemVerbaAutorizado(null);
       const tcId = data?.terceiroContratoGeradoId;
       setTimeout(() => setAprovacaoProgress(p => p ? { ...p, step: 3 } : p), 400);
       setTimeout(() => setAprovacaoProgress(p => p ? { ...p, step: 4, redirectTo: tcId ? `/terceiros/contratos/${tcId}?tab=documento` : undefined } : p), 1000);
@@ -1398,7 +1574,7 @@ export default function Cotacoes() {
     onSuccess: (data) => {
       setLocalItensEmOC(prev => [...new Set([...prev, ...itensPendentesOCRef.current])]);
       itensPendentesOCRef.current = [];
-      q.refetch(); detalheQ.refetch(); mapaQ.refetch(); setSemVerbaAutorizado(null);
+      q.refetch(); detalheQ.refetch(); mapaQ.refetch(); refetchListaDerivados(); setSemVerbaAutorizado(null);
       setTimeout(() => setAprovacaoProgress(p => p ? { ...p, step: 3 } : p), 400);
       setTimeout(() => setAprovacaoProgress(p => p ? { ...p, step: 4 } : p), 1000);
       setTimeout(() => {
@@ -1423,15 +1599,15 @@ export default function Cotacoes() {
     onError: (e) => toast.error(e.message),
   });
   const atualizarStatus = trpc.compras.atualizarStatusCotacao.useMutation({
-    onSuccess: () => { toast.success("Status atualizado!"); q.refetch(); detalheQ.refetch(); },
+    onSuccess: () => { toast.success("Status atualizado!"); q.refetch(); detalheQ.refetch(); refetchListaDerivados(); },
     onError: (e) => toast.error(e.message),
   });
   const excluir = trpc.compras.excluirCotacao.useMutation({
-    onSuccess: () => { toast.success("Cotação excluída!"); q.refetch(); setShowDetalhe(null); },
+    onSuccess: () => { toast.success("Cotação excluída!"); q.refetch(); refetchListaDerivados(); setShowDetalhe(null); },
     onError: (e) => toast.error(e.message),
   });
   const excluirLote = trpc.compras.excluirCotacoesEmLote.useMutation({
-    onSuccess: (res) => { toast.success(`${res.count} cotação(ões) excluída(s)!`); q.refetch(); setSelectedIds(new Set()); setConfirmExcluirLote(false); },
+    onSuccess: (res) => { toast.success(`${res.count} cotação(ões) excluída(s)!`); q.refetch(); refetchListaDerivados(); setSelectedIds(new Set()); setConfirmExcluirLote(false); },
     onError: (e) => toast.error(e.message),
   });
   const gerarContrato = trpc.terceiroContratos.gerarContratoFromCotacao.useMutation({
@@ -1447,6 +1623,203 @@ export default function Cotacoes() {
     },
     onError: (e) => { setAprovacaoProgress(null); toast.error(e.message); },
   });
+  // Rev. 4998 — prévia do contrato ANTES de aprovar (pedido do user): modal com o texto
+  // exatamente como sairá na geração, e só então "Aprovar e Gerar".
+  const [previewContratoOpen, setPreviewContratoOpen] = useState(false);
+  // Rev. 5013 — título/assunto do contrato é digitado pelo usuário antes da prévia
+  // (pode ser "...para Fornecimento de Mão de Obra", "...Material e Mão de Obra" etc.)
+  const [contratoTitulo, setContratoTitulo] = useState("");
+  const [tituloPromptOpen, setTituloPromptOpen] = useState(false);
+  const [tituloDraft, setTituloDraft] = useState("");
+  // Rev. 5019 — WIZARD DE ANEXOS (poka-yoke): conduz o usuário etapa por etapa
+  // (título → matriz de fornecimento → projetos por disciplina → cronograma →
+  // outros documentos → revisão) antes de abrir a prévia do contrato.
+  const [wizStep, setWizStep] = useState(0);
+  const MATRIZ_PADRAO = ["Concreto usinado", "Aço / armação", "Telas (fibra de vidro / metálica)", "Argamassa / resina de chumbamento", "Formas e escoramento", "Andaimes / plataforma", "Ferramentas e equipamentos", "EPIs da equipe"];
+  const [wizMatriz, setWizMatriz] = useState<Array<{ item: string; fornecidoPor: "CONTRATANTE" | "CONTRATADA" }>>([]);
+  const [wizMatrizNovo, setWizMatrizNovo] = useState("");
+  // Rev. 5020 — "não se aplica" (contrato só de mão de obra) + cópia do escopo da proposta via IA
+  const [wizMatrizNA, setWizMatrizNA] = useState(false);
+  const extrairMatrizIA = trpc.terceiroContratos.extrairMatrizDaProposta.useMutation();
+  const [wizProjetos, setWizProjetos] = useState<Array<{ disciplina: string; arquivos: Array<{ nome: string; url: string }> }>>([]);
+  const [wizCronograma, setWizCronograma] = useState<{ nome: string; url: string } | null>(null);
+  const [wizOutros, setWizOutros] = useState<Array<{ titulo: string; nome: string; url: string }>>([]);
+  const [wizUploading, setWizUploading] = useState(false);
+  // Rev. 5053 — pedido do user (IMG_5550/5552): a proposta comercial (Anexo I)
+  // agora é gerida DENTRO do wizard (ver/abrir/substituir/excluir), matando o
+  // fluxo de duas telas via clipe do Mapa de Cotação.
+  const wizVencedor: any = ((mapaQ.data as any)?.participantes ?? []).find((p: any) => p.selecionado) ?? null;
+  const wizPropostaUrl: string | null = wizVencedor?.arquivoUrl || null;
+  const wizPropostaNome: string = wizVencedor?.arquivoNome || "Proposta Comercial";
+  const uploadPropostaWiz = trpc.compras.uploadAnexoFornecedor.useMutation();
+  const salvarPropostaWiz = trpc.compras.salvarAnexoFornecedor.useMutation();
+  const wizUploadProposta = async (file: File) => {
+    if (!showDetalhe || !wizVencedor) return;
+    if (!/\.(pdf|jpe?g)$/i.test(file.name)) { toast.error("A proposta deve ser PDF ou JPG."); return; }
+    if (file.size > 15 * 1024 * 1024) { toast.error("Arquivo acima de 15MB."); return; }
+    try {
+      const b64 = await new Promise<string>((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result).split(",")[1] || ""); fr.onerror = rej; fr.readAsDataURL(file); });
+      await uploadPropostaWiz.mutateAsync({
+        cotacaoId: showDetalhe, fornecedorId: wizVencedor.fornecedorId, companyId,
+        fileBase64: b64, fileName: file.name,
+        mimeType: /\.pdf$/i.test(file.name) ? "application/pdf" : "image/jpeg",
+      });
+      toast.success("Proposta anexada!");
+      mapaQ.refetch();
+    } catch (e: any) { toast.error(e?.message || "Falha ao enviar a proposta"); }
+  };
+  // Rev. 5021 — % real de envio (0–100) via XHR upload.onprogress
+  const [wizProgress, setWizProgress] = useState(0);
+  const anexosContratoQ = trpc.terceiroContratos.getAnexosContrato.useQuery(
+    { cotacaoId: showDetalhe ?? 0, companyId },
+    { enabled: tituloPromptOpen && !!showDetalhe && companyId > 0, staleTime: 0 }
+  );
+  const wizHidratado = useRef(false);
+  useEffect(() => {
+    // hidrata UMA vez por abertura (efeito único — evita corrida de cache do RQ)
+    if (!tituloPromptOpen) { wizHidratado.current = false; return; }
+    if (wizHidratado.current || anexosContratoQ.data === undefined) return;
+    wizHidratado.current = true;
+    setWizStep(0);
+    // Rev. 5020 — título sugerido automaticamente pelo tipo da cotação (o
+    // usuário pode editar): MDO pura, pacote (material+MDO) ou equipamento.
+    {
+      const tp = String((detalheQ.data as any)?.tipo ?? "material");
+      const sugestao = tp === "servico" ? "Contrato de Prestação de Serviços para Fornecimento de Mão de Obra"
+        : tp === "pacote" ? "Contrato de Prestação de Serviços para Fornecimento de Material e Mão de Obra"
+        : tp === "equipamento" ? "Contrato de Locação de Equipamentos"
+        : "";
+      // Preenche quando vazio OU quando o draft é só um título genérico/sugerido
+      // (não sobrescreve texto personalizado digitado pelo usuário)
+      const genericos = ["", "contrato de prestação de serviços", "contrato de prestação de serviços para fornecimento de mão de obra", "contrato de prestação de serviços para fornecimento de material e mão de obra", "contrato de locação de equipamentos"];
+      if (sugestao && genericos.includes(tituloDraft.trim().toLowerCase())) setTituloDraft(sugestao);
+    }
+    const ax: any = anexosContratoQ.data?.anexos || null;
+    const salvos: any[] = Array.isArray(ax?.matriz) ? ax.matriz : [];
+    setWizMatriz(MATRIZ_PADRAO.map((item) => ({
+      item, fornecidoPor: (salvos.find((s) => s.item === item)?.fornecidoPor === "CONTRATANTE" ? "CONTRATANTE" : "CONTRATADA") as "CONTRATANTE" | "CONTRATADA",
+    })).concat(salvos.filter((s) => !MATRIZ_PADRAO.includes(s.item)).map((s) => ({ item: String(s.item), fornecidoPor: s.fornecidoPor === "CONTRATANTE" ? "CONTRATANTE" as const : "CONTRATADA" as const }))));
+    setWizProjetos(Array.isArray(ax?.projetos) ? ax.projetos : []);
+    setWizCronograma(ax?.cronograma?.url ? ax.cronograma : null);
+    setWizOutros(Array.isArray(ax?.outros) ? ax.outros : []);
+    // Rev. 5020 — MDO pura já entra como "não se aplica" por padrão
+    setWizMatrizNA(ax ? ax.matrizNaoAplica === true : String((detalheQ.data as any)?.tipo ?? "") === "servico");
+  }, [tituloPromptOpen, anexosContratoQ.data]);
+  const uploadAnexoContrato = trpc.terceiroContratos.uploadAnexoContrato.useMutation();
+  const salvarAnexosContrato = trpc.terceiroContratos.salvarAnexosContrato.useMutation();
+  const wizUpload = async (file: File): Promise<{ nome: string; url: string } | null> => {
+    if (!showDetalhe) return null;
+    if (!/\.pdf$/i.test(file.name)) { toast.error("Apenas arquivos PDF são aceitos como anexo do contrato."); return null; }
+    setWizUploading(true);
+    setWizProgress(0);
+    try {
+      const b64 = await new Promise<string>((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result).split(",")[1] || ""); fr.onerror = rej; fr.readAsDataURL(file); });
+      // XHR direto no endpoint tRPC p/ ter upload.onprogress (0–100% real);
+      // formato do httpBatchLink+superjson: {"0":{"json":<input>}} → [{result:{data:{json:...}}}]
+      const r = await new Promise<{ nome: string; url: string }>((res, rej) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", "/api/trpc/terceiroContratos.uploadAnexoContrato?batch=1");
+        xhr.setRequestHeader("Content-Type", "application/json");
+        xhr.withCredentials = true;
+        xhr.upload.onprogress = (ev) => { if (ev.lengthComputable) setWizProgress(Math.min(99, Math.round((ev.loaded / ev.total) * 100))); };
+        xhr.onload = () => {
+          try {
+            const body = JSON.parse(xhr.responseText);
+            const item = Array.isArray(body) ? body[0] : body;
+            if (xhr.status >= 200 && xhr.status < 300 && item?.result?.data?.json?.url) {
+              setWizProgress(100);
+              res({ nome: item.result.data.json.nome, url: item.result.data.json.url });
+            } else rej(new Error(item?.error?.json?.message || item?.error?.message || "Falha ao enviar o arquivo"));
+          } catch { rej(new Error("Falha ao enviar o arquivo")); }
+        };
+        xhr.onerror = () => rej(new Error("Falha de conexão no envio"));
+        xhr.send(JSON.stringify({ "0": { json: { cotacaoId: showDetalhe, companyId, fileBase64: b64, fileName: file.name } } }));
+      });
+      return r;
+    } catch (e: any) {
+      toast.error(e?.message || "Falha ao enviar o arquivo");
+      return null;
+    } finally { setWizUploading(false); setWizProgress(0); }
+  };
+  const wizConcluir = async () => {
+    if (!showDetalhe || !tituloDraft.trim()) return;
+    try {
+      await salvarAnexosContrato.mutateAsync({
+        cotacaoId: showDetalhe, companyId,
+        anexos: {
+          matrizNaoAplica: wizMatrizNA,
+          matriz: wizMatrizNA ? [] : wizMatriz.filter((m) => m.item.trim()),
+          projetos: wizProjetos.filter((p) => p.disciplina.trim() && p.arquivos.length > 0),
+          cronograma: wizCronograma,
+          outros: wizOutros.filter((o) => o.titulo.trim() && o.url),
+        },
+      });
+      setContratoTitulo(tituloDraft.trim());
+      setTituloPromptOpen(false);
+      setPreviewContratoOpen(true);
+    } catch (e: any) { toast.error(e?.message || "Falha ao salvar os anexos"); }
+  };
+  const previewContratoQ = trpc.terceiroContratos.previewContratoFromCotacao.useQuery(
+    { cotacaoId: showDetalhe ?? 0, companyId, tituloContrato: contratoTitulo || undefined },
+    { enabled: previewContratoOpen && !!showDetalhe && companyId > 0 && !!contratoTitulo.trim(), staleTime: 0 }
+  );
+  // Rev. 5008 — pedido do user (IMG_5523): renderiza as páginas da proposta
+  // (PDF via pdfjs → canvas → dataURL; imagem → dataURL) para continuarem
+  // DENTRO da prévia, após as assinaturas. null = renderizando/falhou (mostra
+  // card de fallback com botão "Abrir").
+  // Rev. 5021 — TODOS os anexos do wizard (proposta, projetos, cronograma,
+  // outros) renderizados dentro da prévia, cada um com capa própria.
+  const [anexoPreviewPages, setAnexoPreviewPages] = useState<Array<{ titulo: string; subtitulo?: string; pages: string[] }> | null>(null);
+  // Rev. 5022 — logo da empresa como dataURL: o iframe sandboxed não envia o
+  // cookie de sessão, então /uploads (autenticado) quebrava a imagem.
+  const [contratoLogoDataUrl, setContratoLogoDataUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let cancel = false;
+    setContratoLogoDataUrl(null);
+    const logoUrl = String((previewContratoQ.data as any)?.docMeta?.empresa?.logoUrl || "");
+    if (!previewContratoOpen || !logoUrl) return;
+    (async () => {
+      try {
+        const blob = await fetch(logoUrl).then(r => { if (!r.ok) throw new Error("logo"); return r.blob(); });
+        const dataUrl = await new Promise<string>((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result as string); fr.onerror = rej; fr.readAsDataURL(blob); });
+        if (!cancel && dataUrl.startsWith("data:image/")) setContratoLogoDataUrl(dataUrl);
+      } catch { /* fallback: URL absoluta no builder */ }
+    })();
+    return () => { cancel = true; };
+  }, [previewContratoOpen, (previewContratoQ.data as any)?.docMeta?.empresa?.logoUrl]);
+  // Rev. 5009 — spinner do botão "WhatsApp" da prévia (gera o PDF no servidor)
+  const [previewPdfSharing, setPreviewPdfSharing] = useState(false);
+  // Rev. 5019 — dupla checagem (IA): contrato × proposta comercial. Só alerta,
+  // nunca bloqueia a aprovação (decisão comercial é do usuário).
+  const analisarDivergencias = trpc.terceiroContratos.analisarDivergenciasContrato.useMutation();
+  const [divergenciasPanel, setDivergenciasPanel] = useState<null | { motivo: string | null; divergencias: Array<{ tema: string; gravidade: string; contrato: string; proposta: string; recomendacao: string }> }>(null);
+  // Rev. 5023 — pedido do user: progresso 0→100% durante a análise + resumo
+  // completo numa tela própria ao concluir. O % é estimado (a IA não streama
+  // progresso), avançando até 95% e fechando em 100% quando a resposta chega.
+  const [analiseProgress, setAnaliseProgress] = useState<number | null>(null);
+  const analiseTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [resumoAnaliseOpen, setResumoAnaliseOpen] = useState(false);
+  // Rev. 5024 — chips do placar filtram a lista de divergências ao clicar.
+  const [resumoFiltro, setResumoFiltro] = useState<"todas" | "alta" | "media" | "baixa">("todas");
+  const pararProgressoAnalise = () => { if (analiseTimerRef.current) { clearInterval(analiseTimerRef.current); analiseTimerRef.current = null; } };
+  useEffect(() => () => pararProgressoAnalise(), []);
+  useEffect(() => { if (!previewContratoOpen) { setDivergenciasPanel(null); analisarDivergencias.reset(); setResumoAnaliseOpen(false); pararProgressoAnalise(); setAnaliseProgress(null); } }, [previewContratoOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    let cancel = false;
+    setAnexoPreviewPages(null);
+    const pUrl = safeAnexoHref((previewContratoQ.data as any)?.propostaUrl);
+    if (!previewContratoOpen || !pUrl) return;
+    (async () => {
+      try {
+        // Rev. 5054 — lógica extraída p/ @/lib/contratoAnexoPages (reuso no ContratoDetalhe)
+        const sections = await buildAnexoSections(previewContratoQ.data, () => cancel);
+        if (!cancel && sections) setAnexoPreviewPages(sections);
+      } catch {
+        // mantém fallback: card "Abrir" abaixo da prévia
+      }
+    })();
+    return () => { cancel = true; };
+  }, [previewContratoOpen, (previewContratoQ.data as any)?.propostaUrl, (previewContratoQ.data as any)?.anexosContrato]);
   const marcarFd = trpc.compras.marcarCotacaoFd.useMutation({
     onSuccess: () => { toast.success("Faturamento Direto definido!"); detalheQ.refetch(); q.refetch(); setShowFdCotDialog(false); },
     onError: (e) => toast.error(e.message),
@@ -1493,71 +1866,6 @@ export default function Cotacoes() {
     onError: (e) => toast.error(e.message),
   });
 
-  // Cadastro rápido de fornecedor (popup, sem sair da cotação)
-  const buscarCnpjFornQuery = trpc.compras.buscarCNPJ.useQuery(
-    { cnpj: novoForn.cnpj.replace(/\D/g, "") },
-    { enabled: false, retry: false }
-  );
-  const resetNovoForn = () => {
-    setNovoForn({ cnpj: "", razaoSocial: "", nomeFantasia: "", telefone: "", email: "", cidade: "", estado: "" });
-    setCnpjFornErro(null);
-    setBuscandoCnpjForn(false);
-  };
-  const buscarCnpjForn = async () => {
-    const cnpj = novoForn.cnpj.replace(/\D/g, "");
-    if (cnpj.length !== 14) { setCnpjFornErro("Digite um CNPJ completo (14 dígitos)."); return; }
-    setBuscandoCnpjForn(true);
-    setCnpjFornErro(null);
-    try {
-      const res = await buscarCnpjFornQuery.refetch();
-      const d = res.data;
-      if (!d) {
-        setCnpjFornErro(res.error
-          ? "Não foi possível consultar a Receita Federal agora. Preencha manualmente."
-          : "CNPJ não encontrado na Receita Federal.");
-        return;
-      }
-      setNovoForn(prev => ({
-        ...prev,
-        razaoSocial: d.razaoSocial || prev.razaoSocial,
-        nomeFantasia: d.nomeFantasia || prev.nomeFantasia,
-        telefone: d.telefone || prev.telefone,
-        email: d.email || prev.email,
-        cidade: d.cidade || prev.cidade,
-        estado: d.estado || prev.estado,
-      }));
-    } catch {
-      setCnpjFornErro("Falha ao consultar o CNPJ. Preencha manualmente.");
-    } finally {
-      setBuscandoCnpjForn(false);
-    }
-  };
-  const criarFornRapido = trpc.compras.criarFornecedor.useMutation({
-    onSuccess: (f: any) => {
-      toast.success("Fornecedor cadastrado!");
-      setShowNovoForn(false);
-      resetNovoForn();
-      fornQ.refetch();
-      // Já deixa o novo fornecedor selecionado pra adicionar ao mapa num clique.
-      if (f?.id) setMapaFornSelectId(String(f.id));
-    },
-    onError: (e) => toast.error(e.message),
-  });
-  const salvarNovoForn = () => {
-    if (!novoForn.razaoSocial.trim()) { toast.error("Informe a Razão Social."); return; }
-    if (companyId <= 0) { toast.error("Selecione uma empresa antes de cadastrar."); return; }
-    criarFornRapido.mutate({
-      companyId,
-      cnpj: novoForn.cnpj.trim() || undefined,
-      razaoSocial: novoForn.razaoSocial.trim(),
-      nomeFantasia: novoForn.nomeFantasia.trim() || undefined,
-      telefone: novoForn.telefone.trim() || undefined,
-      email: novoForn.email.trim() || undefined,
-      cidade: novoForn.cidade.trim() || undefined,
-      estado: novoForn.estado.trim() || undefined,
-      isFornecedor: true,
-    });
-  };
   const removerForn = trpc.compras.removerFornecedorMapa.useMutation({
     onSuccess: () => { toast.success("Fornecedor removido!"); mapaQ.refetch(); },
     onError: (e) => toast.error(e.message),
@@ -1661,15 +1969,15 @@ export default function Cotacoes() {
     onError: (e) => toast.error(e.message),
   });
   const selecionarVencedor = trpc.compras.selecionarVencedorMapa.useMutation({
-    onSuccess: () => { toast.success("Fornecedor vencedor selecionado!"); mapaQ.refetch(); detalheQ.refetch(); q.refetch(); },
+    onSuccess: () => { toast.success("Fornecedor vencedor selecionado!"); mapaQ.refetch(); detalheQ.refetch(); q.refetch(); refetchListaDerivados(); },
     onError: (e) => toast.error(e.message),
   });
   const cancelarCotacaoMut = trpc.compras.cancelarCotacao.useMutation({
-    onSuccess: () => { toast.success("Cotação cancelada. A SC voltou para 'Aprovado' e pode gerar nova cotação."); setShowDetalhe(null); q.refetch(); },
+    onSuccess: () => { toast.success("Cotação cancelada. A SC voltou para 'Aprovado' e pode gerar nova cotação."); setShowDetalhe(null); q.refetch(); refetchListaDerivados(); },
     onError: (e) => toast.error(e.message),
   });
   const cancelarVencedor = trpc.compras.cancelarVencedorMapa.useMutation({
-    onSuccess: () => { toast.success("Seleção de vencedor cancelada. Ajuste os preços e selecione novamente."); mapaQ.refetch(); detalheQ.refetch(); q.refetch(); },
+    onSuccess: () => { toast.success("Seleção de vencedor cancelada. Ajuste os preços e selecione novamente."); mapaQ.refetch(); detalheQ.refetch(); q.refetch(); refetchListaDerivados(); },
     onError: (e) => toast.error(e.message),
   });
   const propostasQ = trpc.compras.listarPropostasFornecedor.useQuery(
@@ -1739,6 +2047,7 @@ export default function Cotacoes() {
       setCancelarCotacaoId(null);
       setShowDetalhe(null);
       q.refetch();
+      refetchListaDerivados();
       trpcUtils.compras.getCotacao.invalidate();
       trpcUtils.compras.listarOrdens.invalidate();
       trpcUtils.compras.getTimelineCompra.invalidate();
@@ -1750,6 +2059,7 @@ export default function Cotacoes() {
       toast.success("Aprovação revertida. Contrato de serviço excluído. Cotação voltou para 'Aprovada' — pode ser editada e gerar novo contrato.");
       setShowDetalhe(null);
       q.refetch();
+      refetchListaDerivados();
     },
     onError: (e) => toast.error(e.message),
   });
@@ -1800,6 +2110,10 @@ export default function Cotacoes() {
       const valorFreteInicial: Record<number, string> = {};
       const transportadoraInicial: Record<number, string> = {};
       const moduloMedicaoInicial: Record<number, string> = {};
+      // Rev. 5012 — reseta os mapas de prazo do contrato ao trocar de cotação
+      // (senão os valores de um fornecedor vazam p/ outra cotação com o mesmo fornecedor)
+      const mobDataInicial: Record<number, string> = {};
+      const duracaoInicial: Record<number, string> = {};
       const excecaoManualInicial: Record<number, boolean> = {};
       for (const p of mapaQ.data.participantes) {
         prazoInicial[p.fornecedorId] = p.prazoEntregaDias ? String(p.prazoEntregaDias) : "";
@@ -1811,6 +2125,8 @@ export default function Cotacoes() {
         valorFreteInicial[p.fornecedorId] = (p as any).valorFrete ? String(parseFloat((p as any).valorFrete)) : "0";
         transportadoraInicial[p.fornecedorId] = (p as any).transportadora ?? "";
         moduloMedicaoInicial[p.fornecedorId] = (p as any).moduloMedicao ?? "";
+        mobDataInicial[p.fornecedorId] = (p as any).mobilizacaoDataInicio ?? "";
+        duracaoInicial[p.fornecedorId] = (p as any).duracaoContratoDias ? String((p as any).duracaoContratoDias) : "";
         excecaoManualInicial[p.fornecedorId] = !!(p as any).excecaoManual;
         if ((p as any).arquivoUrl) anexoInicial[p.fornecedorId] = (p as any).arquivoUrl;
       }
@@ -1859,6 +2175,8 @@ export default function Cotacoes() {
       setEditTransportadora(transportadoraInicial);
       setEditModuloMedicao(moduloMedicaoInicial);
       setEditExcecaoManual(excecaoManualInicial);
+      setEditMobilizacaoData(mobDataInicial);
+      setEditDuracaoDias(duracaoInicial);
       setAnexoUrl(anexoInicial);
     }
   }, [mapaQ.data, abaAtiva]);
@@ -1900,6 +2218,8 @@ export default function Cotacoes() {
     setEditValorFrete(prev => prev[fId] !== undefined ? prev : { ...prev, [fId]: persistedValorFrete });
     setEditTransportadora(prev => prev[fId] !== undefined ? prev : { ...prev, [fId]: persistedTransp });
     setEditModuloMedicao(prev => prev[fId] !== undefined ? prev : { ...prev, [fId]: persistedModulo });
+    setEditMobilizacaoData(prev => prev[fId] !== undefined ? prev : { ...prev, [fId]: (p as any).mobilizacaoDataInicio ?? "" });
+    setEditDuracaoDias(prev => prev[fId] !== undefined ? prev : { ...prev, [fId]: (p as any).duracaoContratoDias ? String((p as any).duracaoContratoDias) : "" });
     setEditExcecaoManual(prev => prev[fId] !== undefined ? prev : { ...prev, [fId]: persistedExcecao });
     // Rev. 4284 — seed adiantamento e retenção
     setEditAdiantamentoAtivo(prev => prev[fId] !== undefined ? prev : { ...prev, [fId]: !!(p as any).adiantamentoAtivo });
@@ -2011,109 +2331,35 @@ export default function Cotacoes() {
     setItens(p => p.map((it, i) => i === idx ? { ...it, [field]: val } : it));
   }
 
-  const lista = q.data ?? [];
-  // Rev. 2296 — contadores por status (ignoram filtroStatus, mas respeitam busca por número).
-  const listaSearched = lista.filter(c => !busca || c.numeroCotacao?.toLowerCase().includes(busca.toLowerCase()) || c.descricao?.toLowerCase().includes(busca.toLowerCase()));
-  // Rev. 2298 — contadores e filtros são compostos (status + tipo).
-  // Cada linha de pills mostra o contador IGNORANDO seu próprio filtro
-  // mas APLICANDO o filtro da outra dimensão — assim, ao escolher um
-  // tipo, o contador de status reflete só aquele tipo, e vice-versa.
-  function tipoOf(c: any) { return String(c?.tipo ?? "material"); }
-  function statusOf(c: any) { return String(c?.status ?? "pendente"); }
-  // Rev. 2826 — filtro virtual "A entregar": OC gerada mas ainda não entregue
-  // (campo `entregaPendente` vindo do backend). Não é um status real da cotação.
-  function matchStatus(c: any) {
-    if (filtroStatus === "todos") return true;
-    if (filtroStatus === "a_entregar") return !!c?.entregaPendente;
-    return statusOf(c) === filtroStatus;
-  }
-
-  const baseTipoFiltered = listaSearched.filter(c => filtroTipo === "todos" || tipoOf(c) === filtroTipo);
-  const baseStatusFiltered = listaSearched.filter(matchStatus);
-
-  const countsPorStatus = baseTipoFiltered.reduce<Record<string, number>>((acc, c) => {
-    const s = statusOf(c);
-    acc[s] = (acc[s] ?? 0) + 1;
-    return acc;
-  }, {});
-  const countAEntregar = baseTipoFiltered.filter(c => c?.entregaPendente).length;
-  const countTodos = baseTipoFiltered.length;
-
-  const countsPorTipo = baseStatusFiltered.reduce<Record<string, number>>((acc, c) => {
-    const t = tipoOf(c);
-    acc[t] = (acc[t] ?? 0) + 1;
-    return acc;
-  }, {});
-  const countTodosTipo = baseStatusFiltered.length;
-
-  // Rev. 4016 — Item 17: filtro por período de criação (criadoEm).
-  function matchData(c: any) {
-    if (!filtroDataInicio && !filtroDataFim) return true;
-    const raw = c?.criadoEm;
-    if (!raw) return false;
-    const d = new Date(raw);
-    if (Number.isNaN(d.getTime())) return false;
-    if (filtroDataInicio) {
-      const ini = new Date(`${filtroDataInicio}T00:00:00`);
-      if (d < ini) return false;
-    }
-    if (filtroDataFim) {
-      const fim = new Date(`${filtroDataFim}T23:59:59`);
-      if (d > fim) return false;
-    }
-    return true;
-  }
-  const filtBase = listaSearched.filter(c =>
-    matchStatus(c) &&
-    (filtroTipo === "todos" || tipoOf(c) === filtroTipo) &&
-    matchData(c) &&
-    (!filtroObraId || String(c.obraId) === filtroObraId)
-  );
-  // Rev. 2487 — Ordenação clicável por coluna.
-  const fornecedoresList = fornQ.data ?? [];
+  // Rev. 5200 — linhas exibidas de imediato; o enriquecimento (meta × melhor preço,
+  // chaveado por id) é MESCLADO por id sem descartar nenhuma linha. Nomes de
+  // fornecedor/obra vêm dos catálogos (carregados logo após a lista). Se o
+  // enriquecimento ainda não chegou, mantém os campos que a própria linha já traz.
+  const listaBase = q.data?.items ?? [];
+  const lista = React.useMemo(() => {
+    if (enriquecerMap.size === 0) return listaBase;
+    return listaBase.map((c: any) => {
+      const e = enriquecerMap.get(c.id);
+      return e ? { ...c, ...e } : c;
+    });
+  }, [listaBase, enriquecerMap]);
+  const filt = lista;
+  // Rev. 5200 — total/contadores vêm do resumo (endpoint separado). Enquanto o resumo
+  // não chega, usa valores loading-safe (0/{}); a lista já aparece.
+  const counts = resumoQ.data?.counts;
+  const countsPorStatus = counts?.porStatus ?? {};
+  const countAEntregar = counts?.aEntregar ?? 0;
+  const countTodos = counts?.todosStatus ?? 0;
+  const countsPorTipo = counts?.porTipo ?? {};
+  const countTodosTipo = counts?.todosTipo ?? 0;
+  // Rev. 5200 — total/totalPages para paginação e display, com fallback loading-safe:
+  // enquanto o resumo não carrega, deriva de hasMore/página para não travar a navegação.
+  const resumoTotal = resumoQ.data?.total;
+  const listaHasMore = !!(q.data as any)?.hasMore;
+  const totalPaginasCotacoes = resumoTotal != null
+    ? Math.max(1, Math.ceil(resumoTotal / 50))
+    : (listaHasMore ? pagina + 1 : pagina);
   const obrasList = obrasQ.data ?? [];
-  function nomeObraSort(id: any) {
-    if (id === null || id === undefined) return "";
-    const o = obrasList.find((x: any) => x.id === id);
-    return (o?.nome || "").toString();
-  }
-  function nomeFornSort(id: any) {
-    if (id === null || id === undefined) return "";
-    const f = fornecedoresList.find((x: any) => x.id === id);
-    return (f?.nomeFantasia || f?.razaoSocial || "").toString();
-  }
-  function isEmpty(v: any): boolean {
-    return v === null || v === undefined || v === "" || (typeof v === "number" && !isFinite(v));
-  }
-  function cmp(a: any, b: any): number {
-    if (typeof a === "number" && typeof b === "number") return a - b;
-    return String(a).localeCompare(String(b), "pt-BR", { numeric: true, sensitivity: "base" });
-  }
-  function valForSort(c: any): any {
-    switch (sortKey) {
-      case "numeroCotacao": return c.numeroCotacao ?? null;
-      case "descricao":     return c.descricao ?? null;
-      case "obra":          return nomeObraSort((c as any).obraId) || null;
-      case "fornecedor":    return nomeFornSort(c.fornecedorId) || null;
-      case "total":         { const v = parseFloat((c as any).total ?? ""); return isNaN(v) ? null : v; }
-      case "validade":      return ((c as any).validadeAte ?? null) || null;
-      case "status":        return statusOf(c) || null;
-      default:              return null;
-    }
-  }
-  // Vazios SEMPRE no fim (independente de asc/desc) — comparação de
-  // vazio acontece ANTES da inversão de sinal.
-  const filt = [...filtBase].sort((a, b) => {
-    const va = valForSort(a);
-    const vb = valForSort(b);
-    const ea = isEmpty(va);
-    const eb = isEmpty(vb);
-    if (ea && eb) return 0;
-    if (ea) return 1;
-    if (eb) return -1;
-    const r = cmp(va, vb);
-    return sortDir === "asc" ? r : -r;
-  });
 
   const allFilteredIds = filt.map(c => c.id);
   const allSelected = allFilteredIds.length > 0 && allFilteredIds.every(id => selectedIds.has(id));
@@ -2181,7 +2427,7 @@ export default function Cotacoes() {
     };
     return (
       <div className="fixed inset-0 z-[9999] flex items-center justify-center" style={{ pointerEvents: "auto" }}>
-        <div className="absolute inset-0 bg-black/50" onClick={() => setIaExtracao(null)} />
+        <div className="absolute inset-0 bg-black/50" onClick={() => { setIaExtracao(null); setIaFiltroStatus(null); }} />
         <div className="relative bg-white rounded-xl shadow-2xl border border-gray-200 max-w-6xl w-[98vw] max-h-[92vh] overflow-y-auto p-6 space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="flex items-center gap-2 text-lg font-semibold text-violet-700">
@@ -2194,7 +2440,7 @@ export default function Cotacoes() {
                 </span>
               )}
               {d.fileName && <span className="text-[10px] text-gray-400 truncate max-w-[150px]">{d.fileName}</span>}
-              <button onClick={() => setIaExtracao(null)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+              <button onClick={() => { setIaExtracao(null); setIaFiltroStatus(null); }} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
             </div>
           </div>
 
@@ -2225,20 +2471,49 @@ export default function Cotacoes() {
             <div className="bg-gray-50 border border-gray-200 rounded-lg p-2.5 text-xs text-gray-600">{d.observacoes}</div>
           )}
 
-          <div className="grid grid-cols-3 gap-2">
-            <div className={`rounded-lg p-2.5 text-center ${nParcial > 0 ? "bg-amber-50 border border-amber-200" : "bg-green-50 border border-green-200"}`}>
-              <div className="text-lg font-bold">{nParcial}</div>
-              <div className="text-[10px] font-medium text-amber-700">Qtd Parcial</div>
+          {/* Rev. 5096 — cards clicáveis que filtram a tabela abaixo */}
+          {(() => {
+            const statusDe = (l: any): "ok" | "parcial" | "excedente" | "sem_vinculo" => {
+              if (l.matchItemId == null) return "sem_vinculo";
+              const sc0 = itemById.get(l.matchItemId);
+              const qSC0 = sc0 ? Number(sc0.quantidade) : null;
+              const qCot0 = l.quantidade != null ? Number(l.quantidade) : null;
+              if (qSC0 == null || qCot0 == null) return "ok";
+              const dd = qCot0 - qSC0;
+              return Math.abs(dd) < 0.01 ? "ok" : dd < 0 ? "parcial" : "excedente";
+            };
+            const nOk = iaLinhas.filter((l: any) => statusDe(l) === "ok").length;
+            const nSemVinculo = iaLinhas.filter((l: any) => statusDe(l) === "sem_vinculo").length;
+            const cardCls = (ativo: boolean, base: string) =>
+              `rounded-lg p-2.5 text-center cursor-pointer select-none transition-all border ${base} ${ativo ? "ring-2 ring-violet-400 shadow-sm" : "hover:shadow-sm hover:brightness-[0.98]"}`;
+            const toggle = (v: typeof iaFiltroStatus) => setIaFiltroStatus(prev => prev === v ? null : v);
+            return (
+              <div className="grid grid-cols-4 gap-2">
+                <div onClick={() => toggle("ok")} className={cardCls(iaFiltroStatus === "ok", "bg-emerald-50 border-emerald-200")}>
+                  <div className="text-lg font-bold text-emerald-700">{nOk}</div>
+                  <div className="text-[10px] font-medium text-emerald-700">Qtd OK</div>
+                </div>
+                <div onClick={() => toggle("parcial")} className={cardCls(iaFiltroStatus === "parcial", nParcial > 0 ? "bg-amber-50 border-amber-200" : "bg-gray-50 border-gray-200")}>
+                  <div className="text-lg font-bold text-amber-700">{nParcial}</div>
+                  <div className="text-[10px] font-medium text-amber-700">Qtd Parcial</div>
+                </div>
+                <div onClick={() => toggle("excedente")} className={cardCls(iaFiltroStatus === "excedente", nExcedente > 0 ? "bg-blue-50 border-blue-200" : "bg-gray-50 border-gray-200")}>
+                  <div className="text-lg font-bold text-blue-700">{nExcedente}</div>
+                  <div className="text-[10px] font-medium text-blue-700">Qtd Excedente</div>
+                </div>
+                <div onClick={() => toggle("sem_vinculo")} className={cardCls(iaFiltroStatus === "sem_vinculo", (nSemVinculo > 0 || semMatchSC.length > 0) ? "bg-red-50 border-red-200" : "bg-gray-50 border-gray-200")}>
+                  <div className="text-lg font-bold text-red-700">{nSemVinculo > 0 ? nSemVinculo : semMatchSC.length}</div>
+                  <div className="text-[10px] font-medium text-red-700">{nSemVinculo > 0 ? "Sem vínculo" : "SC sem cotação"}</div>
+                </div>
+              </div>
+            );
+          })()}
+          {iaFiltroStatus && (
+            <div className="flex items-center gap-2 text-[11px] text-violet-700">
+              <span>Filtro ativo: <strong>{iaFiltroStatus === "ok" ? "Qtd OK" : iaFiltroStatus === "parcial" ? "Qtd Parcial" : iaFiltroStatus === "excedente" ? "Qtd Excedente" : "Sem vínculo"}</strong></span>
+              <button onClick={() => setIaFiltroStatus(null)} className="underline hover:text-violet-900">limpar</button>
             </div>
-            <div className={`rounded-lg p-2.5 text-center ${nExcedente > 0 ? "bg-blue-50 border border-blue-200" : "bg-green-50 border border-green-200"}`}>
-              <div className="text-lg font-bold">{nExcedente}</div>
-              <div className="text-[10px] font-medium text-blue-700">Qtd Excedente</div>
-            </div>
-            <div className={`rounded-lg p-2.5 text-center ${semMatchSC.length > 0 ? "bg-red-50 border border-red-200" : "bg-green-50 border border-green-200"}`}>
-              <div className="text-lg font-bold">{semMatchSC.length}</div>
-              <div className="text-[10px] font-medium text-red-700">SC sem cotação</div>
-            </div>
-          </div>
+          )}
 
           {temDuplicidade && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-2.5 text-xs text-red-700 flex items-center gap-2">
@@ -2257,29 +2532,53 @@ export default function Cotacoes() {
             <div className="border rounded-lg overflow-x-auto">
               <table className="w-full text-xs">
                 <thead className="bg-violet-50">
+                  {/* Rev. 5096 — META (orçamento) vem primeiro, depois o que o FORNECEDOR orçou, depois a DIFERENÇA */}
+                  <tr>
+                    <th colSpan={3} className="px-2 py-1"></th>
+                    <th colSpan={iaPacote ? 2 : 3} className="text-center px-2 py-1 text-[10px] font-bold text-slate-600 bg-slate-100 border-x border-slate-200 uppercase tracking-wide">Orçamento (meta)</th>
+                    <th colSpan={iaPacote ? 5 : 4} className="text-center px-2 py-1 text-[10px] font-bold text-violet-700 bg-violet-100 border-r border-violet-200 uppercase tracking-wide">Fornecedor (cotado)</th>
+                    <th className="text-center px-2 py-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 uppercase tracking-wide">Diferença</th>
+                    <th className="px-2 py-1"></th>
+                  </tr>
                   <tr>
                     <th className="text-center px-2 py-2 font-medium text-violet-700 whitespace-nowrap">IA</th>
                     <th className="text-left px-2 py-2 font-medium text-violet-700">Descrição (fornecedor)</th>
                     <th className="text-left px-2 py-2 font-medium text-violet-700 w-[220px]">Item da cotação</th>
-                    <th className="text-right px-2 py-2 font-medium text-violet-700">Qtd</th>
-                    <th className="text-right px-2 py-2 font-medium text-violet-700">Qtd SC</th>
+                    <th className="text-right px-2 py-2 font-medium text-slate-600 bg-slate-50 border-l border-slate-200">Qtd SC</th>
+                    {!iaPacote && <th className="text-right px-2 py-2 font-medium text-slate-600 bg-slate-50">Meta Unit.</th>}
+                    <th className="text-right px-2 py-2 font-medium text-slate-600 bg-slate-50 border-r border-slate-200">Meta Total</th>
+                    <th className="text-right px-2 py-2 font-medium text-violet-700 bg-violet-50/60">Qtd Cotada</th>
                     {iaPacote ? (
                       <>
-                        <th className="text-right px-2 py-2 font-medium text-blue-600">MAT (R$)</th>
-                        <th className="text-right px-2 py-2 font-medium text-orange-600">MO (R$)</th>
-                        <th className="text-right px-2 py-2 font-medium text-violet-700">Total</th>
+                        <th className="text-right px-2 py-2 font-medium text-blue-600 bg-violet-50/60">MAT (R$)</th>
+                        <th className="text-right px-2 py-2 font-medium text-orange-600 bg-violet-50/60">MO (R$)</th>
+                        <th className="text-right px-2 py-2 font-medium text-violet-400 bg-violet-50/60 whitespace-nowrap" title="Desconto individual (sobrepõe o global quando > 0)">Desc.%</th>
+                        <th className="text-right px-2 py-2 font-medium text-violet-700 bg-violet-50/60 border-r border-violet-200">Total</th>
                       </>
                     ) : (
                       <>
-                        <th className="text-right px-2 py-2 font-medium text-violet-700">Preço Unit.</th>
-                        <th className="text-right px-2 py-2 font-medium text-violet-700">Total</th>
+                        <th className="text-right px-2 py-2 font-medium text-violet-700 bg-violet-50/60">Preço Unit.</th>
+                        <th className="text-right px-2 py-2 font-medium text-violet-400 bg-violet-50/60 whitespace-nowrap" title="Desconto individual (sobrepõe o global quando > 0)">Desc.%</th>
+                        <th className="text-right px-2 py-2 font-medium text-violet-700 bg-violet-50/60 border-r border-violet-200">
+                          Total{iaDescontoPct > 0 ? <span className="text-[10px] ml-1 text-violet-400">(−{iaDescontoPct}%)</span> : null}
+                        </th>
                       </>
                     )}
+                    <th className="text-right px-2 py-2 font-medium text-emerald-700 bg-emerald-50/60" title="Meta Total − Total do fornecedor">Saldo (Meta − Cotado)</th>
                     <th className="text-center px-2 py-2 font-medium text-violet-700">Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {linhasOrd.map((l: any) => {
+                  {linhasOrd.filter((l: any) => {
+                    if (!iaFiltroStatus) return true;
+                    const sc0 = l.matchItemId != null ? itemById.get(l.matchItemId) : null;
+                    if (iaFiltroStatus === "sem_vinculo") return l.matchItemId == null;
+                    if (l.matchItemId == null) return false;
+                    const qSC0 = sc0 ? Number(sc0.quantidade) : null;
+                    const qCot0 = l.quantidade != null ? Number(l.quantidade) : null;
+                    const st = (qSC0 == null || qCot0 == null) ? "ok" : Math.abs(qCot0 - qSC0) < 0.01 ? "ok" : (qCot0 - qSC0) < 0 ? "parcial" : "excedente";
+                    return st === iaFiltroStatus;
+                  }).map((l: any) => {
                     const sc = l.matchItemId != null ? itemById.get(l.matchItemId) : null;
                     const qSC = sc ? Number(sc.quantidade) : null;
                     const qCot = l.quantidade != null ? Number(l.quantidade) : null;
@@ -2288,6 +2587,19 @@ export default function Cotacoes() {
                     const total = (qCot != null && l.precoUnitario != null) ? qCot * Number(l.precoUnitario) : (l.precoUnitario != null ? Number(l.precoUnitario) : null);
                     const dup = l.matchItemId != null && (usoItem.get(l.matchItemId) ?? 0) > 1;
                     const badge = confBadge(l.matchConfianca);
+                    // Rev. 5096 — meta do orçamento p/ comparação lado a lado
+                    const metaUnit = sc ? (parseFloat((sc as any).metaUnitario ?? "0") || 0) : 0;
+                    const metaTotal = metaUnit > 0 && qSC != null ? metaUnit * qSC : null;
+                    const totalPac = (l.totalMat != null || l.totalMdo != null) ? Number(l.totalMat ?? 0) + Number(l.totalMdo ?? 0) : null;
+                    const totalForn = iaPacote ? totalPac : total;
+                    // desconto efetivo: por item (quando > 0) sobrepõe o global
+                    const descItemPct = Number(l.descontoPct ?? 0);
+                    const descEfetivo = descItemPct > 0 ? descItemPct : iaDescontoPct;
+                    // aplica desconto no preview p/ o saldo refletir o que vai ser salvo
+                    const totalFornLiq = (totalForn != null && descEfetivo > 0) ? totalForn * (1 - descEfetivo / 100) : totalForn;
+                    const saldo = metaTotal != null && totalFornLiq != null ? metaTotal - totalFornLiq : null;
+                    const fmtBR = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                    const fmtQ = (v: number) => v.toLocaleString("pt-BR", { maximumFractionDigits: 4 });
                     return (
                       <tr key={l.key} className={`border-t border-gray-100 ${dup ? "bg-red-50/60" : l.matchItemId == null ? "bg-amber-50/40" : "hover:bg-violet-50/40"}`}>
                         <td className="px-2 py-2 text-center">
@@ -2303,7 +2615,22 @@ export default function Cotacoes() {
                             duplicado={dup}
                           />
                         </td>
-                        <td className="px-1 py-1 text-right">
+                        {/* ORÇAMENTO (meta) primeiro */}
+                        <td className={`px-2 py-2 text-right font-mono bg-slate-50/60 border-l border-slate-100 ${statusQtd === "parcial" ? "text-amber-600 font-semibold" : statusQtd === "excedente" ? "text-blue-600 font-semibold" : "text-gray-500"}`}>
+                          {qSC != null ? fmtQ(qSC) : "—"}
+                          {statusQtd === "parcial" && diff != null && <span className="text-[9px] ml-0.5">(-{fmtQ(Math.abs(diff))})</span>}
+                          {statusQtd === "excedente" && diff != null && <span className="text-[9px] ml-0.5">(+{fmtQ(diff)})</span>}
+                        </td>
+                        {!iaPacote && (
+                          <td className="px-2 py-2 text-right font-mono text-gray-500 bg-slate-50/60">
+                            {metaUnit > 0 ? `R$ ${metaUnit.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}` : "—"}
+                          </td>
+                        )}
+                        <td className="px-2 py-2 text-right font-mono text-gray-600 font-semibold bg-slate-50/60 border-r border-slate-100">
+                          {metaTotal != null ? `R$ ${fmtBR(metaTotal)}` : "—"}
+                        </td>
+                        {/* FORNECEDOR (cotado) */}
+                        <td className="px-1 py-1 text-right bg-violet-50/30">
                           <input
                             type="text" inputMode="decimal"
                             value={l.quantidade != null ? String(l.quantidade) : ""}
@@ -2311,11 +2638,6 @@ export default function Cotacoes() {
                             className="w-16 h-7 text-right font-mono text-[11px] border border-gray-200 rounded px-1.5 focus:border-violet-400 focus:ring-1 focus:ring-violet-200 outline-none"
                             placeholder="—"
                           />
-                        </td>
-                        <td className={`px-2 py-2 text-right font-mono ${statusQtd === "parcial" ? "text-amber-600 font-semibold" : statusQtd === "excedente" ? "text-blue-600 font-semibold" : "text-gray-400"}`}>
-                          {qSC != null ? qSC : "—"}
-                          {statusQtd === "parcial" && diff != null && <span className="text-[9px] ml-0.5">(-{Math.abs(diff).toFixed(0)})</span>}
-                          {statusQtd === "excedente" && diff != null && <span className="text-[9px] ml-0.5">(+{diff.toFixed(0)})</span>}
                         </td>
                         {iaPacote ? (
                           <>
@@ -2337,8 +2659,23 @@ export default function Cotacoes() {
                                 placeholder="0,00"
                               />
                             </td>
-                            <td className="px-2 py-2 text-right font-mono text-gray-700">
-                              {((l.totalMat != null || l.totalMdo != null)) ? `R$ ${(Number(l.totalMat ?? 0) + Number(l.totalMdo ?? 0)).toFixed(2)}` : "—"}
+                            <td className="px-1 py-1 text-right bg-violet-50/30">
+                              <input
+                                type="number" min="0" max="100" step="0.5"
+                                value={descItemPct > 0 ? descItemPct : ""}
+                                onChange={e => setIaLinha(l.key, { descontoPct: e.target.value.trim() === "" ? 0 : Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)) })}
+                                className="w-14 h-7 text-right font-mono text-[11px] border border-violet-200 rounded px-1.5 outline-none focus:border-violet-400 focus:ring-1 focus:ring-violet-100"
+                                placeholder={iaDescontoPct > 0 ? String(iaDescontoPct) : "0"}
+                                title={iaDescontoPct > 0 ? `Desc. global: ${iaDescontoPct}% (deixe vazio para herdar)` : "Desconto individual (%)"}
+                              />
+                            </td>
+                            <td className="px-2 py-2 text-right font-mono border-r border-violet-100">
+                              {totalPac != null ? (
+                                <div className="flex flex-col items-end gap-0.5">
+                                  {descEfetivo > 0 && <span className="text-[10px] text-gray-400 line-through">R$ {fmtBR(totalPac)}</span>}
+                                  <span className={descEfetivo > 0 ? "font-semibold text-violet-700" : "text-gray-700"}>R$ {fmtBR(totalPac * (1 - descEfetivo / 100))}</span>
+                                </div>
+                              ) : "—"}
                             </td>
                           </>
                         ) : (
@@ -2355,11 +2692,30 @@ export default function Cotacoes() {
                                 />
                               </div>
                             </td>
-                            <td className="px-2 py-2 text-right font-mono text-gray-700">
-                              {total != null ? `R$ ${Number(total).toFixed(2)}` : "—"}
+                            <td className="px-1 py-1 text-right bg-violet-50/30">
+                              <input
+                                type="number" min="0" max="100" step="0.5"
+                                value={descItemPct > 0 ? descItemPct : ""}
+                                onChange={e => setIaLinha(l.key, { descontoPct: e.target.value.trim() === "" ? 0 : Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)) })}
+                                className="w-14 h-7 text-right font-mono text-[11px] border border-violet-200 rounded px-1.5 outline-none focus:border-violet-400 focus:ring-1 focus:ring-violet-100"
+                                placeholder={iaDescontoPct > 0 ? String(iaDescontoPct) : "0"}
+                                title={iaDescontoPct > 0 ? `Desc. global: ${iaDescontoPct}% (deixe vazio para herdar)` : "Desconto individual (%)"}
+                              />
+                            </td>
+                            <td className="px-2 py-2 text-right font-mono font-semibold border-r border-violet-100">
+                              {total != null ? (
+                                <div className="flex flex-col items-end gap-0.5">
+                                  {descEfetivo > 0 && <span className="text-[10px] text-gray-400 line-through">R$ {fmtBR(Number(total))}</span>}
+                                  <span className={descEfetivo > 0 ? "text-violet-700" : "text-gray-700"}>R$ {fmtBR(Number(total) * (1 - descEfetivo / 100))}</span>
+                                </div>
+                              ) : "—"}
                             </td>
                           </>
                         )}
+                        {/* DIFERENÇA: meta − cotado */}
+                        <td className={`px-2 py-2 text-right font-mono font-semibold bg-emerald-50/40 ${saldo == null ? "text-gray-300" : saldo >= 0 ? "text-emerald-700" : "text-red-600"}`}>
+                          {saldo != null ? `${saldo < 0 ? "-" : ""}R$ ${fmtBR(Math.abs(saldo))}` : "—"}
+                        </td>
                         <td className="px-2 py-2 text-center">
                           {statusQtd === "nenhum" ? (
                             <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700">Sem vínculo</span>
@@ -2374,7 +2730,7 @@ export default function Cotacoes() {
                     );
                   })}
                   {iaLinhas.length === 0 && (
-                    <tr><td colSpan={8} className="px-2 py-6 text-center text-gray-400">Nenhum item lido do documento.</td></tr>
+                    <tr><td colSpan={12} className="px-2 py-6 text-center text-gray-400">Nenhum item lido do documento.</td></tr>
                   )}
                 </tbody>
               </table>
@@ -2397,48 +2753,72 @@ export default function Cotacoes() {
             </div>
           )}
 
-          <div className="flex justify-end gap-2 pt-2 border-t">
-            <Button variant="outline" onClick={() => setIaExtracao(null)}>Cancelar</Button>
-            <Button
-              disabled={respostasValidas.length === 0}
-              onClick={() => {
-                const respostas = respostasValidas.map((l: any) => {
-                  const hasMdo = l.totalMat != null || l.totalMdo != null;
-                  const matVal = l.totalMat != null ? Number(l.totalMat) : 0;
-                  const mdoVal = l.totalMdo != null ? Number(l.totalMdo) : 0;
-                  const precoUnit = iaPacote && hasMdo && !l.precoUnitario
-                    ? (matVal + mdoVal)
-                    : Number(l.precoUnitario);
-                  return {
-                    itemId: l.matchItemId as number,
-                    precoUnitario: precoUnit,
-                    quantidade: l.quantidade != null ? Number(l.quantidade) : undefined,
-                    descontoPct: 0,
-                    ...(iaPacote && hasMdo ? { totalMat: matVal, totalMdo: mdoVal } : {}),
-                  };
-                });
-                if (respostas.length === 0) { toast.error("Nenhum item vinculado com preço para salvar"); return; }
-                salvarRespostas.mutate({
-                  cotacaoId: showDetalhe!,
-                  fornecedorId: iaExtracao.fornecedorId,
-                  propostaId: d.propostaId ?? undefined,
-                  respostas,
-                  condicaoPagamento: d.condicaoPagamento ?? undefined,
-                }, {
-                  onSuccess: () => {
-                    toast.success(`${respostas.length} preço(s) salvos com sucesso!`);
-                    setIaExtracao(null);
-                    mapaQ.refetch();
-                    propostasQ.refetch();
-                  },
-                  onError: (e: any) => toast.error("Erro ao salvar: " + e.message),
-                });
-              }}
-              className="bg-violet-600 hover:bg-violet-500 text-white gap-2"
-            >
-              <CheckCircle className="h-4 w-4" />
-              Confirmar e Salvar ({respostasValidas.length} {respostasValidas.length === 1 ? "item" : "itens"})
-            </Button>
+          <div className="flex items-center justify-between pt-3 border-t gap-4 flex-wrap">
+            {/* ── Desconto global ── */}
+            <div className="flex items-center gap-2">
+              <label className="text-xs font-semibold text-slate-600 whitespace-nowrap">Desconto global (%)</label>
+              <input
+                type="number" min="0" max="100" step="0.5"
+                value={iaDescontoPct || ""}
+                onChange={e => setIaDescontoPct(Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)))}
+                placeholder="0"
+                className="w-20 border border-slate-300 rounded-md px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-violet-400"
+              />
+              {iaDescontoPct > 0 && (
+                <span className="text-[11px] text-violet-600 font-medium bg-violet-50 px-2 py-0.5 rounded-full border border-violet-200">
+                  −{iaDescontoPct}% aplicado em {respostasValidas.length} {respostasValidas.length === 1 ? "item" : "itens"}
+                </span>
+              )}
+            </div>
+            {/* ── Ações ── */}
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => { setIaExtracao(null); setIaFiltroStatus(null); }}>Cancelar</Button>
+              <Button
+                disabled={respostasValidas.length === 0}
+                onClick={() => {
+                  const descGlobal = iaDescontoPct;
+                  const respostas = respostasValidas.map((l: any) => {
+                    const hasMdo = l.totalMat != null || l.totalMdo != null;
+                    const matVal = l.totalMat != null ? Number(l.totalMat) : 0;
+                    const mdoVal = l.totalMdo != null ? Number(l.totalMdo) : 0;
+                    const precoUnit = iaPacote && hasMdo && !l.precoUnitario
+                      ? (matVal + mdoVal)
+                      : Number(l.precoUnitario);
+                    const descItem = Number(l.descontoPct ?? 0);
+                    return {
+                      itemId: l.matchItemId as number,
+                      precoUnitario: precoUnit,
+                      quantidade: l.quantidade != null ? Number(l.quantidade) : undefined,
+                      descontoPct: descItem > 0 ? descItem : descGlobal,
+                      ...(iaPacote && hasMdo ? { totalMat: matVal, totalMdo: mdoVal } : {}),
+                    };
+                  });
+                  if (respostas.length === 0) { toast.error("Nenhum item vinculado com preço para salvar"); return; }
+                  salvarRespostas.mutate({
+                    cotacaoId: showDetalhe!,
+                    fornecedorId: iaExtracao.fornecedorId,
+                    propostaId: d.propostaId ?? undefined,
+                    respostas,
+                    condicaoPagamento: d.condicaoPagamento ?? undefined,
+                  }, {
+                    onSuccess: () => {
+                      const temDescIndividual = respostasValidas.some((l: any) => Number(l.descontoPct ?? 0) > 0);
+                      toast.success(`${respostas.length} preço(s) salvos${descGlobal > 0 || temDescIndividual ? ` com desconto aplicado` : ""}!`);
+                      setIaExtracao(null);
+                      setIaFiltroStatus(null);
+                      setIaDescontoPct(0);
+                      mapaQ.refetch();
+                      propostasQ.refetch();
+                    },
+                    onError: (e: any) => toast.error("Erro ao salvar: " + e.message),
+                  });
+                }}
+                className="bg-violet-600 hover:bg-violet-500 text-white gap-2"
+              >
+                <CheckCircle className="h-4 w-4" />
+                Confirmar e Salvar ({respostasValidas.length} {respostasValidas.length === 1 ? "item" : "itens"})
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -2467,8 +2847,8 @@ export default function Cotacoes() {
           return acc + Math.round(parseFloat(origResp.total) * 100);
         }
         // Com alteração → recomputa do novo preço (preview de mudança em andamento)
-        const preco = parseFloat(curPreco) || 0;
-        const qty   = parseFloat(curQty) > 0 ? parseFloat(curQty) : parseFloat(it.quantidade ?? "1");
+        const preco = parseBRNumber(curPreco) || 0;
+        const qty   = parseBRNumber(curQty) > 0 ? parseBRNumber(curQty) : parseFloat(it.quantidade ?? "1");
         return acc + Math.round(preco * qty * 100);
       }, 0);
       const isFob = (editFreteTipo[fId] ?? "cif") === "fob";
@@ -2642,6 +3022,8 @@ export default function Cotacoes() {
         prazoEntregaDias: prazoVal,
         numeroParcelas: numeroParcelasFinal,
         moduloMedicao: editModuloMedicao[fId] || undefined,
+        mobilizacaoDataInicio: editMobilizacaoData[fId] !== undefined ? (editMobilizacaoData[fId] || "") : undefined,
+        duracaoContratoDias: editDuracaoDias[fId] !== undefined ? (parseInt(editDuracaoDias[fId] || "0", 10) || 0) : undefined,
         cartaoId: formaPagamentoFinal === "cartao" ? (editCartaoId[fId] ?? null) : null,
         excecaoManual: excecaoAtiva,
         // Rev. 4284 — adiantamento e retenção
@@ -2814,6 +3196,61 @@ export default function Cotacoes() {
                       );
                     })}
                   </div>
+                  {/* Rev. 4998 — dados bancários do fornecedor aparecem automaticamente em PIX/Transferência/Depósito */}
+                  {(() => {
+                    const formaSel = isTravado ? (condicaoEfetiva!.formaPagamento || "") : (editFormaPag[fId] || "");
+                    if (!["pix", "transferencia", "deposito"].includes(formaSel)) return null;
+                    const banco = (forn?.banco ?? "").trim();
+                    const agencia = (forn?.agencia ?? "").trim();
+                    const conta = (forn?.conta ?? "").trim();
+                    const pixChave = (forn?.pix ?? "").trim();
+                    const isPix = formaSel === "pix";
+                    const temDados = isPix ? !!pixChave : !!(banco || agencia || conta);
+                    return (
+                      <div className={`mt-4 rounded-xl border p-4 ${temDados ? "bg-emerald-50/60 border-emerald-200" : "bg-amber-50 border-amber-200"}`}>
+                        <div className="flex items-center gap-2 mb-2">
+                          <Banknote className={`w-4 h-4 ${temDados ? "text-emerald-600" : "text-amber-600"}`} />
+                          <span className={`text-[11px] font-bold uppercase tracking-wider ${temDados ? "text-emerald-700" : "text-amber-700"}`}>
+                            Dados bancários do fornecedor
+                          </span>
+                        </div>
+                        {temDados ? (
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2 text-sm">
+                            {pixChave && (
+                              <div className="col-span-2">
+                                <div className="text-[10px] font-semibold text-gray-500 uppercase">Chave PIX</div>
+                                <div className="font-semibold text-gray-900 break-all">{pixChave}</div>
+                              </div>
+                            )}
+                            {banco && (
+                              <div>
+                                <div className="text-[10px] font-semibold text-gray-500 uppercase">Banco</div>
+                                <div className="font-semibold text-gray-900">{banco}</div>
+                              </div>
+                            )}
+                            {agencia && (
+                              <div>
+                                <div className="text-[10px] font-semibold text-gray-500 uppercase">Agência</div>
+                                <div className="font-semibold text-gray-900">{agencia}</div>
+                              </div>
+                            )}
+                            {conta && (
+                              <div>
+                                <div className="text-[10px] font-semibold text-gray-500 uppercase">Conta</div>
+                                <div className="font-semibold text-gray-900">{conta}</div>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-amber-700 font-medium">
+                            {isPix
+                              ? "Este fornecedor não tem chave PIX cadastrada. Edite o cadastro do fornecedor para preencher."
+                              : "Este fornecedor não tem dados bancários cadastrados. Edite o cadastro do fornecedor para preencher."}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })()}
                   {!isTravado && editFormaPag[fId] === "cartao" && (
                     <div className="mt-4">
                       <CartaoDisponivelCard
@@ -3297,6 +3734,38 @@ export default function Cotacoes() {
                           </p>
                         </div>
                       )}
+                      {/* Rev. 5012 — Prazo do contrato: início da mobilização + duração (vão p/ a Cláusula 2ª do contrato) */}
+                      <div className="mt-4 pt-4 border-t border-gray-100">
+                        <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2.5">Prazo do Contrato</p>
+                        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+                          <div className="flex-1 min-w-0">
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Início da mobilização</label>
+                            <input type="date" value={editMobilizacaoData[fId] ?? ""}
+                              onChange={e => setEditMobilizacaoData(prev => ({ ...prev, [fId]: e.target.value }))}
+                              className="block w-full max-w-full min-w-0 h-10 px-3 rounded-lg border border-gray-300 bg-white text-sm appearance-none focus:border-purple-400 focus:ring-1 focus:ring-purple-200 outline-none" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Duração do contrato (dias corridos)</label>
+                            <input type="number" min="1" inputMode="numeric" placeholder="ex.: 120" value={editDuracaoDias[fId] ?? ""}
+                              onChange={e => setEditDuracaoDias(prev => ({ ...prev, [fId]: e.target.value }))}
+                              className="block w-full max-w-full min-w-0 h-10 px-3 rounded-lg border border-gray-300 bg-white text-sm appearance-none focus:border-purple-400 focus:ring-1 focus:ring-purple-200 outline-none" />
+                          </div>
+                        </div>
+                        {(() => {
+                          const mob = editMobilizacaoData[fId] || "";
+                          const dur = parseInt(editDuracaoDias[fId] || "0", 10) || 0;
+                          if (!/^\d{4}-\d{2}-\d{2}$/.test(mob) || dur <= 0) return (
+                            <p className="text-[11px] text-gray-400 mt-2">Definem as datas de início e término da Cláusula 2ª do contrato. Se ficarem em branco, as datas vêm do cronograma da obra.</p>
+                          );
+                          const d = new Date(`${mob}T12:00:00`);
+                          d.setDate(d.getDate() + dur);
+                          return (
+                            <p className="text-xs text-purple-700 font-medium mt-2">
+                              Contrato: {new Date(`${mob}T12:00:00`).toLocaleDateString("pt-BR")} → {d.toLocaleDateString("pt-BR")} ({dur} dias)
+                            </p>
+                          );
+                        })()}
+                      </div>
                     </section>
                   );
                 })()}
@@ -3520,8 +3989,9 @@ export default function Cotacoes() {
       const totaisVivos: Record<number, number> = (mapa as any).totaisPorFornecedor ?? {};
       const getTotal = (p: any) => {
         const stored = parseFloat(p.totalOrcado ?? "0");
-        const vivo = totaisVivos[p.fornecedorId] ?? 0;
-        return stored > 0 ? stored : vivo;
+        return Object.prototype.hasOwnProperty.call(totaisVivos, p.fornecedorId)
+          ? Number(totaisVivos[p.fornecedorId] ?? 0)
+          : stored;
       };
       const comTotal = mapa.participantes.filter((p: any) => getTotal(p) > 0);
       if (comTotal.length === 0) return null;
@@ -3544,7 +4014,15 @@ export default function Cotacoes() {
     const vencedorModuloMedicao = vencedorFornId ? (editModuloMedicao[vencedorFornId] || (fornParaSaldo as any)?.moduloMedicao || "") : "";
     const isMedicaoVencedor = ["medicao_mensal", "medicao_avanco", "medicao_etapa", "empreitada"].includes(vencedorModuloMedicao);
 
+    function garantirMapaCarregado(): boolean {
+      if (mapa) return true;
+      setAbaAtiva("mapa");
+      toast.info("Carregando o Mapa de Cotação para concluir esta ação.");
+      return false;
+    }
+
     function validarCondicoesVencedor(): boolean {
+      if (!garantirMapaCarregado()) return false;
       if (!fornParaSaldo) {
         setValidacaoErroInfo({
           titulo: "Nenhum fornecedor vencedor identificado",
@@ -3571,6 +4049,9 @@ export default function Cotacoes() {
       const isServicoPuro = cotTipoVal === "servico";
       const isMdoMedicao = (cotTipoVal === "servico" || cotTipoVal === "pacote") && (tipoPag === "medicao" || (condPag ?? "").toLowerCase().includes("medição"));
       const dispensaPrazo = isServicoPuro || isMdoMedicao;
+      // Rev. 5008 → 5053: a exigência da proposta comercial (Anexo I) saiu deste
+      // pré-check e virou a etapa "Proposta" DENTRO do wizard Preparar Contrato
+      // (pedido do user IMG_5550/5552 — anexar/ver/substituir numa tela só).
       const erros: string[] = [];
       if (!condPag) erros.push("Forma de Pagamento");
       if (!dispensaPrazo && (!prazo || Number(prazo) <= 0)) erros.push("Prazo de Entrega");
@@ -3610,6 +4091,7 @@ export default function Cotacoes() {
     const condicoesIncompletas = detalheFullscreen?.status === "pendente" && fornParaSaldo && (!condPagVencedor || (!dispensaPrazoVencedor && (!prazoVencedor || Number(prazoVencedor) <= 0)));
 
     function handleAbrirCotacaoParcial(cotacaoId: number) {
+      if (!garantirMapaCarregado()) return;
       const itensDoMapa: any[] = mapa?.itens ?? [];
       const participantes: any[] = mapa?.participantes ?? [];
       if (itensDoMapa.length === 0 || participantes.length === 0) {
@@ -3632,10 +4114,8 @@ export default function Cotacoes() {
           const key = `${it.id}_${p.fornecedorId}`;
           const resp = mapa?.respostaMap?.[key];
           if (resp) {
-            const pu = parseFloat((resp as any).precoUnitario ?? "0");
-            const qty = parseFloat((resp as any).quantidade ?? it.quantidade ?? "1");
-            const total = pu * qty;
-            if (pu > 0 && total < melhorTotal) {
+            const total = parseFloat((resp as any).total ?? "0");
+            if (total > 0 && total < melhorTotal) {
               melhorTotal = total;
               melhorFornId = p.fornecedorId;
             }
@@ -3655,6 +4135,7 @@ export default function Cotacoes() {
     }
 
     function handleAprovarGerarOC(cotacaoId: number) {
+      if (!garantirMapaCarregado()) return;
       if (temItensSemVerba && !semVerbaAutorizado) {
         setSemVerbaAdminEmail("");
         setSemVerbaAdminSenha("");
@@ -3673,10 +4154,7 @@ export default function Cotacoes() {
       // sem `selecionado` explícito (fallback do backend) cairiam no flow antigo.
       const participantes: any[] = (mapa?.participantes ?? []) as any[];
       const vencSelecionado = participantes.find(p => p.selecionado === true);
-      const fallback = melhorForn ?? participantes.filter(p => parseFloat(p.totalOrcado ?? "0") > 0).reduce((b, c) => {
-        if (!b) return c;
-        return (parseFloat(c.totalOrcado ?? "0") < parseFloat(b.totalOrcado ?? "0")) ? c : b;
-      }, null as any);
+      const fallback = melhorForn;
       // Rev. 2501 — Estoque (Almoxarifado) não tem totalOrcado (não é proposta monetária),
       // então cai fora do fallback acima. Se ele é o único participante ou todos os
       // fornecedores ficaram sem proposta com preço, ele é o vencedor de facto e o
@@ -3695,7 +4173,7 @@ export default function Cotacoes() {
     async function handleConfirmarTotal() {
       setShowConfirmarTipoCotDialog(false);
       if (!validarCondicoesVencedor()) return;
-      const fornTotal = parseFloat(fornParaSaldo?.totalOrcado ?? "0");
+      const fornTotal = fornParaSaldo ? getFornTotal(fornParaSaldo) : 0;
       // Usa o saldo pacote-aware (mesmo cálculo da tabela). Antes somava insumos crus do mapa,
       // o que estourava falso "déficit" em cotações por pacote mesmo havendo CRÉDITO (ex.: COT-2026-0283).
       if (deficit > 0 && !cobertoPorRisco && !semVerbaAutorizado) {
@@ -3730,10 +4208,8 @@ export default function Cotacoes() {
             const key = `${it.id}_${p.fornecedorId}`;
             const resp = mapa?.respostaMap?.[key];
             if (resp) {
-              const pu = parseFloat((resp as any).precoUnitario ?? "0");
-              const qty = parseFloat((resp as any).quantidade ?? it.quantidade ?? "1");
-              const total = pu * qty;
-              if (pu > 0 && total < melhorTotal) {
+              const total = parseFloat((resp as any).total ?? "0");
+              if (total > 0 && total < melhorTotal) {
                 melhorTotal = total;
                 fId = p.fornecedorId;
               }
@@ -3770,16 +4246,41 @@ export default function Cotacoes() {
       });
     }
 
-    function calcNegociadoPreview(fornecedorId: number, valorInput: string) {
+    function calcNegociadoPreview(fornecedorId: number, valorInput: string, grupo?: string, itemIds?: number[]) {
       if (!mapa) return [];
-      const itens = mapa.itens ?? [];
+      // Rev. 5132/5135 — negociar por região OU por seleção livre de itens
+      const selSet = itemIds && itemIds.length > 0 ? new Set(itemIds) : null;
+      const itens = (mapa.itens ?? []).filter((it: any) =>
+        selSet ? selSet.has(it.id)
+               : (!grupo || String(it.eapPath || it.parentEapDescricao || "").trim() === grupo)
+      );
       const parseBR = (v: string) => parseFloat(v.replace(/\./g, "").replace(",", ".")) || 0;
 
+      // Rev. 4998 — cotação de serviço: o total do item vem dos campos MAT/MDO
+      // (digitados ou salvos), não do preço unitário. O rateio precisa ler e
+      // reescrever esses campos, senão o "fechado a X" não bate no salvar.
+      const isServicoNeg = ((mapa as any)?.tipoEfetivo ?? mapa?.cotacao?.tipo) === "servico";
       const itemTotais = itens.map((it: any) => {
         const key = `${it.id}_${fornecedorId}`;
-        const precoAtual = parseFloat(editPrecos[key] ?? "0") || 0;
-        const qtd = parseFloat(editQtds[key] ?? String(it.quantidade ?? "1")) || 1;
-        return { id: it.id, descricao: it.descricao ?? it.titulo ?? `Item #${it.id}`, precoAtual, qtd, total: precoAtual * qtd, key };
+        let precoAtual = parseBRNumber(editPrecos[key] ?? "0") || 0;
+        const qtd = parseBRNumber(editQtds[key] ?? String(it.quantidade ?? "1")) || 1;
+        let usaMatMdo = false;
+        let matRatio = 0;
+        let total = precoAtual * qtd;
+        if (isServicoNeg && !it._isPacoteGroup && !it._grouped) {
+          // editMatMdo guarda preço UNITÁRIO (Rev. 4998); saved totalMat/totalMdo são TOTAIS.
+          const savedRr: any = mapa?.respostaMap?.[key];
+          const mat = editMatMdo[key]?.mat != null ? (parseBRNumber(editMatMdo[key].mat) || 0) * qtd : (parseFloat(savedRr?.totalMat ?? "0") || 0);
+          const mdo = editMatMdo[key]?.mdo != null ? (parseBRNumber(editMatMdo[key].mdo) || 0) * qtd : (parseFloat(savedRr?.totalMdo ?? "0") || 0);
+          const totMatMdo = mat + mdo;
+          if (totMatMdo > 0) {
+            usaMatMdo = true;
+            matRatio = mat / totMatMdo;
+            total = totMatMdo;
+            precoAtual = qtd > 0 ? totMatMdo / qtd : totMatMdo;
+          }
+        }
+        return { id: it.id, descricao: it.descricao ?? it.titulo ?? `Item #${it.id}`, precoAtual, qtd, total, key, usaMatMdo, matRatio };
       });
 
       const totalGeral = itemTotais.reduce((s, i) => s + i.total, 0);
@@ -3809,6 +4310,13 @@ export default function Cotacoes() {
           difItem = Math.round(diferenca * peso * 100) / 100;
           acumulado += difItem;
         }
+        if (it.usaMatMdo) {
+          // Serviço MAT/MDO: o total salvo é mat+mdo (2 casas), então o novo total
+          // pode ser exato mesmo que o unitário vire dízima — o unitário é derivado.
+          const novoTotal = Math.max(0, Math.round((it.total + difItem) * 100) / 100);
+          const novoPreco = it.qtd > 0 ? Math.round((novoTotal / it.qtd) * 100) / 100 : novoTotal;
+          return { ...it, difItem, novoPreco, novoTotal };
+        }
         const novoPreco = Math.max(0, Math.round((it.precoAtual + difItem / it.qtd) * 100) / 100);
         return { ...it, difItem, novoPreco, novoTotal: Math.round(novoPreco * it.qtd * 100) / 100 };
       });
@@ -3818,7 +4326,10 @@ export default function Cotacoes() {
       if (diff !== 0 && result.length > 0) {
         const last = result[lastNonZeroIdx];
         last.novoTotal = Math.round((last.novoTotal + diff) * 100) / 100;
-        if (last.qtd > 0) {
+        if ((last as any).usaMatMdo) {
+          // total salvo = mat+mdo, não preco×qtd — o resíduo entra direto no total
+          last.novoPreco = last.qtd > 0 ? Math.round((last.novoTotal / last.qtd) * 100) / 100 : last.novoTotal;
+        } else if (last.qtd > 0) {
           last.novoPreco = Math.round((last.novoTotal / last.qtd) * 100) / 100;
           last.novoTotal = Math.round(last.novoPreco * last.qtd * 100) / 100;
           const diffFinal = Math.round((targetTotal - result.reduce((s, i) => s + i.novoTotal, 0)) * 100) / 100;
@@ -3832,16 +4343,29 @@ export default function Cotacoes() {
 
     function aplicarNegociado() {
       if (!negociadoModal) return;
-      const preview = calcNegociadoPreview(negociadoModal.fornecedorId, negociadoValor);
+      const preview = calcNegociadoPreview(negociadoModal.fornecedorId, negociadoValor, negociadoModal.grupo, negociadoModal.itemIds);
       if (!preview.length) return;
       const updates: Record<string, string> = {};
       const totaisUpdates: Record<string, number> = {};
+      const matMdoUpdates: Record<string, { mat: string; mdo: string }> = {};
+      const fmtBR = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       for (const it of preview) {
         updates[it.key] = it.novoPreco.toFixed(2);
         totaisUpdates[it.key] = it.novoTotal;
+        if ((it as any).usaMatMdo) {
+          // Rev. 4998 — reescreve MAT/MDO (preço UNITÁRIO) mantendo a proporção do
+          // item; o total exato fica garantido pelo editTotaisOverride, que tem
+          // precedência no salvar (o unitário pode virar dízima, sem problema).
+          const novoMat = Math.round(it.novoTotal * (it as any).matRatio * 100) / 100;
+          const novoMdo = Math.round((it.novoTotal - novoMat) * 100) / 100;
+          const q = it.qtd > 0 ? it.qtd : 1;
+          const fmtUnitBR = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 6 });
+          matMdoUpdates[it.key] = { mat: fmtUnitBR(novoMat / q), mdo: fmtUnitBR(novoMdo / q) };
+        }
       }
       setEditPrecos(prev => ({ ...prev, ...updates }));
       setEditTotaisOverride(prev => ({ ...prev, ...totaisUpdates }));
+      if (Object.keys(matMdoUpdates).length > 0) setEditMatMdo(prev => ({ ...prev, ...matMdoUpdates }));
       setNegociadoModal(null);
       setNegociadoValor("");
       setNegociadoPreviewing(false);
@@ -3851,6 +4375,23 @@ export default function Cotacoes() {
     function handleSalvarPrecos(fornecedorId: number) {
       if (!mapa || !showDetalhe) return;
       const isPacote = ((mapa as any)?.tipoEfetivo ?? mapa?.cotacao?.tipo) === 'pacote';
+      // Rev. 5079 — item NÃO alterado pelo usuário preserva o total salvo (fonte autoritativa).
+      // preco_unitario é armazenado com 4dp (arredondado), então recomputar preco×qty no server
+      // muda o total a cada salvamento sem alteração (ex.: R$ 180.000,00 → R$ 179.999,76).
+      const respMapaSalvar = ((mapa as any)?.respostaMap ?? {}) as Record<string, any>;
+      const origTotaisSeNaoAlterado = (key: string): { totalOverride: number; totalMat?: number; totalMdo?: number } | null => {
+        const o = respMapaSalvar[key];
+        if (!o || !(parseFloat(o.total ?? "0") > 0)) return null;
+        if (editTotaisOverride[key] !== undefined) return null; // user negociou valor novo
+        const curPreco = editPrecos[key] ?? (o.precoUnitario ?? "0");
+        const curQty = editQtds[key] ?? (o.quantidade ?? "0");
+        if (curPreco !== (o.precoUnitario ?? "0") || curQty !== (o.quantidade ?? "0")) return null; // user alterou
+        return {
+          totalOverride: parseFloat(o.total),
+          totalMat: o.totalMat != null && parseFloat(o.totalMat) > 0 ? parseFloat(o.totalMat) : undefined,
+          totalMdo: o.totalMdo != null && parseFloat(o.totalMdo) > 0 ? parseFloat(o.totalMdo) : undefined,
+        };
+      };
       let respostas: Array<{ itemId: number; precoUnitario: number; descontoPct: number; quantidade: number; totalOverride?: number }>;
       if (isPacote) {
         const compGroups: Record<string, any[]> = {};
@@ -3869,11 +4410,12 @@ export default function Cotacoes() {
           const first = items[0];
           const compQtd = (first as any).composicaoQtdOrcada || parseFloat(first.quantidade ?? "0");
           const firstKey = `${first.id}_${fornecedorId}`;
-          const precoComp = parseFloat(editPrecos[firstKey] ?? "0") || 0;
+          const precoComp = parseBRNumber(editPrecos[firstKey] ?? "0") || 0;
           const compMatMdo = editMatMdo[firstKey];
           const compTotalMat = compMatMdo ? (parseBRNumber(compMatMdo.mat) || 0) : undefined;
           const compTotalMdo = compMatMdo ? (parseBRNumber(compMatMdo.mdo) || 0) : undefined;
-          respostas.push({ itemId: first.id, precoUnitario: precoComp, descontoPct: 0, quantidade: compQtd, totalOverride: editTotaisOverride[firstKey], ...(compTotalMat != null || compTotalMdo != null ? { totalMat: compTotalMat, totalMdo: compTotalMdo } : {}) });
+          const keepComp = origTotaisSeNaoAlterado(firstKey);
+          respostas.push({ itemId: first.id, precoUnitario: precoComp, descontoPct: 0, quantidade: compQtd, totalOverride: editTotaisOverride[firstKey] ?? keepComp?.totalOverride, ...(compTotalMat != null || compTotalMdo != null ? { totalMat: compTotalMat, totalMdo: compTotalMdo } : {}) });
           for (let i = 1; i < items.length; i++) {
             respostas.push({ itemId: items[i].id, precoUnitario: 0, descontoPct: 0, quantidade: 0 });
           }
@@ -3881,24 +4423,42 @@ export default function Cotacoes() {
         for (const it of noComp) {
           const key = `${it.id}_${fornecedorId}`;
           const qtyStr = editQtds[key];
-          const qty = qtyStr && parseFloat(qtyStr) > 0 ? parseFloat(qtyStr) : parseFloat(it.quantidade);
-          respostas.push({ itemId: it.id, precoUnitario: parseFloat(editPrecos[key] ?? "0") || 0, descontoPct: 0, quantidade: qty, totalOverride: editTotaisOverride[key] });
+          const qty = qtyStr && parseBRNumber(qtyStr) > 0 ? parseBRNumber(qtyStr) : parseFloat(it.quantidade);
+          const keepNC = origTotaisSeNaoAlterado(key);
+          respostas.push({ itemId: it.id, precoUnitario: parseBRNumber(editPrecos[key] ?? "0") || 0, descontoPct: 0, quantidade: qty, totalOverride: editTotaisOverride[key] ?? keepNC?.totalOverride });
         }
       } else {
         const tipoEfetivoSalvar = ((mapa as any)?.tipoEfetivo ?? mapa?.cotacao?.tipo);
         respostas = mapa.itens.map((it: any) => {
           const key = `${it.id}_${fornecedorId}`;
           const qtyStr = editQtds[key];
-          const qty = qtyStr && parseFloat(qtyStr) > 0 ? parseFloat(qtyStr) : parseFloat(it.quantidade);
-          const matVal = tipoEfetivoSalvar === "servico" ? (parseBRNumber(editMatMdo[key]?.mat ?? "0") || 0) : 0;
-          const mdoVal = tipoEfetivoSalvar === "servico" ? (parseBRNumber(editMatMdo[key]?.mdo ?? "0") || 0) : 0;
+          const qty = qtyStr && parseBRNumber(qtyStr) > 0 ? parseBRNumber(qtyStr) : parseFloat(it.quantidade);
+          // Rev. 4998 — MAT/MDO digitados são preço UNITÁRIO; totais = unit × qty.
+          // editTotaisOverride (Valor Negociado) tem precedência p/ fechar no centavo.
+          const matUnit = tipoEfetivoSalvar === "servico" ? (parseBRNumber(editMatMdo[key]?.mat ?? "0") || 0) : 0;
+          const mdoUnit = tipoEfetivoSalvar === "servico" ? (parseBRNumber(editMatMdo[key]?.mdo ?? "0") || 0) : 0;
+          const matVal = Math.round(matUnit * qty * 100) / 100;
+          const mdoVal = Math.round(mdoUnit * qty * 100) / 100;
           const matMdoTotal = matVal + mdoVal;
+          // Rev. 5079 — sem alteração → preserva total/totalMat/totalMdo salvos (evita drift)
+          const keep = origTotaisSeNaoAlterado(key);
+          if (keep) {
+            return {
+              itemId: it.id,
+              precoUnitario: matUnit + mdoUnit > 0 ? matUnit + mdoUnit : parseBRNumber(editPrecos[key] ?? "0") || 0,
+              descontoPct: 0,
+              quantidade: qty,
+              totalOverride: keep.totalOverride,
+              totalMat: keep.totalMat,
+              totalMdo: keep.totalMdo,
+            };
+          }
           return {
             itemId: it.id,
-            precoUnitario: matMdoTotal > 0 && qty > 0 ? matMdoTotal / qty : parseFloat(editPrecos[key] ?? "0") || 0,
+            precoUnitario: matUnit + mdoUnit > 0 ? matUnit + mdoUnit : parseBRNumber(editPrecos[key] ?? "0") || 0,
             descontoPct: 0,
             quantidade: qty,
-            totalOverride: matMdoTotal > 0 ? matMdoTotal : editTotaisOverride[key],
+            totalOverride: editTotaisOverride[key] ?? (matMdoTotal > 0 ? matMdoTotal : undefined),
             totalMat: matVal > 0 ? matVal : undefined,
             totalMdo: mdoVal > 0 ? mdoVal : undefined,
           };
@@ -3916,6 +4476,8 @@ export default function Cotacoes() {
         valorFrete: parseFloat(editValorFrete[fornecedorId] ?? "0") || 0,
         transportadora: editTransportadora[fornecedorId] || undefined,
         moduloMedicao: editModuloMedicao[fornecedorId] || undefined,
+        mobilizacaoDataInicio: editMobilizacaoData[fornecedorId] !== undefined ? (editMobilizacaoData[fornecedorId] || "") : undefined,
+        duracaoContratoDias: editDuracaoDias[fornecedorId] !== undefined ? (parseInt(editDuracaoDias[fornecedorId] || "0", 10) || 0) : undefined,
         respostas,
       });
     }
@@ -3932,23 +4494,23 @@ export default function Cotacoes() {
               if (seen.has(cc)) continue;
               seen.add(cc);
               const firstKey = `${it.id}_${p.fornecedorId}`;
-              const preco = parseFloat(editPrecos[firstKey] ?? "0") || 0;
+              const preco = parseBRNumber(editPrecos[firstKey] ?? "0") || 0;
               const compQtd = (it as any).composicaoQtdOrcada || parseFloat(it.quantidade ?? "0");
               totalItens += preco * compQtd;
             } else {
               const key = `${it.id}_${p.fornecedorId}`;
-              const preco = parseFloat(editPrecos[key] ?? "0") || 0;
+              const preco = parseBRNumber(editPrecos[key] ?? "0") || 0;
               const qtyStr = editQtds[key];
-              const qty = qtyStr && parseFloat(qtyStr) > 0 ? parseFloat(qtyStr) : parseFloat(it.quantidade);
+              const qty = qtyStr && parseBRNumber(qtyStr) > 0 ? parseBRNumber(qtyStr) : parseFloat(it.quantidade);
               totalItens += preco * qty;
             }
           }
         } else {
           totalItens = (mapa?.itens ?? []).reduce((acc: number, it: any) => {
             const key = `${it.id}_${p.fornecedorId}`;
-            const preco = parseFloat(editPrecos[key] ?? "0") || 0;
+            const preco = parseBRNumber(editPrecos[key] ?? "0") || 0;
             const qtyStr = editQtds[key];
-            const qty = qtyStr && parseFloat(qtyStr) > 0 ? parseFloat(qtyStr) : parseFloat(it.quantidade);
+            const qty = qtyStr && parseBRNumber(qtyStr) > 0 ? parseBRNumber(qtyStr) : parseFloat(it.quantidade);
             return acc + preco * qty;
           }, 0);
         }
@@ -3956,7 +4518,10 @@ export default function Cotacoes() {
         const frete = isFob ? (parseFloat(editValorFrete[p.fornecedorId] ?? "0") || 0) : 0;
         return totalItens + frete;
       }
-      return parseFloat(p.totalOrcado ?? "0");
+      const totaisPersistidos = (mapa as any)?.totaisPorFornecedor ?? {};
+      return Object.prototype.hasOwnProperty.call(totaisPersistidos, p.fornecedorId)
+        ? Number(totaisPersistidos[p.fornecedorId] ?? 0)
+        : parseFloat(p.totalOrcado ?? "0");
     }
 
     function getFornFrete(p: any): number {
@@ -3981,19 +4546,19 @@ export default function Cotacoes() {
       if (!fornParaSaldo) return { saldo: 0, hasMeta: true };
       const wKey = `${it.id}_${fornParaSaldo.fornecedorId}`;
       const wResp = mapa?.respostaMap?.[wKey];
-      const precoForn = parseFloat(wResp?.precoUnitario ?? "0");
-      const custoCompra = precoForn * qtdItem;
-      const qtdOrcada = parseFloat((it as any).qtdOrcada ?? "0");
-      const qtdTotalSolicitada = parseFloat((it as any).qtdTotalSolicitada ?? "0");
-      const estourou = (it as any).semVerba || (qtdOrcada > 0 && qtdTotalSolicitada > qtdOrcada + 0.01);
-      if (estourou) {
-        const qtdExcedente = qtdTotalSolicitada - qtdOrcada;
-        const qtdCoberta = Math.max(0, qtdItem - qtdExcedente);
-        const verbaCoberta = metaUnit * qtdCoberta;
-        return { saldo: verbaCoberta - custoCompra, hasMeta: true };
-      }
-      const metaTot = metaUnit * qtdItem;
-      return { saldo: metaTot - custoCompra, hasMeta: true };
+      // Respostas já salvas usam o total persistido, pois preço unitário ×
+      // quantidade pode divergir alguns centavos do valor negociado.
+      const emEdicao = editingFornId === fornParaSaldo.fornecedorId;
+      const precoForn = emEdicao
+        ? parseBRNumber(editPrecos[wKey] ?? "0")
+        : parseFloat(wResp?.precoUnitario ?? "0");
+      const qtdEmEdicao = parseBRNumber(editQtds[wKey] ?? "") || qtdItem;
+      const custoAtual = emEdicao
+        ? precoForn * qtdEmEdicao
+        : parseFloat(wResp?.total ?? "0");
+      const metaTotal = parseFloat((it as any).metaFinanceiraTotal ?? "0") || (metaUnit * qtdItem);
+      const comprasAnteriores = parseFloat((it as any).valorComprometidoAnterior ?? "0");
+      return { saldo: metaTotal - comprasAnteriores - custoAtual, hasMeta: true };
     }
 
     // Rev. 4003 — Monta as linhas item × fornecedor do Mapa de Cotação
@@ -4026,6 +4591,8 @@ export default function Cotacoes() {
         });
         return {
           descricao: it._isPacoteGroup && (it as any).composicaoEapCodigo ? `[${(it as any).composicaoEapCodigo}] ${it.descricao}` : it.descricao,
+          eapCodigo: String((it as any).eapCodigo ?? (it as any).parentEapCodigo ?? "").trim(),
+          eapPath: String((it as any).eapPath ?? "").trim(),
           unidade: it.unidade || "un",
           quantidade: fmtQtd(it.quantidade),
           metaUnit,
@@ -4033,7 +4600,25 @@ export default function Cotacoes() {
           porFornecedor,
         };
       });
-      return { linhas, participantes };
+      // Rev. 5080 — exportações respeitam a numeração da EAP do orçamento,
+      // sempre do menor pro maior (segmento a segmento, mesma regra da tela).
+      const segKeyExp = (cod: string): number[] | null => {
+        const segs = String(cod ?? "").trim().split(/[^0-9]+/).filter(Boolean).map(Number);
+        return segs.length ? segs : null;
+      };
+      const linhasOrdenadas = linhas.map((l: any, i: number) => ({ l, i, k: segKeyExp(l.eapCodigo) }))
+        .sort((a: any, b: any) => {
+          if (a.k && b.k) {
+            const len = Math.max(a.k.length, b.k.length);
+            for (let s = 0; s < len; s++) { const d = (a.k[s] ?? 0) - (b.k[s] ?? 0); if (d !== 0) return d; }
+            return a.i - b.i;
+          }
+          if (a.k) return -1;
+          if (b.k) return 1;
+          return a.i - b.i;
+        })
+        .map((x: any) => x.l);
+      return { linhas: linhasOrdenadas, participantes };
     }
 
     // Rev. 4003 — "Exportar PDF" abria o print do navegador via window.print()
@@ -4042,96 +4627,240 @@ export default function Cotacoes() {
     // em print-dialog-fixed-clip: elemento fixed não flui pro fluxo normal de
     // impressão). Fix: gera HTML autônomo numa aba nova (mesmo padrão já
     // usado em Solicitacoes.tsx → gerarPdfSC), imune a overflow/fixed da tela.
-    function gerarPdfCotacao() {
-      if (!detalheFullscreen) return;
+    // Rev. 5082 — "Exportar PDF" agora usa o PDF renderizado no SERVIDOR (idêntico
+    // à tela: paisagem, cores, faixas META/COTAÇÃO). O print do navegador no
+    // iPad descartava fundos coloridos e imprimia em retrato. Fallback: aba de impressão.
+    async function gerarPdfCotacao() {
+      if (!garantirMapaCarregado()) return;
+      const html = montarHtmlMapaPdf(false);
+      if (!html || !detalheFullscreen) return;
+      // abre a janela DENTRO do gesto do usuário (senão o Safari bloqueia)
+      const w = window.open("", "_blank");
+      if (w) { try { w.document.write("<p style='font-family:sans-serif;color:#475569;padding:24px'>Gerando PDF do Mapa de Cotação…</p>"); } catch { /* ignore */ } }
+      try {
+        const resp = await fetch("/api/cotacao-mapa-pdf", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ cotacaoId: detalheFullscreen.id, html, retorno: "url" }),
+        });
+        if (!resp.ok) throw new Error(await resp.text().catch(() => "Erro ao gerar o PDF"));
+        // Rev. 5092 — o Safari ignora nome de File em blob: URL (mostrava UUID no viewer).
+        // O servidor agora devolve uma URL GET que termina no nome do arquivo (com nº da SC).
+        const { url } = await resp.json();
+        if (!url) throw new Error("Resposta inválida do servidor");
+        if (w) { w.location.href = url; } else { window.open(url, "_blank"); }
+      } catch (e: any) {
+        try { w?.close(); } catch { /* ignore */ }
+        toast.error("Erro ao gerar o PDF no servidor — abrindo a versão de impressão. " + (e?.message || ""));
+        abrirImpressaoMapa();
+      }
+    }
+    // Rev. 5091 — nome do arquivo do PDF com o nº da SOLICITAÇÃO (pedido do user)
+    function nomeArquivoMapaPdf(): string {
+      const clean = (s: any) => String(s ?? "").replace(/[^a-zA-Z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+      const scRaw = (detalheFullscreen as any)?.scInfo?.numeroSc;
+      const sc = scRaw ? clean(formatNumeroScDisplay(scRaw)) : "";
+      const cot = clean(formatNumeroCotacaoDisplay(detalheFullscreen?.numeroCotacao));
+      return sc ? `Mapa_${sc}_${cot}.pdf` : `Mapa_${cot}.pdf`;
+    }
+    // Rev. 5081 — HTML do mapa fatorado p/ reuso: aba de impressão E PDF real
+    // via servidor (WhatsApp) usam exatamente o mesmo layout.
+    function montarHtmlMapaPdf(comPrintScript: boolean): string | null {
+      if (!detalheFullscreen) return null;
       const esc = (s: any) => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
       const fmtMoeda = (v: any) => v != null ? `R$ ${Number(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—";
       const { linhas, participantes } = montarLinhasExportacao();
       const numeroFmt = formatNumeroCotacaoDisplay(detalheFullscreen.numeroCotacao);
       const st2 = STATUS_LABELS[detalheFullscreen.status] ?? STATUS_LABELS.pendente;
-      const colCount = 4 + participantes.length * 3;
-      const theadFornecedores = participantes.map((p: any) => {
+      // Rev. 5076 — layout refeito: paisagem, blocos META (orçamento) × COTAÇÃO
+      // (fornecedores) visualmente separados, agrupamento por etapa da EAP,
+      // código do item e coluna Δ vs meta no melhor preço.
+      const colCount = 6 + participantes.length * 3;
+      const theadFornecedores = participantes.map((p: any, i: number) => {
         const nome = p.fornecedor?.nomeFantasia || p.fornecedor?.razaoSocial || `#${p.fornecedorId}`;
-        return `<th colspan="3" style="text-align:center">${esc(nome)}</th>`;
+        const isMelhor = melhorForn?.fornecedorId === p.fornecedorId;
+        return `<th colspan="3" class="grp-forn${i === 0 ? " sep" : ""}" style="text-align:center">${esc(nome)}${isMelhor && participantes.length > 1 ? ' <span class="star">★ melhor</span>' : ""}</th>`;
       }).join("");
-      const theadSub = participantes.map(() => `<th style="text-align:right">Qtd</th><th style="text-align:right">Preço Unit.</th><th style="text-align:right">Total</th>`).join("");
+      const theadSub = participantes.map((_: any, i: number) => `<th class="sub-forn${i === 0 ? " sep" : ""}" style="text-align:right">Qtd</th><th class="sub-forn" style="text-align:right">Preço Unit.</th><th class="sub-forn" style="text-align:right">Total</th>`).join("");
+      let _grpAnterior: string | null = null;
       const rowsHtml = linhas.map((l: any) => {
-        const fornCols = l.porFornecedor.map((f: any) => `
-          <td style="text-align:right">${f.qtd ? f.qtd.toLocaleString("pt-BR", { maximumFractionDigits: 2 }) : "—"}</td>
-          <td style="text-align:right${f.isMelhorPreco ? ";color:#166534;font-weight:700" : ""}">${f.precoUnit != null ? fmtMoeda(f.precoUnit) : "—"}</td>
-          <td style="text-align:right${f.isMelhorPreco ? ";color:#166534;font-weight:700" : ""}">${f.total != null ? fmtMoeda(f.total) : "—"}</td>`).join("");
-        return `<tr>
+        // Rev. 5085 — números todos no MESMO tamanho/peso; destaque (negrito) só na
+        // meta do orçamento. Verde de "melhor preço" só quando há comparação (2+ forn.).
+        const destacaMelhor = participantes.length > 1;
+        const fornCols = l.porFornecedor.map((f: any, i: number) => `
+          <td class="c-forn${i === 0 ? " sep" : ""}" style="text-align:right">${f.qtd ? f.qtd.toLocaleString("pt-BR", { maximumFractionDigits: 2 }) : "—"}</td>
+          <td class="c-forn" style="text-align:right${destacaMelhor && f.isMelhorPreco ? ";color:#047857;font-weight:700" : ""}">${f.precoUnit != null ? fmtMoeda(f.precoUnit) : "—"}</td>
+          <td class="c-forn" style="text-align:right${destacaMelhor && f.isMelhorPreco ? ";color:#047857;font-weight:700" : ""}">${f.total != null ? fmtMoeda(f.total) : "—"}</td>`).join("");
+        const grupo = l.eapPath || "";
+        let grpRow = "";
+        if (grupo && grupo !== _grpAnterior) {
+          grpRow = `<tr class="grp-row"><td colspan="${colCount}">📂 ${esc(grupo)}</td></tr>`;
+          _grpAnterior = grupo;
+        }
+        return `${grpRow}<tr>
+          <td class="c-cod">${l.eapCodigo ? `<span class="cod">${esc(l.eapCodigo)}</span>` : ""}</td>
           <td>${esc(l.descricao)}</td>
-          <td style="text-align:center">${esc(l.unidade)}</td>
-          <td style="text-align:right">${esc(l.quantidade)}</td>
-          <td style="text-align:right">${l.metaUnit > 0 ? fmtMoeda(l.metaUnit) : "—"}</td>
+          <td style="text-align:center;color:#64748b">${esc(l.unidade)}</td>
+          <td class="c-meta sep" style="text-align:right">${esc(l.quantidade)}</td>
+          <td class="c-meta" style="text-align:right">${l.metaUnit > 0 ? fmtMoeda(l.metaUnit) : "—"}</td>
+          <td class="c-meta" style="text-align:right;font-weight:600">${l.metaTot > 0 ? fmtMoeda(l.metaTot) : "—"}</td>
           ${fornCols}
         </tr>`;
       }).join("");
-      const totalFornCols = participantes.map((p: any) => {
+      const totalFornCols = participantes.map((p: any, i: number) => {
         const totalForn = getFornTotal(p);
         const isMelhor = melhorForn?.fornecedorId === p.fornecedorId;
+        const delta = metaGrandTotal > 0 && totalForn > 0 ? totalForn - metaGrandTotal : null;
+        const deltaTxt = delta != null ? `<div style="font-size:9px;font-weight:600;color:${delta <= 0 ? "#047857" : "#b91c1c"}">${delta <= 0 ? "▼" : "▲"} ${fmtMoeda(Math.abs(delta))} vs meta</div>` : "";
         return `
-          <td></td>
-          <td></td>
-          <td style="text-align:right;font-weight:700${isMelhor ? ";color:#166534" : ""}">${totalForn > 0 ? fmtMoeda(totalForn) : "—"}</td>`;
+          <td class="c-forn${i === 0 ? " sep" : ""}"></td>
+          <td class="c-forn"></td>
+          <td class="c-forn" style="text-align:right;font-weight:700${isMelhor ? ";color:#047857" : ""}">${totalForn > 0 ? fmtMoeda(totalForn) : "—"}${deltaTxt}</td>`;
       }).join("");
-      const totalRowHtml = `<tr style="background:#f1f5f9;border-top:2px solid #0f172a">
-        <td colspan="2" style="font-weight:700;text-transform:uppercase;font-size:10px">Total</td>
-        <td style="text-align:right;font-weight:700">${qtdGrandTotal !== null ? `${qtdGrandTotal.toLocaleString("pt-BR")} ${esc(qtdUnidade)}` : "—"}</td>
-        <td style="text-align:right;font-weight:700">${metaGrandTotal > 0 ? fmtMoeda(metaGrandTotal) : "—"}</td>
+      const totalRowHtml = `<tr class="tot-row">
+        <td colspan="3" style="font-weight:700;text-transform:uppercase;font-size:10px">Total Geral</td>
+        <td class="c-meta sep" style="text-align:right;font-weight:700">${qtdGrandTotal !== null ? `${qtdGrandTotal.toLocaleString("pt-BR")} ${esc(qtdUnidade)}` : ""}</td>
+        <td class="c-meta"></td>
+        <td class="c-meta" style="text-align:right;font-weight:700">${metaGrandTotal > 0 ? fmtMoeda(metaGrandTotal) : "—"}</td>
         ${totalFornCols}
       </tr>`;
       const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${esc(numeroFmt)}</title>
 <style>
-  *{box-sizing:border-box} body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#1f2937;margin:24px;font-size:11px}
-  h1{font-size:20px;margin:0 0 4px 0;color:#0f172a}
-  .head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #0f172a;padding-bottom:12px;margin-bottom:16px}
-  .meta{display:grid;grid-template-columns:repeat(3,1fr);gap:8px 24px;margin-bottom:16px}
-  .meta div{padding:6px 8px;background:#f8fafc;border-left:3px solid #3b82f6;border-radius:4px}
-  .meta b{display:block;font-size:10px;color:#64748b;text-transform:uppercase;font-weight:600;margin-bottom:2px}
-  table{width:100%;border-collapse:collapse;margin-top:8px}
-  th{background:#1e293b;color:#fff;padding:6px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:0.3px}
-  td{padding:6px;border-bottom:1px solid #e2e8f0;vertical-align:top}
-  tbody tr:nth-child(even){background:#f8fafc}
-  .footer{margin-top:24px;padding-top:12px;border-top:1px solid #cbd5e1;font-size:10px;color:#64748b;display:flex;justify-content:space-between}
-  .badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;text-transform:uppercase}
-  @media print{body{margin:12px}}
+  @page{size:A4 landscape;margin:10mm}
+  *{box-sizing:border-box} body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#1f2937;margin:16px;font-size:10px}
+  h1{font-size:19px;margin:0 0 2px 0;color:#0f172a;letter-spacing:-0.3px}
+  .head{display:flex;justify-content:space-between;align-items:flex-start;padding:12px 16px;margin-bottom:12px;background:linear-gradient(135deg,#0f172a,#1e3a5f);border-radius:10px;color:#fff}
+  .head h1{color:#fff}
+  .meta{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
+  .meta div{padding:6px 10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px}
+  .meta b{display:block;font-size:8.5px;color:#64748b;text-transform:uppercase;font-weight:700;letter-spacing:0.4px;margin-bottom:1px}
+  .legenda{display:flex;gap:14px;align-items:center;margin-bottom:6px;font-size:9px;color:#475569}
+  .sw{display:inline-block;width:10px;height:10px;border-radius:3px;vertical-align:-1px;margin-right:4px}
+  table{width:100%;border-collapse:collapse}
+  thead th{padding:5px 6px;font-size:8.5px;text-transform:uppercase;letter-spacing:0.3px}
+  .grp-item{background:#0f172a;color:#fff;text-align:left}
+  .grp-meta{background:#1d4ed8;color:#fff}
+  .grp-forn{background:#047857;color:#fff}
+  .sub-meta{background:#dbeafe;color:#1e40af}
+  .sub-forn{background:#d1fae5;color:#065f46}
+  .star{font-size:8px;background:#fff;color:#047857;border-radius:8px;padding:1px 5px;font-weight:700}
+  td{padding:4px 6px;border-bottom:1px solid #e2e8f0;vertical-align:top}
+  tbody tr:nth-child(even):not(.grp-row){background:#fafafa}
+  .c-meta{background:rgba(59,130,246,0.06)}
+  .c-forn{background:rgba(16,185,129,0.05)}
+  .sep{border-left:2px solid #94a3b8}
+  .c-cod{white-space:nowrap;width:1%}
+  .cod{font-family:ui-monospace,Menlo,monospace;font-size:8.5px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:4px;padding:1px 4px;color:#475569}
+  .grp-row td{background:#e2e8f0;color:#334155;font-weight:700;font-size:9px;text-transform:uppercase;letter-spacing:0.4px;padding:4px 8px;border-bottom:none}
+  .tot-row td{background:#f1f5f9;border-top:2px solid #0f172a;font-size:10.5px}
+  .footer{margin-top:16px;padding-top:8px;border-top:1px solid #cbd5e1;font-size:9px;color:#64748b;display:flex;justify-content:space-between}
+  .badge{display:inline-block;padding:2px 10px;border-radius:10px;font-size:10px;font-weight:700;text-transform:uppercase;background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.35)}
+  thead{display:table-header-group}
+  tr{page-break-inside:avoid}
+  @media print{body{margin:0}}
 </style></head><body>
 <div class="head">
   <div>
     <h1>Mapa de Cotação ${esc(numeroFmt)}</h1>
-    <div style="color:#64748b;font-size:11px">${esc((detalheFullscreen as any).descricao || "")}</div>
+    <div style="color:#cbd5e1;font-size:10.5px">${esc((detalheFullscreen as any).descricao || "")}</div>
   </div>
   <div style="text-align:right">
-    <span class="badge" style="background:#dbeafe;color:#1e40af">${esc(st2.label)}</span>
+    <span class="badge">${esc(st2.label)}</span>
   </div>
 </div>
 <div class="meta">
   <div><b>Obra</b>${esc((detalheFullscreen as any).obraNome || "—")}</div>
   <div><b>Fornecedores</b>${participantes.length}</div>
   <div><b>Criado em</b>${(detalheFullscreen as any).criadoEm ? new Date((detalheFullscreen as any).criadoEm).toLocaleDateString("pt-BR") : "—"}</div>
+  <div><b>Meta total (orçamento)</b>${metaGrandTotal > 0 ? fmtMoeda(metaGrandTotal) : "—"}</div>
+</div>
+<div class="legenda">
+  <span><span class="sw" style="background:#dbeafe;border:1px solid #93c5fd"></span>META — valores do orçamento (referência)</span>
+  <span><span class="sw" style="background:#d1fae5;border:1px solid #6ee7b7"></span>COTAÇÃO — preços dos fornecedores</span>
 </div>
 <table>
   <thead>
-    <tr><th rowspan="2">Item</th><th rowspan="2">Un.</th><th rowspan="2" style="text-align:right">Qtd</th><th rowspan="2" style="text-align:right">Meta Unit.</th>${theadFornecedores}</tr>
-    <tr>${theadSub}</tr>
+    <tr>
+      <th colspan="3" class="grp-item">Item do Orçamento</th>
+      <th colspan="3" class="grp-meta sep" style="text-align:center">Meta (Orçamento)</th>
+      ${theadFornecedores}
+    </tr>
+    <tr>
+      <th class="grp-item" style="font-weight:400">Cód. EAP</th><th class="grp-item" style="font-weight:400">Descrição</th><th class="grp-item" style="font-weight:400;text-align:center">Un.</th>
+      <th class="sub-meta sep" style="text-align:right">Qtd</th><th class="sub-meta" style="text-align:right">Meta Unit.</th><th class="sub-meta" style="text-align:right">Meta Total</th>
+      ${theadSub}
+    </tr>
   </thead>
   <tbody>${rowsHtml || `<tr><td colspan="${colCount}" style="text-align:center;color:#94a3b8;padding:24px">Sem itens</td></tr>`}</tbody>
   <tfoot>${linhas.length ? totalRowHtml : ""}</tfoot>
 </table>
-<div class="footer"><span>FC Engenharia · ERP RH/DP</span><span>Impresso em ${new Date().toLocaleString("pt-BR")}</span></div>
-<script>setTimeout(function(){window.print()},250);</script>
+${gruposAgrupados.length > 0 ? `
+<div style="margin-top:18px;page-break-inside:avoid">
+  <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;color:#334155;margin-bottom:6px">📦 Resumo Consolidado de Materiais</div>
+  <table style="width:75%">
+    <thead>
+      <tr>
+        <th class="grp-item" style="text-align:left">Material / Serviço</th>
+        <th class="grp-item" style="text-align:left">Un.</th>
+        <th class="grp-item" style="text-align:right">Qtd Total</th>
+        ${temValorResumo ? `<th class="grp-forn" style="text-align:right">Valor Fechado</th><th class="grp-forn" style="text-align:right">% do Total</th>` : ""}
+      </tr>
+    </thead>
+    <tbody>
+      ${gruposAgrupados.map(g => {
+        const pctPdf = temValorResumo && resumoValorTotal > 0 ? (g.valorTotal / resumoValorTotal) * 100 : 0;
+        return `<tr>
+        <td>${esc(g.descricao)}</td>
+        <td style="color:#64748b">${esc(g.unidade)}</td>
+        <td style="text-align:right;font-weight:600">${g.qtdTotal.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</td>
+        ${temValorResumo ? `<td class="c-forn" style="text-align:right;color:#047857;font-weight:600">${g.valorTotal > 0 ? fmtMoeda(g.valorTotal) : "—"}</td><td class="c-forn" style="text-align:right;color:#64748b">${pctPdf.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%</td>` : ""}
+      </tr>`;
+      }).join("")}
+    </tbody>
+    <tfoot>
+    ${(() => {
+      // Rev. 5098 — subtotal por CATEGORIA (nome) + unidade (ex.: total de kg de aço, sem misturar cimento)
+      const porCat: Record<string, { qtd: number; n: number; valor: number; label: string; un: string }> = {};
+      for (const g of gruposAgrupados) {
+        const cat = categoriaResumo(g.descricao, g.unidade);
+        if (!porCat[cat.key]) porCat[cat.key] = { qtd: 0, n: 0, valor: 0, label: cat.label, un: g.unidade || "un" };
+        porCat[cat.key].qtd += g.qtdTotal; porCat[cat.key].n++; porCat[cat.key].valor += g.valorTotal;
+      }
+      return Object.values(porCat).filter(v => v.n > 1).map(v => `<tr>
+        <td style="font-weight:600;color:#334155;font-size:9px">Total ${esc(v.label)} — ${v.n} itens</td><td style="color:#64748b">${esc(v.un)}</td>
+        <td style="text-align:right;font-weight:700">${v.qtd.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</td>
+        ${temValorResumo ? `<td style="text-align:right;font-weight:600;color:#047857">${v.valor > 0 ? fmtMoeda(v.valor) : "—"}</td><td></td>` : ""}
+      </tr>`).join("");
+    })()}
+    ${temValorResumo ? `<tr class="tot-row">
+      <td style="font-weight:700;text-transform:uppercase;font-size:9px">Total Fechado</td><td></td><td></td>
+      <td style="text-align:right;font-weight:700;color:#047857">${fmtMoeda(resumoValorTotal)}</td>
+      <td style="text-align:right;color:#64748b">100%</td>
+    </tr>` : ""}
+    </tfoot>
+  </table>
+</div>` : ""}
+<div class="footer"><span>FC Engenharia · ERP Gestão Integrada</span><span>Impresso em ${new Date().toLocaleString("pt-BR")}</span></div>
+${comPrintScript ? `<script>setTimeout(function(){window.print()},250);</script>` : ""}
 </body></html>`;
+      return html;
+    }
+    function abrirImpressaoMapa() {
+      const html = montarHtmlMapaPdf(true);
+      if (!html) return;
       const w = window.open("", "_blank", "width=1100,height=1400");
       if (!w) { toast.error("Bloqueador de pop-up impediu abrir o PDF. Permita pop-ups e tente novamente."); return; }
       w.document.open(); w.document.write(html); w.document.close();
     }
+    // Rev. 5093 — botão "Enviar PDF (WhatsApp)" removido a pedido do user:
+    // o "Exportar PDF" (URL nomeada com nº da SC) já cobre visualizar/compartilhar.
 
     // Rev. 4003 — Exportação em Excel item × fornecedor do Mapa de Cotação
     // (pedido recorrente do usuário p/ mandar pro cliente aprovar item a
     // item; hoje ele monta essa planilha manualmente).
     function exportarExcelCotacao() {
+      if (!garantirMapaCarregado()) return;
       if (!detalheFullscreen) return;
       const { linhas, participantes } = montarLinhasExportacao();
       const numeroFmt = formatNumeroCotacaoDisplay(detalheFullscreen.numeroCotacao);
@@ -4184,46 +4913,163 @@ export default function Cotacoes() {
       return [...grouped, ...noComp.map((it: any) => ({ quantidade: parseFloat(it.quantidade ?? "0"), metaUnitario: parseFloat(it.metaUnitario ?? "0"), metaQtd: parseFloat(it.metaQtd ?? it.quantidade ?? "0"), unidade: it.unidade || "un" }))];
     })();
     const itensParaTotais = pacoteCompItens ?? (mapa?.itens ?? []).map((it: any) => ({ quantidade: parseFloat(it.quantidade ?? "0"), metaUnitario: parseFloat(it.metaUnitario ?? "0"), metaQtd: parseFloat(it.metaQtd ?? it.quantidade ?? "0"), unidade: it.unidade || "un" }));
-    const metaGrandTotal = itensParaTotais.reduce((acc: number, it: any) =>
+    const metaExibicaoTotal = itensParaTotais.reduce((acc: number, it: any) =>
       acc + (Math.round(it.metaUnitario * 100) / 100 * it.metaQtd), 0);
+    // Cada meta e cada OC anterior entram uma vez por vínculo orçamentário.
+    // Isso evita duplicar um insumo quando ele aparece em mais de uma linha
+    // de SC e, principalmente, mantém excesso físico separado de déficit R$.
+    const gruposFinanceiros = (() => {
+      const groups = new Map<string, { meta: number; comprasAnteriores: number }>();
+      for (const item of (mapa?.itens ?? []) as any[]) {
+        const key = String(item.chaveFinanceira ?? `cot-item:${item.id}`);
+        const metaPadrao = parseFloat(item.metaUnitario ?? "0") * parseFloat(item.qtdOrcada ?? item.metaQtd ?? item.quantidade ?? "0");
+        const meta = parseFloat(item.metaFinanceiraTotal ?? "0") || metaPadrao;
+        const comprasAnteriores = parseFloat(item.valorComprometidoAnterior ?? "0");
+        const current = groups.get(key);
+        if (current) {
+          current.meta = Math.max(current.meta, meta);
+          current.comprasAnteriores = Math.max(current.comprasAnteriores, comprasAnteriores);
+        } else {
+          groups.set(key, { meta, comprasAnteriores });
+        }
+      }
+      return groups;
+    })();
+    const metaGrandTotal = isPacoteTotals
+      ? metaExibicaoTotal
+      : [...gruposFinanceiros.values()].reduce((total, group) => total + group.meta, 0);
+    const comprasAnterioresTotal = [...gruposFinanceiros.values()]
+      .reduce((total, group) => total + (group.meta > 0 ? group.comprasAnteriores : 0), 0);
     const unidadesUnicas = [...new Set(itensParaTotais.map((it: any) => (it.unidade || "un").toLowerCase()))];
     const qtdGrandTotal = unidadesUnicas.length === 1
       ? itensParaTotais.reduce((acc: number, it: any) => acc + it.metaQtd, 0)
       : null;
     const qtdUnidade = unidadesUnicas.length === 1 ? unidadesUnicas[0] : null;
     const allItens = mapa?.itens ?? [];
-    const winnerGrandTotal = fornParaSaldo ? parseFloat(fornParaSaldo.totalOrcado ?? "0") : 0;
-    const saldoTotal = fornParaSaldo ? (isPacoteTotals
-      ? metaGrandTotal - winnerGrandTotal
-      : allItens.reduce((acc: number, it: any) => {
-          const { saldo, hasMeta } = getItemSaldo(it);
-          return acc + (hasMeta ? saldo : 0);
-        }, 0)
-    ) : 0;
+    const winnerGrandTotal = fornParaSaldo ? getFornTotal(fornParaSaldo) : 0;
+    const saldoTotal = fornParaSaldo
+      ? metaGrandTotal - comprasAnterioresTotal - winnerGrandTotal
+      : 0;
     const deficit = saldoTotal < 0 ? Math.abs(saldoTotal) : 0;
+
+    function getFechamentoParcialFinanceiro(
+      selecao: Array<{ itemId: number; fornecedorId: number; incluir: boolean }>,
+    ) {
+      const grupos = new Map<string, { meta: number; comprasAnteriores: number }>();
+      const fornecedoresComItens = new Set<number>();
+      let cotacaoAtual = 0;
+      for (const escolhido of selecao) {
+        if (!escolhido.incluir) continue;
+        const item: any = (mapa?.itens ?? []).find((it: any) => it.id === escolhido.itemId);
+        if (!item) continue;
+        const key = String(item.chaveFinanceira ?? `cot-item:${item.id}`);
+        const meta = Number(item.metaFinanceiraTotal ?? 0);
+        const comprasAnteriores = Number(item.valorComprometidoAnterior ?? 0);
+        const existente = grupos.get(key);
+        if (existente) {
+          existente.meta = Math.max(existente.meta, meta);
+          existente.comprasAnteriores = Math.max(existente.comprasAnteriores, comprasAnteriores);
+        } else {
+          grupos.set(key, { meta, comprasAnteriores });
+        }
+        const resposta: any = mapa?.respostaMap?.[`${item.id}_${escolhido.fornecedorId}`];
+        cotacaoAtual += Number(resposta?.total ?? 0);
+        fornecedoresComItens.add(escolhido.fornecedorId);
+      }
+      for (const fornecedorId of fornecedoresComItens) {
+        const participante: any = (mapa?.participantes ?? []).find((p: any) => p.fornecedorId === fornecedorId);
+        if ((participante?.freteTipo ?? "cif") === "fob") {
+          cotacaoAtual += Number(participante?.valorFrete ?? 0);
+        }
+      }
+      const metaOriginal = [...grupos.values()].reduce((sum, group) => sum + group.meta, 0);
+      const anteriores = [...grupos.values()].reduce(
+        (sum, group) => sum + (group.meta > 0 ? group.comprasAnteriores : 0),
+        0,
+      );
+      const saldo = Math.round((metaOriginal - anteriores - cotacaoAtual) * 100) / 100;
+      return { metaOriginal, anteriores, cotacaoAtual, saldo, deficit: saldo < 0 ? Math.abs(saldo) : 0 };
+    }
 
     const cobertura = (() => {
       const itensComOrc = allItens.filter((it: any) => (it as any).qtdOrcada > 0);
       if (itensComOrc.length === 0) return null;
       const total = itensComOrc.length;
-      const totais = itensComOrc.filter((it: any) => (it as any).qtdTotalSolicitada >= (it as any).qtdOrcada);
-      const parciais = itensComOrc.filter((it: any) => (it as any).qtdTotalSolicitada > 0 && (it as any).qtdTotalSolicitada < (it as any).qtdOrcada);
-      const pctMedio = itensComOrc.reduce((acc: number, it: any) => acc + Math.min(((it as any).qtdTotalSolicitada / (it as any).qtdOrcada) * 100, 100), 0) / total;
+      // Rev. 5086 — tolerância de arredondamento: a SC grava qtd com 3 casas e o
+      // orçamento tem 4 (ex.: 208,490 vs 208,4901). Diferença ínfima NÃO é compra
+      // parcial — considera total quando cobre ≥ 99,9% (ou falta < 0,01 un).
+      const cobreTotal = (sol: number, orc: number) => sol >= orc - Math.max(orc * 0.001, 0.01);
+      const totais = itensComOrc.filter((it: any) => cobreTotal((it as any).qtdTotalSolicitada, (it as any).qtdOrcada));
+      const parciais = itensComOrc.filter((it: any) => (it as any).qtdTotalSolicitada > 0 && !cobreTotal((it as any).qtdTotalSolicitada, (it as any).qtdOrcada));
+      const pctMedio = itensComOrc.reduce((acc: number, it: any) => {
+        const sol = (it as any).qtdTotalSolicitada, orc = (it as any).qtdOrcada;
+        return acc + (cobreTotal(sol, orc) ? 100 : Math.min((sol / orc) * 100, 100));
+      }, 0) / total;
       return { total, totais: totais.length, parciais: parciais.length, semCobertura: total - totais.length - parciais.length, pctMedio };
     })();
 
     // Remove prefixo de código EAP "[xx.xx.xx.xx] " da descrição para agrupar itens iguais
     const stripEapPrefix = (desc: string) => desc.replace(/^\[[\d.]+\]\s*/, "").trim();
-    const agrupados: Record<string, { descricao: string; unidade: string; qtdTotal: number }> = {};
+    // Rev. 5087 — resumo consolidado em TABELA organizada, com o valor fechado
+    // por material (fornecedor vencedor, senão o de melhor proposta) e total geral.
+    const fornResumo = fornParaSaldo ?? melhorForn;
+    const agrupados: Record<string, { descricao: string; unidade: string; qtdTotal: number; valorTotal: number }> = {};
     for (const it of (mapa?.itens ?? [])) {
       const descLimpa = stripEapPrefix(it.descricao);
       const chave = `${descLimpa}__${it.unidade || "un"}`;
-      if (!agrupados[chave]) agrupados[chave] = { descricao: descLimpa, unidade: it.unidade || "un", qtdTotal: 0 };
+      if (!agrupados[chave]) agrupados[chave] = { descricao: descLimpa, unidade: it.unidade || "un", qtdTotal: 0, valorTotal: 0 };
       agrupados[chave].qtdTotal += parseFloat(it.quantidade ?? "0");
+      const resp = fornResumo ? (mapa?.respostaMap?.[`${it.id}_${fornResumo.fornecedorId}`] as any) : null;
+      if (resp) {
+        const precoUnit = parseFloat(resp.precoUnitario ?? "0");
+        const q = parseFloat(resp.quantidade ?? it.quantidade ?? "0");
+        if (precoUnit > 0 && q > 0) agrupados[chave].valorTotal += precoUnit * q;
+      }
     }
-    const gruposAgrupados = Object.values(agrupados).filter(g => g.qtdTotal > 0);
+    const gruposAgrupados = Object.values(agrupados).filter(g => g.qtdTotal > 0)
+      .sort((a, b) => b.valorTotal - a.valorTotal || a.descricao.localeCompare(b.descricao, "pt-BR"));
+    const resumoValorTotal = gruposAgrupados.reduce((s, g) => s + g.valorTotal, 0);
+    const temValorResumo = resumoValorTotal > 0;
 
     const fullscreenMapa = abaAtiva === "mapa";
+    if (fullscreenMapa && detalheFullscreen && !mapa) {
+      return (
+        <DetalheWrapper fullscreen>
+          <div className="min-h-screen bg-gray-50 px-4 py-4">
+            <div className="mx-auto max-w-3xl space-y-5">
+              <button onClick={() => setAbaAtiva("detalhes")} className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-900">
+                <ChevronLeft className="h-4 w-4" /> Voltar aos detalhes
+              </button>
+              <div className="rounded-xl border border-gray-200 bg-white p-10 text-center shadow-sm">
+                {mapaQ.isError ? (
+                  <div className="space-y-4">
+                    <AlertTriangle className="mx-auto h-8 w-8 text-red-500" />
+                    <div>
+                      <p className="font-semibold text-gray-900">Não foi possível carregar o Mapa de Cotação.</p>
+                      <p className="mt-1 text-sm text-gray-500">Os detalhes básicos continuam disponíveis.</p>
+                    </div>
+                    <div className="flex justify-center gap-2">
+                      <Button variant="outline" onClick={() => setAbaAtiva("detalhes")}>Voltar aos detalhes</Button>
+                      <Button onClick={() => mapaQ.refetch()} className="gap-1.5 bg-blue-600 hover:bg-blue-500">
+                        <RefreshCw className="h-4 w-4" /> Tentar novamente
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <Loader2 className="mx-auto h-7 w-7 animate-spin text-blue-600" />
+                    <div>
+                      <p className="font-semibold text-gray-900">Carregando Mapa de Cotação</p>
+                      <p className="mt-1 text-sm text-gray-500">Preços, histórico e indicadores de fornecedores são buscados somente agora.</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </DetalheWrapper>
+      );
+    }
     return (
       <DetalheWrapper fullscreen={fullscreenMapa}>
         <div className={`${fullscreenMapa ? "px-3 py-3 space-y-3" : "p-6 space-y-5"} bg-gray-50 min-h-screen`}>
@@ -4284,11 +5130,12 @@ export default function Cotacoes() {
                       ) : (
                         <Button onClick={() => {
                           if (!validarCondicoesVencedor()) return;
-                          gerarContrato.mutate({ cotacaoId: detalheFullscreen.id, companyId });
+                          setTituloDraft(contratoTitulo || "Contrato de Prestação de Serviços");
+                          setTituloPromptOpen(true);
                         }} disabled={gerarContrato.isPending}
                           className="bg-purple-600 hover:bg-purple-500 text-white gap-2">
                           {gerarContrato.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
-                          Aprovar e Gerar Contrato de Serviço
+                          Visualizar e Aprovar Contrato
                         </Button>
                       )}
                       <Button variant="outline" onClick={() => atualizarStatus.mutate({ id: detalheFullscreen.id, status: "recusada" })}
@@ -4483,30 +5330,71 @@ export default function Cotacoes() {
               {(() => {
                 const df = detalheFullscreen as any;
                 const isServicoOuPacote = df.tipo === "servico" || df.tipo === "pacote";
-                const hasOC = df.status === "aprovada" || df.status === "concluida";
+                // Uma cotação pode gerar mais de uma OC. O rastreio usa a
+                // relação retornada pelo servidor, não apenas o status da
+                // cotação, para que cada numeração seja navegável.
+                const ordensVinculadas: any[] = df.ordensVinculadas ?? [];
+                const hasOC = ordensVinculadas.length > 0;
+                const numeroSc = df.scInfo?.numeroSc
+                  ? formatNumeroScDisplay(df.scInfo.numeroSc)
+                  : df.solicitacaoId ? `SC #${df.solicitacaoId}` : null;
                 const hasContrato = !!df.contratoTerceiroId;
                 const steps = isServicoOuPacote
                   ? [
-                      { label: "Solicitação", done: true, icon: <ClipboardList className="h-4 w-4" /> },
-                      { label: "Cotação", done: true, icon: <FileSearch className="h-4 w-4" /> },
-                      { label: "Ordem de Serviço", done: hasOC, icon: <ShoppingCart className="h-4 w-4" /> },
-                      { label: "Contrato", done: hasContrato, icon: <FileText className="h-4 w-4" /> },
+                      {
+                        label: "Solicitação",
+                        done: !!df.solicitacaoId,
+                        icon: <ClipboardList className="h-4 w-4" />,
+                        links: df.solicitacaoId ? [{
+                          id: df.solicitacaoId,
+                          label: numeroSc,
+                          href: `/compras/solicitacoes?destaque=${df.solicitacaoId}`,
+                          title: "Abrir solicitação de compra",
+                        }] : [],
+                      },
+                      { label: "Cotação", done: true, icon: <FileSearch className="h-4 w-4" />, links: [] },
+                      { label: "Ordem de Serviço", done: hasOC, icon: <ShoppingCart className="h-4 w-4" />, links: [] },
+                      { label: "Contrato", done: hasContrato, icon: <FileText className="h-4 w-4" />, links: [] },
                     ]
                   : [
-                      { label: "Solicitação", done: true, icon: <ClipboardList className="h-4 w-4" /> },
-                      { label: "Cotação", done: true, icon: <FileSearch className="h-4 w-4" /> },
-                      { label: "Ordem de Compra", done: hasOC, icon: <ShoppingCart className="h-4 w-4" /> },
-                      { label: "Entrega", done: df.status === "concluida", icon: <CheckCircle className="h-4 w-4" /> },
+                      {
+                        label: "Solicitação",
+                        done: !!df.solicitacaoId,
+                        icon: <ClipboardList className="h-4 w-4" />,
+                        links: df.solicitacaoId ? [{
+                          id: df.solicitacaoId,
+                          label: numeroSc,
+                          href: `/compras/solicitacoes?destaque=${df.solicitacaoId}`,
+                          title: "Abrir solicitação de compra",
+                        }] : [],
+                      },
+                      { label: "Cotação", done: true, icon: <FileSearch className="h-4 w-4" />, links: [] },
+                      {
+                        label: "Ordem de Compra",
+                        done: hasOC,
+                        icon: <ShoppingCart className="h-4 w-4" />,
+                        links: ordensVinculadas.map((oc) => ({
+                          id: oc.id,
+                          label: formatNumeroOcDisplay(oc.numeroOc),
+                          href: `/compras/ordens?destaque=${oc.id}`,
+                          title: `Abrir ordem de compra ${formatNumeroOcDisplay(oc.numeroOc)}`,
+                        })),
+                      },
+                      { label: "Entrega", done: df.status === "concluida", icon: <CheckCircle className="h-4 w-4" />, links: [] },
                     ];
                 const currentIdx = steps.reduce((acc, s, i) => (s.done ? i : acc), 0);
                 const isCancelada = df.status === "cancelada" || df.status === "recusada";
                 return (
-                  <div className="flex items-center gap-0 w-full py-2">
+                  <div className="rounded-xl border border-blue-100 bg-blue-50/40 px-3 py-3">
+                    <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-blue-700">
+                      Rastreio da Solicitação à Compra
+                    </p>
+                    <div className="flex items-start gap-0 w-full">
                     {steps.map((step, i) => {
                       const isActive = i === currentIdx + (steps[currentIdx + 1] && !steps[currentIdx + 1].done ? 1 : 0) && !isCancelada;
                       const isDone = step.done && !isCancelada;
                       return (
-                        <div key={i} className="flex items-center flex-1">
+                        <div key={i} className="flex items-start flex-1 min-w-0">
                           <div className="flex flex-col items-center flex-1">
                             <div className={`flex items-center justify-center w-9 h-9 rounded-full border-2 transition-all ${
                               isDone ? "bg-emerald-500 border-emerald-500 text-white" :
@@ -4519,6 +5407,22 @@ export default function Cotacoes() {
                             <span className={`text-[11px] mt-1.5 font-medium text-center leading-tight ${
                               isDone ? "text-emerald-700" : isActive && !isDone ? "text-blue-700" : "text-gray-400"
                             }`}>{step.label}</span>
+                            {step.links?.length > 0 && (
+                              <div className="mt-1.5 flex max-w-full flex-wrap justify-center gap-1">
+                                {step.links.map((link: any) => (
+                                  <button
+                                    key={link.id}
+                                    type="button"
+                                    onClick={() => navigate(link.href)}
+                                    title={link.title}
+                                    className="inline-flex max-w-full items-center gap-1 rounded-md border border-blue-200 bg-white px-1.5 py-0.5 text-[10px] font-bold text-blue-700 shadow-sm transition-colors hover:border-blue-400 hover:bg-blue-100 hover:text-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                                  >
+                                    <Link2 className="h-3 w-3 shrink-0" />
+                                    <span className="truncate">{link.label}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
                           </div>
                           {i < steps.length - 1 && (
                             <div className={`h-0.5 flex-1 -mt-5 mx-1 rounded ${isDone ? "bg-emerald-400" : "bg-gray-200"}`} />
@@ -4526,6 +5430,7 @@ export default function Cotacoes() {
                         </div>
                       );
                     })}
+                    </div>
                   </div>
                 );
               })()}
@@ -4701,39 +5606,322 @@ export default function Cotacoes() {
                     <div className="px-5 py-3 border-b border-gray-100 bg-gray-50">
                       <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">Itens</h2>
                     </div>
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="border-gray-100 bg-gray-50 hover:bg-gray-50">
-                          <TableHead className="text-gray-500 text-xs font-semibold uppercase">Descrição</TableHead>
-                          <TableHead className="text-gray-500 text-xs font-semibold uppercase w-16">Un.</TableHead>
-                          <TableHead className="text-gray-500 text-xs font-semibold uppercase w-24 text-right">Qtd</TableHead>
-                          <TableHead className="text-gray-500 text-xs font-semibold uppercase w-32 text-right">Preço Unit.</TableHead>
-                          <TableHead className="text-gray-500 text-xs font-semibold uppercase w-20 text-right">Desc%</TableHead>
-                          <TableHead className="text-gray-500 text-xs font-semibold uppercase w-32 text-right">Total</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {(detalheFullscreen.itens as any[]).map((it: any) => (
-                          <TableRow key={it.id} className={`border-gray-100 hover:bg-gray-50 ${it.semVerba ? (it.motivoSemVerba === "avulso" ? "bg-orange-50 print:bg-orange-50" : "bg-red-50 print:bg-red-50") : ""}`}>
-                            <TableCell className="text-gray-900 text-sm py-3">
-                              {it.descricao}
-                              {it.semVerba && (it.motivoSemVerba === "avulso"
-                                ? <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-orange-100 text-orange-700 border border-orange-200 print:border-orange-400">FORA DO ORÇAMENTO</span>
-                                : <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-700 border border-red-200 print:border-red-400">PREJUÍZO</span>
-                              )}
-                              {(it as any).somenteMo && (
-                                <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-100 text-blue-700 border border-blue-200 print:border-blue-400">SOMENTE MO</span>
-                              )}
-                            </TableCell>
-                            <TableCell className="text-gray-500 text-sm">{it.unidade || "un"}</TableCell>
-                            <TableCell className="text-gray-700 text-sm text-right">{parseFloat(it.quantidade).toLocaleString("pt-BR")}</TableCell>
-                            <TableCell className="text-gray-700 text-sm text-right">{parseFloat(it.precoUnitario || "0").toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</TableCell>
-                            <TableCell className="text-gray-500 text-sm text-right">{parseFloat(it.descontoPct || "0")}%</TableCell>
-                            <TableCell className="text-emerald-700 text-sm font-semibold text-right">{parseFloat(it.total || "0").toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                    {/* Rev. 5077 — enquanto pendente, a lista mostra a META como referência e avisa
+                        que os valores fechados só existem após aprovação (Detalhes = espelho do fechamento) */}
+                    {detalheFullscreen.status === "pendente" && (
+                      <div className="flex items-center gap-2.5 px-5 py-2.5 bg-blue-50 border-b border-blue-100">
+                        <Info className="h-4 w-4 text-blue-600 shrink-0" />
+                        <p className="text-xs text-blue-800">
+                          <strong>Aguardando fechamento</strong> — os preços abaixo só são preenchidos após a aprovação da cotação.
+                          A coluna <strong>Meta (Orç.)</strong> é referência do orçamento; a negociação acontece na aba <strong>Mapa de Cotação</strong>.
+                        </p>
+                      </div>
+                    )}
+                    {/* Rev. 5078 — réplica da planilha orçamentária: agrupada por etapa (EAP),
+                        pais e filhos com numeração, meta no escopo do tipo da cotação e valor fechado lado a lado. */}
+                    {(() => {
+                      const pend = detalheFullscreen.status === "pendente";
+                      const dItens = detalheFullscreen.itens as any[];
+                      const mapaItens = ((mapaQ.data?.itens ?? []) as any[]);
+                      const metaById = new Map<number, any>(mapaItens.map((m: any) => [m.id, m]));
+                      const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+                      const nnum = (v: any) => { const x = typeof v === "number" ? v : parseFloat(v || "0"); return isNaN(x) ? 0 : x; };
+                      const temEap = dItens.some((it: any) => { const m = metaById.get(it.id); return m && (m.eapCodigo || m.eapPath || m.parentEapCodigo); });
+                      const tipoCot = String((detalheFullscreen as any).tipo ?? (mapaQ.data as any)?.tipoEfetivo ?? "material");
+                      const metaLabel = tipoCot === "servico" ? "Meta MDO" : tipoCot === "pacote" ? "Meta Mat+MDO" : tipoCot === "equipamento" ? "Meta Equip." : "Meta Mat.";
+                      const badges = (it: any) => (<>
+                        {it.semVerba && (it.motivoSemVerba === "avulso"
+                          ? <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-orange-100 text-orange-700 border border-orange-200">FORA DO ORÇAMENTO</span>
+                          : <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-700 border border-red-200">PREJUÍZO</span>
+                        )}
+                        {(it as any).somenteMo && (
+                          <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-100 text-blue-700 border border-blue-200">SOMENTE MO</span>
+                        )}
+                      </>);
+                      const cellFechado = (v: number, cls: string) => (pend && v === 0
+                        ? <span className="text-gray-300" title="Preenchido após aprovação">aguard.</span>
+                        : <span className={cls}>{fmt(v)}</span>);
+                      // Sem vínculo com o orçamento (cotação avulsa) → tabela simples original
+                      if (!temEap) {
+                        return (
+                          <Table>
+                            <TableHeader>
+                              <TableRow className="border-gray-100 bg-gray-50 hover:bg-gray-50">
+                                <TableHead className="text-gray-500 text-xs font-semibold uppercase">Descrição</TableHead>
+                                <TableHead className="text-gray-500 text-xs font-semibold uppercase w-16">Un.</TableHead>
+                                <TableHead className="text-gray-500 text-xs font-semibold uppercase w-24 text-right">Qtd</TableHead>
+                                {pend && <TableHead className="text-blue-500 text-xs font-semibold uppercase w-28 text-right bg-blue-50/60">Meta (Orç.)</TableHead>}
+                                <TableHead className="text-gray-500 text-xs font-semibold uppercase w-32 text-right">Preço Unit.</TableHead>
+                                <TableHead className="text-gray-500 text-xs font-semibold uppercase w-20 text-right">Desc%</TableHead>
+                                <TableHead className="text-gray-500 text-xs font-semibold uppercase w-32 text-right">Total</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {dItens.map((it: any) => (
+                                <TableRow key={it.id} className={`border-gray-100 hover:bg-gray-50 ${it.semVerba ? (it.motivoSemVerba === "avulso" ? "bg-orange-50" : "bg-red-50") : ""}`}>
+                                  <TableCell className="text-gray-900 text-sm py-3">{it.descricao}{badges(it)}</TableCell>
+                                  <TableCell className="text-gray-500 text-sm">{it.unidade || "un"}</TableCell>
+                                  <TableCell className="text-gray-700 text-sm text-right">{nnum(it.quantidade).toLocaleString("pt-BR")}</TableCell>
+                                  {pend && (
+                                    <TableCell className="text-blue-700 text-sm text-right bg-blue-50/40">
+                                      {nnum(it.precoMeta) > 0 ? fmt(nnum(it.precoMeta)) : <span className="text-gray-300">—</span>}
+                                    </TableCell>
+                                  )}
+                                  <TableCell className="text-gray-700 text-sm text-right">{cellFechado(nnum(it.precoUnitario), "text-gray-700")}</TableCell>
+                                  <TableCell className="text-gray-500 text-sm text-right">{nnum(it.descontoPct)}%</TableCell>
+                                  <TableCell className="text-sm font-semibold text-right">{cellFechado(nnum(it.total), "text-emerald-700")}</TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        );
+                      }
+                      // Réplica da planilha — ordenar pela numeração EAP (segmento a segmento)
+                      const segKey = (cod: string): number[] | null => {
+                        const segs = String(cod ?? "").trim().split(/[^0-9]+/).filter(Boolean).map(Number);
+                        return segs.length ? segs : null;
+                      };
+                      const rows = dItens.map((it: any, i: number) => {
+                        const m = metaById.get(it.id) ?? {};
+                        const metaUnit = nnum(m.metaUnitario);
+                        const qtd = nnum(it.quantidade);
+                        return {
+                          it, m, i,
+                          k: segKey(m.eapCodigo || m.parentEapCodigo || ""),
+                          metaUnit,
+                          metaTotal: metaUnit * qtd,
+                          fechUnit: nnum(it.precoUnitario),
+                          fechTotal: nnum(it.total),
+                          grupo: String(m.eapPath || "").trim(),
+                          paiKey: `${m.parentEapCodigo ?? ""}|${m.parentEapDescricao ?? ""}`,
+                        };
+                      }).sort((a: any, b: any) => {
+                        if (a.k && b.k) {
+                          const len = Math.max(a.k.length, b.k.length);
+                          for (let s = 0; s < len; s++) { const d = (a.k[s] ?? 0) - (b.k[s] ?? 0); if (d !== 0) return d; }
+                          return a.i - b.i;
+                        }
+                        if (a.k) return -1;
+                        if (b.k) return 1;
+                        return a.i - b.i;
+                      });
+                      const totalMeta = rows.reduce((s: number, r: any) => s + r.metaTotal, 0);
+                      const totalFech = rows.reduce((s: number, r: any) => s + r.fechTotal, 0);
+                      const delta = totalFech - totalMeta;
+                      // Rev. 5090 — expandir/recolher por etapa (EAP): subtotais por grupo + toolbar
+                      const gruposUnicos: string[] = [];
+                      const subPorGrupo = new Map<string, { meta: number; fech: number; n: number }>();
+                      for (const r of rows) {
+                        const g = r.grupo || "";
+                        if (!g) continue;
+                        if (!subPorGrupo.has(g)) { subPorGrupo.set(g, { meta: 0, fech: 0, n: 0 }); gruposUnicos.push(g); }
+                        const s = subPorGrupo.get(g)!;
+                        s.meta += r.metaTotal; s.fech += r.fechTotal; s.n += 1;
+                      }
+                      const todosFechados = gruposUnicos.length > 0 && gruposUnicos.every(g => detalheGruposFechados[g]);
+                      // Rev. 5090 — resumo consolidado (igual ao do mapa): agrupa por descrição+un.
+                      const resumoMap = new Map<string, { descricao: string; unidade: string; qtd: number; valor: number; meta: number }>();
+                      for (const r of rows) {
+                        const key = `${(r.it.descricao ?? "").trim().toLowerCase()}|${r.it.unidade ?? "un"}`;
+                        if (!resumoMap.has(key)) resumoMap.set(key, { descricao: r.it.descricao, unidade: r.it.unidade || "un", qtd: 0, valor: 0, meta: 0 });
+                        const s = resumoMap.get(key)!;
+                        s.qtd += nnum(r.it.quantidade); s.valor += r.fechTotal; s.meta += r.metaTotal;
+                      }
+                      const usaFechadoResumo = totalFech > 0;
+                      const resumoRows = [...resumoMap.values()].sort((a, b) => (usaFechadoResumo ? b.valor - a.valor : b.meta - a.meta));
+                      const resumoTotal = usaFechadoResumo ? totalFech : totalMeta;
+                      return (
+                        <>
+                        {gruposUnicos.length > 0 && (
+                          <div className="flex items-center justify-end gap-2 px-5 py-2 border-b border-gray-100 bg-gray-50/60">
+                            <button
+                              type="button"
+                              onClick={() => setDetalheGruposFechados(todosFechados ? {} : Object.fromEntries(gruposUnicos.map(g => [g, true])))}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-gray-300 bg-white text-[11px] font-semibold text-gray-600 hover:bg-gray-100"
+                            >
+                              {todosFechados ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                              {todosFechados ? "Expandir todos" : "Recolher todos"}
+                            </button>
+                          </div>
+                        )}
+                        <Table>
+                          <TableHeader>
+                            <TableRow className="border-gray-100 bg-gray-50 hover:bg-gray-50">
+                              <TableHead className="text-gray-500 text-xs font-semibold uppercase w-20">Item</TableHead>
+                              <TableHead className="text-gray-500 text-xs font-semibold uppercase">Descrição</TableHead>
+                              <TableHead className="text-gray-500 text-xs font-semibold uppercase w-14">Un.</TableHead>
+                              <TableHead className="text-gray-500 text-xs font-semibold uppercase w-20 text-right">Qtd</TableHead>
+                              <TableHead className="text-blue-600 text-xs font-semibold uppercase w-28 text-right bg-blue-50/60">{metaLabel} Unit.</TableHead>
+                              <TableHead className="text-blue-600 text-xs font-semibold uppercase w-28 text-right bg-blue-50/60">Meta Total</TableHead>
+                              <TableHead className="text-emerald-600 text-xs font-semibold uppercase w-28 text-right bg-emerald-50/60">Fechado Unit.</TableHead>
+                              <TableHead className="text-emerald-600 text-xs font-semibold uppercase w-28 text-right bg-emerald-50/60">Fechado Total</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {rows.map((r: any, idx: number) => {
+                              const prev: any = idx > 0 ? rows[idx - 1] : null;
+                              const novoGrupo = r.grupo && (!prev || prev.grupo !== r.grupo);
+                              const novoPai = (r.m.parentEapDescricao || r.m.parentEapCodigo) && (!prev || prev.paiKey !== r.paiKey || novoGrupo);
+                              const codFilho = String(r.m.eapCodigo || "").trim();
+                              const grupoFechado = !!(r.grupo && detalheGruposFechados[r.grupo]);
+                              const sub = r.grupo ? subPorGrupo.get(r.grupo) : null;
+                              return (
+                                <React.Fragment key={r.it.id}>
+                                  {novoGrupo && (
+                                    <TableRow
+                                      className="bg-slate-100 hover:bg-slate-200/70 border-slate-200 cursor-pointer select-none"
+                                      onClick={() => setDetalheGruposFechados(prevSt => ({ ...prevSt, [r.grupo]: !prevSt[r.grupo] }))}
+                                    >
+                                      <TableCell colSpan={grupoFechado ? 5 : 8} className="py-1.5 text-[11px] font-bold text-slate-600 uppercase tracking-wide">
+                                        <span className="inline-flex items-center gap-1.5">
+                                          {grupoFechado ? <ChevronRight className="h-3.5 w-3.5 text-slate-400" /> : <ChevronDown className="h-3.5 w-3.5 text-slate-400" />}
+                                          {r.grupo}
+                                          {sub && <span className="normal-case tracking-normal font-medium text-[10px] text-slate-400">({sub.n} {sub.n === 1 ? "item" : "itens"})</span>}
+                                        </span>
+                                      </TableCell>
+                                      {grupoFechado && sub && (
+                                        <>
+                                          <TableCell className="py-1.5 text-xs font-bold text-blue-700 text-right bg-blue-50/60">{sub.meta > 0 ? fmt(sub.meta) : "—"}</TableCell>
+                                          <TableCell className="py-1.5 bg-emerald-50/50" />
+                                          <TableCell className="py-1.5 text-xs font-bold text-right bg-emerald-50/50">
+                                            {sub.fech > 0 ? <span className={sub.meta > 0 && sub.fech > sub.meta ? "text-red-600" : "text-emerald-700"}>{fmt(sub.fech)}</span> : <span className="text-gray-300">{pend ? "aguard." : "—"}</span>}
+                                          </TableCell>
+                                        </>
+                                      )}
+                                    </TableRow>
+                                  )}
+                                  {!grupoFechado && novoPai && (
+                                    <TableRow className="bg-gray-50/80 hover:bg-gray-50/80 border-gray-100">
+                                      <TableCell className="py-1.5">
+                                        {r.m.parentEapCodigo && <span className="inline-flex px-1.5 py-0.5 rounded bg-gray-200 text-gray-600 text-[10px] font-mono font-bold">{r.m.parentEapCodigo}</span>}
+                                      </TableCell>
+                                      <TableCell colSpan={7} className="py-1.5 text-xs font-semibold text-gray-700">{r.m.parentEapDescricao || "—"}</TableCell>
+                                    </TableRow>
+                                  )}
+                                  {!grupoFechado && (
+                                  <TableRow className={`border-gray-100 hover:bg-gray-50 ${r.it.semVerba ? (r.it.motivoSemVerba === "avulso" ? "bg-orange-50" : "bg-red-50") : ""}`}>
+                                    <TableCell className="py-2.5">
+                                      {codFilho
+                                        ? <span className="inline-flex px-1.5 py-0.5 rounded bg-gray-100 border border-gray-200 text-gray-500 text-[10px] font-mono">{codFilho}</span>
+                                        : <span className="text-gray-300 text-xs">—</span>}
+                                    </TableCell>
+                                    <TableCell className="text-gray-900 text-sm py-2.5 pl-3">{r.it.descricao}{badges(r.it)}</TableCell>
+                                    <TableCell className="text-gray-500 text-sm">{r.it.unidade || "un"}</TableCell>
+                                    <TableCell className="text-gray-700 text-sm text-right">{nnum(r.it.quantidade).toLocaleString("pt-BR")}</TableCell>
+                                    <TableCell className="text-blue-700 text-sm text-right bg-blue-50/40">
+                                      {r.metaUnit > 0 ? fmt(r.metaUnit) : <span className="text-gray-300">—</span>}
+                                      {tipoCot === "pacote" && (nnum(r.m.metaUnitarioMat) > 0 || nnum(r.m.metaUnitarioMdo) > 0) && (
+                                        <div className="text-[10px] text-blue-400 mt-0.5">Mat {fmt(nnum(r.m.metaUnitarioMat))} · MDO {fmt(nnum(r.m.metaUnitarioMdo))}</div>
+                                      )}
+                                    </TableCell>
+                                    <TableCell className="text-blue-700 text-sm font-medium text-right bg-blue-50/40">
+                                      {r.metaTotal > 0 ? fmt(r.metaTotal) : <span className="text-gray-300">—</span>}
+                                    </TableCell>
+                                    <TableCell className="text-sm text-right bg-emerald-50/30">{cellFechado(r.fechUnit, "text-emerald-800")}</TableCell>
+                                    <TableCell className="text-sm font-semibold text-right bg-emerald-50/30">
+                                      {cellFechado(r.fechTotal, r.metaTotal > 0 && r.fechTotal > r.metaTotal ? "text-red-600" : "text-emerald-700")}
+                                    </TableCell>
+                                  </TableRow>
+                                  )}
+                                </React.Fragment>
+                              );
+                            })}
+                            <TableRow className="bg-gray-900 hover:bg-gray-900 border-gray-900">
+                              <TableCell colSpan={5} className="py-3 text-xs font-bold text-white uppercase tracking-wide">Total</TableCell>
+                              <TableCell className="py-3 text-sm font-bold text-blue-300 text-right">{fmt(totalMeta)}</TableCell>
+                              <TableCell className="py-3 text-right">
+                                {totalFech > 0 && totalMeta > 0 && (
+                                  <span className={`text-[11px] font-bold ${delta <= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                                    {delta <= 0 ? "▼" : "▲"} {fmt(Math.abs(delta))}
+                                  </span>
+                                )}
+                              </TableCell>
+                              <TableCell className="py-3 text-sm font-bold text-right">
+                                {pend && totalFech === 0 ? <span className="text-gray-400">aguard.</span> : <span className="text-emerald-300">{fmt(totalFech)}</span>}
+                              </TableCell>
+                            </TableRow>
+                          </TableBody>
+                        </Table>
+                        {/* Rev. 5090 — Resumo consolidado de materiais (igual ao do mapa), no fim da tela */}
+                        {resumoRows.length > 0 && (
+                          <div className="px-5 py-4 border-t border-gray-200 bg-gray-50/40">
+                            <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                              <Package className="h-3.5 w-3.5 text-gray-400" /> Resumo Consolidado de Materiais
+                              {!usaFechadoResumo && <span className="normal-case tracking-normal font-medium text-[10px] text-blue-500">(valores pela meta do orçamento — fechado sai após aprovação)</span>}
+                            </p>
+                            <div className="overflow-x-auto rounded-lg border border-gray-200">
+                              <table className="w-full text-xs">
+                                <thead>
+                                  <tr className="text-[10px] uppercase tracking-wider text-white bg-slate-800">
+                                    <th className="text-left py-2 px-3 font-semibold">Material / Serviço</th>
+                                    <th className="text-center py-2 px-2 font-semibold">Un.</th>
+                                    <th className="text-right py-2 px-3 font-semibold">Qtd Total</th>
+                                    <th className="text-right py-2 px-3 font-semibold bg-emerald-700">{usaFechadoResumo ? "Valor Fechado" : "Valor Meta"}</th>
+                                    <th className="text-left py-2 px-3 font-semibold bg-emerald-700 w-[140px]">% do Total</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {resumoRows.map((g, gi) => {
+                                    const val = usaFechadoResumo ? g.valor : g.meta;
+                                    const pct = resumoTotal > 0 ? (val / resumoTotal) * 100 : 0;
+                                    return (
+                                      <tr key={`${g.descricao}_${g.unidade}`} className={`border-b border-gray-100 ${gi % 2 === 1 ? "bg-gray-50/60" : "bg-white"}`}>
+                                        <td className="py-1.5 px-3 text-gray-700">{g.descricao}</td>
+                                        <td className="py-1.5 px-2 text-center">
+                                          <span className="inline-block bg-slate-100 border border-slate-200 rounded px-1.5 py-0.5 text-[10px] font-medium text-slate-600 whitespace-nowrap">{g.unidade}</span>
+                                        </td>
+                                        <td className="py-1.5 px-3 text-right font-semibold text-gray-900 whitespace-nowrap">{g.qtd.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</td>
+                                        <td className="py-1.5 px-3 text-right font-semibold text-emerald-700 whitespace-nowrap bg-emerald-50/40">
+                                          {val > 0 ? `R$ ${val.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
+                                        </td>
+                                        <td className="py-1.5 px-3 bg-emerald-50/40">
+                                          <div className="flex items-center gap-1.5">
+                                            <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden min-w-[50px]">
+                                              <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${Math.max(pct, 1)}%` }} />
+                                            </div>
+                                            <span className="text-[10px] text-gray-500 tabular-nums w-9 text-right">{pct.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%</span>
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                                <tfoot>
+                                  {/* Rev. 5098 — subtotal por categoria (nome) + unidade */}
+                                  {Object.entries(resumoRows.reduce((acc: Record<string, { qtd: number; n: number; valor: number; label: string; un: string }>, g: any) => {
+                                    const cat = categoriaResumo(g.descricao, g.unidade);
+                                    if (!acc[cat.key]) acc[cat.key] = { qtd: 0, n: 0, valor: 0, label: cat.label, un: g.unidade || "un" };
+                                    acc[cat.key].qtd += g.qtd; acc[cat.key].n++; acc[cat.key].valor += (usaFechadoResumo ? g.valor : g.meta);
+                                    return acc;
+                                  }, {})).filter(([, v]) => v.n > 1).map(([k, v]) => (
+                                    <tr key={`cat_${k}`} className="bg-slate-100 border-t border-slate-200">
+                                      <td className="py-1.5 px-3 font-semibold text-slate-700 text-[11px]">Total {v.label} — {v.n} itens</td>
+                                      <td className="py-1.5 px-2 text-center">
+                                        <span className="inline-block bg-slate-200 rounded px-1.5 py-0.5 text-[10px] font-bold text-slate-700">{v.un}</span>
+                                      </td>
+                                      <td className="py-1.5 px-3 text-right font-bold text-slate-900 whitespace-nowrap">{v.qtd.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</td>
+                                      <td className="py-1.5 px-3 text-right font-semibold text-emerald-700 whitespace-nowrap">
+                                        {v.valor > 0 ? `R$ ${v.valor.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
+                                      </td>
+                                      <td />
+                                    </tr>
+                                  ))}
+                                  <tr className="bg-slate-800 text-white">
+                                    <td className="py-2 px-3 font-bold uppercase text-[10px] tracking-wider">{usaFechadoResumo ? "Total Fechado" : "Total Meta"}</td>
+                                    <td /><td />
+                                    <td className="py-2 px-3 text-right font-bold text-emerald-300 whitespace-nowrap">
+                                      R$ {resumoTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </td>
+                                    <td className="py-2 px-3 text-[10px] text-slate-300">100%</td>
+                                  </tr>
+                                </tfoot>
+                              </table>
+                            </div>
+                          </div>
+                        )}
+                        </>
+                      );
+                    })()}
                   </div>
 
                   <div className="flex flex-wrap gap-3 pt-2 border-t border-gray-200">
@@ -4750,11 +5938,12 @@ export default function Cotacoes() {
                         ) : (
                           <Button onClick={() => {
                             if (!validarCondicoesVencedor()) return;
-                            gerarContrato.mutate({ cotacaoId: detalheFullscreen.id, companyId });
+                            setTituloDraft(contratoTitulo || "Contrato de Prestação de Serviços");
+                            setTituloPromptOpen(true);
                           }} disabled={gerarContrato.isPending}
                             className="bg-purple-600 hover:bg-purple-500 text-white gap-2">
                             {gerarContrato.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
-                            Aprovar e Gerar Contrato de Serviço
+                            Visualizar e Aprovar Contrato
                           </Button>
                         )}
                         <Button variant="outline" onClick={() => atualizarStatus.mutate({ id: detalheFullscreen.id, status: "recusada" })}
@@ -4922,9 +6111,8 @@ export default function Cotacoes() {
                               type="button"
                               onClick={() => {
                                 setMapaFornOpen(false);
-                                resetNovoForn();
                                 // Se a busca já tinha um texto, aproveita como razão social inicial.
-                                if (mapaFornSearch.trim()) setNovoForn(prev => ({ ...prev, razaoSocial: mapaFornSearch.trim() }));
+                                setNovoFornInitial(mapaFornSearch.trim() ? { razaoSocial: mapaFornSearch.trim() } : undefined);
                                 setShowNovoForn(true);
                               }}
                               className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors">
@@ -4960,100 +6148,18 @@ export default function Cotacoes() {
                       )}
                     </div>
 
-                    {/* Cadastro rápido de fornecedor sem sair da cotação */}
-                    <Dialog open={showNovoForn} onOpenChange={(o) => { setShowNovoForn(o); if (!o) resetNovoForn(); }}>
-                      <DialogContent className="max-w-lg border-gray-200" style={{ background: "#fff", color: "#111827" }}>
-                        <DialogHeader>
-                          <DialogTitle className="flex items-center gap-2 text-gray-900">
-                            <UserPlus className="h-5 w-5 text-blue-600" /> Novo Fornecedor
-                          </DialogTitle>
-                        </DialogHeader>
-                        <div className="space-y-3 py-1">
-                          <div>
-                            <label className="text-xs font-medium text-gray-600">CNPJ</label>
-                            <div className="flex gap-2 mt-1">
-                              <input
-                                value={novoForn.cnpj}
-                                onChange={e => { setNovoForn(prev => ({ ...prev, cnpj: e.target.value })); if (cnpjFornErro) setCnpjFornErro(null); }}
-                                placeholder="00.000.000/0000-00"
-                                className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-md outline-none focus:ring-1 focus:ring-blue-500 text-gray-900"
-                              />
-                              <Button type="button" variant="outline" onClick={buscarCnpjForn} disabled={buscandoCnpjForn} className="gap-2 whitespace-nowrap">
-                                {buscandoCnpjForn ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-                                Buscar
-                              </Button>
-                            </div>
-                            {cnpjFornErro && <p className="text-xs text-amber-600 mt-1">{cnpjFornErro}</p>}
-                          </div>
-                          <div>
-                            <label className="text-xs font-medium text-gray-600">Razão Social <span className="text-red-500">*</span></label>
-                            <input
-                              value={novoForn.razaoSocial}
-                              onChange={e => setNovoForn(prev => ({ ...prev, razaoSocial: e.target.value }))}
-                              placeholder="Razão social"
-                              className="w-full mt-1 px-3 py-2 text-sm border border-gray-200 rounded-md outline-none focus:ring-1 focus:ring-blue-500 text-gray-900"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-xs font-medium text-gray-600">Nome Fantasia</label>
-                            <input
-                              value={novoForn.nomeFantasia}
-                              onChange={e => setNovoForn(prev => ({ ...prev, nomeFantasia: e.target.value }))}
-                              placeholder="Nome fantasia"
-                              className="w-full mt-1 px-3 py-2 text-sm border border-gray-200 rounded-md outline-none focus:ring-1 focus:ring-blue-500 text-gray-900"
-                            />
-                          </div>
-                          <div className="grid grid-cols-2 gap-3">
-                            <div>
-                              <label className="text-xs font-medium text-gray-600">Telefone</label>
-                              <input
-                                value={novoForn.telefone}
-                                onChange={e => setNovoForn(prev => ({ ...prev, telefone: e.target.value }))}
-                                placeholder="(00) 00000-0000"
-                                className="w-full mt-1 px-3 py-2 text-sm border border-gray-200 rounded-md outline-none focus:ring-1 focus:ring-blue-500 text-gray-900"
-                              />
-                            </div>
-                            <div>
-                              <label className="text-xs font-medium text-gray-600">E-mail</label>
-                              <input
-                                value={novoForn.email}
-                                onChange={e => setNovoForn(prev => ({ ...prev, email: e.target.value }))}
-                                placeholder="email@empresa.com"
-                                className="w-full mt-1 px-3 py-2 text-sm border border-gray-200 rounded-md outline-none focus:ring-1 focus:ring-blue-500 text-gray-900"
-                              />
-                            </div>
-                          </div>
-                          <div className="grid grid-cols-3 gap-3">
-                            <div className="col-span-2">
-                              <label className="text-xs font-medium text-gray-600">Cidade</label>
-                              <input
-                                value={novoForn.cidade}
-                                onChange={e => setNovoForn(prev => ({ ...prev, cidade: e.target.value }))}
-                                placeholder="Cidade"
-                                className="w-full mt-1 px-3 py-2 text-sm border border-gray-200 rounded-md outline-none focus:ring-1 focus:ring-blue-500 text-gray-900"
-                              />
-                            </div>
-                            <div>
-                              <label className="text-xs font-medium text-gray-600">UF</label>
-                              <input
-                                value={novoForn.estado}
-                                onChange={e => setNovoForn(prev => ({ ...prev, estado: e.target.value.toUpperCase().slice(0, 2) }))}
-                                placeholder="UF"
-                                maxLength={2}
-                                className="w-full mt-1 px-3 py-2 text-sm border border-gray-200 rounded-md outline-none focus:ring-1 focus:ring-blue-500 text-gray-900"
-                              />
-                            </div>
-                          </div>
-                        </div>
-                        <DialogFooter>
-                          <Button type="button" variant="outline" onClick={() => { setShowNovoForn(false); resetNovoForn(); }}>Cancelar</Button>
-                          <Button type="button" onClick={salvarNovoForn} disabled={criarFornRapido.isPending} className="bg-blue-600 hover:bg-blue-500 text-white gap-2">
-                            {criarFornRapido.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
-                            Cadastrar
-                          </Button>
-                        </DialogFooter>
-                      </DialogContent>
-                    </Dialog>
+                    {/* Cadastro completo de fornecedor sem sair da cotação (modal compartilhado) */}
+                    <FornecedorFormModal
+                      companyId={companyId}
+                      open={showNovoForn}
+                      initialForm={novoFornInitial}
+                      onClose={() => { setShowNovoForn(false); setNovoFornInitial(undefined); }}
+                      onSaved={(f) => {
+                        fornQ.refetch();
+                        // Já deixa o novo fornecedor selecionado pra adicionar ao mapa num clique.
+                        if (f?.id) setMapaFornSelectId(String(f.id));
+                      }}
+                    />
 
                     {sugestoesFiltradas.length > 0 && detalheFullscreen?.status === "pendente" && (
                       <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50/50 p-3 space-y-2">
@@ -5103,7 +6209,9 @@ export default function Cotacoes() {
                           const isRecomendado = scoreVal >= 4.0 && sc && sc.totalOCs >= 1;
                           const isAtencao = scoreVal > 0 && scoreVal < 2.5 && sc && sc.totalOCs >= 1;
                           const isEstoqueChip = !!p.isEstoque;
-                          const nomeChip = isEstoqueChip ? "Estoque (Almoxarifado)" : nome;
+                          const nomeChip = isEstoqueChip
+                            ? `${p.fornecedorInternoNome || "Empresa"} — Estoque interno`
+                            : nome;
                           return (
                             <div key={`${p.fornecedorId}-${isEstoqueChip ? "est" : "f"}`} className="flex items-center gap-1">
                               <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-sm font-medium ${isEstoqueChip ? "bg-violet-50 border-violet-300 text-violet-700" : isMelhor ? "bg-emerald-50 border-emerald-300 text-emerald-700" : p.selecionado ? "bg-blue-50 border-blue-300 text-blue-700" : "bg-gray-100 border-gray-300 text-gray-700"}`}>
@@ -5372,7 +6480,16 @@ export default function Cotacoes() {
                   )}
                   {cobertura && (
                     <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
-                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Cobertura do Orçamento</p>
+                      <div className="flex items-center justify-between mb-3">
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Cobertura do Orçamento</p>
+                        {coberturaFiltro && (
+                          <button type="button" onClick={() => setCoberturaFiltro(null)}
+                            className="text-[11px] font-semibold text-blue-600 hover:text-blue-800 inline-flex items-center gap-1">
+                            <X className="h-3 w-3" /> Limpar filtro
+                          </button>
+                        )}
+                      </div>
+                      {/* Rev. 5084 — cards clicáveis: filtram a matriz abaixo p/ mostrar SÓ os itens daquela classificação */}
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                         <div className="text-center">
                           <div className="text-2xl font-bold text-gray-900">{Math.round(cobertura.pctMedio)}%</div>
@@ -5381,19 +6498,35 @@ export default function Cotacoes() {
                             <div className="h-full bg-amber-500 rounded-full" style={{ width: `${Math.min(cobertura.pctMedio, 100)}%` }} />
                           </div>
                         </div>
-                        <div className="text-center">
+                        <button type="button"
+                          onClick={() => setCoberturaFiltro(f => f === "total" ? null : "total")}
+                          title="Itens em que a quantidade solicitada em compras já cobre 100% da quantidade orçada. Clique para filtrar."
+                          className={`text-center rounded-lg py-1 transition-colors cursor-pointer hover:bg-emerald-50 ${coberturaFiltro === "total" ? "ring-2 ring-emerald-500 bg-emerald-50" : ""}`}>
                           <div className="text-2xl font-bold text-emerald-600">{cobertura.totais}</div>
-                          <div className="text-[10px] text-gray-400 mt-0.5">Compra total</div>
-                        </div>
-                        <div className="text-center">
+                          <div className="text-[10px] text-gray-400 mt-0.5">Compra total {coberturaFiltro === "total" ? "· filtrando" : ""}</div>
+                        </button>
+                        <button type="button"
+                          onClick={() => setCoberturaFiltro(f => f === "parcial" ? null : "parcial")}
+                          title="Itens em que já foi solicitada UMA PARTE da quantidade orçada (o restante ainda não foi comprado). Clique para filtrar."
+                          className={`text-center rounded-lg py-1 transition-colors cursor-pointer hover:bg-amber-50 ${coberturaFiltro === "parcial" ? "ring-2 ring-amber-500 bg-amber-50" : ""}`}>
                           <div className="text-2xl font-bold text-amber-600">{cobertura.parciais}</div>
-                          <div className="text-[10px] text-gray-400 mt-0.5">Compra parcial</div>
-                        </div>
-                        <div className="text-center">
+                          <div className="text-[10px] text-gray-400 mt-0.5">Compra parcial {coberturaFiltro === "parcial" ? "· filtrando" : ""}</div>
+                        </button>
+                        <button type="button"
+                          onClick={() => setCoberturaFiltro(f => f === "sem" ? null : "sem")}
+                          title="Itens orçados que ainda não tiveram nenhuma quantidade solicitada em compras. Clique para filtrar."
+                          className={`text-center rounded-lg py-1 transition-colors cursor-pointer hover:bg-gray-50 ${coberturaFiltro === "sem" ? "ring-2 ring-gray-400 bg-gray-50" : ""}`}>
                           <div className="text-2xl font-bold text-gray-400">{cobertura.semCobertura}</div>
-                          <div className="text-[10px] text-gray-400 mt-0.5">Sem cobertura</div>
-                        </div>
+                          <div className="text-[10px] text-gray-400 mt-0.5">Sem cobertura {coberturaFiltro === "sem" ? "· filtrando" : ""}</div>
+                        </button>
                       </div>
+                      {coberturaFiltro && (
+                        <p className="mt-2 text-[11px] text-gray-500 bg-blue-50 border border-blue-200 rounded-lg px-3 py-1.5">
+                          {coberturaFiltro === "total" && "Mostrando só os itens com compra TOTAL: a quantidade solicitada já cobre toda a quantidade orçada."}
+                          {coberturaFiltro === "parcial" && "Mostrando só os itens com compra PARCIAL: foi solicitada apenas parte da quantidade orçada — o restante ainda está por comprar."}
+                          {coberturaFiltro === "sem" && "Mostrando só os itens SEM cobertura: nada foi solicitado ainda para esses itens orçados."}
+                        </p>
+                      )}
                     </div>
                   )}
 
@@ -5541,6 +6674,35 @@ export default function Cotacoes() {
                           )}
                         </div>
                         <div className="flex items-center gap-2">
+                          {/* Rev. 5159 — abrir/fechar todos: regiões (pais) + composições/pacotes (filhos) */}
+                          {(() => {
+                            const grupos = new Set<string>();
+                            const filhosIds: number[] = [];
+                            for (const it of (itensParaRenderizarMemo as any[])) {
+                              const g = String(it.eapPath || it.parentEapDescricao || "").trim();
+                              if (g) grupos.add(g);
+                              if ((!it._grouped && (it.composicaoInsumos ?? []).length > 0) || (it._isPacoteGroup && (it._childItems ?? []).length > 0)) filhosIds.push(it.id);
+                            }
+                            if (grupos.size === 0 && filhosIds.length === 0) return null;
+                            const tudoAberto = collapsedGrupos.size === 0 && filhosIds.every(id => expandedComposicao[id]);
+                            return (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (tudoAberto) {
+                                    setCollapsedGrupos(new Set(grupos));
+                                    setExpandedComposicao({});
+                                  } else {
+                                    setCollapsedGrupos(new Set());
+                                    setExpandedComposicao(Object.fromEntries(filhosIds.map(id => [id, true])));
+                                  }
+                                }}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 transition-colors"
+                              >
+                                {tudoAberto ? <><ChevronUp className="h-3.5 w-3.5" /> Fechar todos</> : <><ChevronDown className="h-3.5 w-3.5" /> Abrir todos</>}
+                              </button>
+                            );
+                          })()}
                           {((mapa as any)?.tipoEfetivo ?? mapa?.cotacao?.tipo) === 'pacote' ? (
                             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-indigo-100 text-indigo-700 border border-indigo-200">
                               <Package className="h-3.5 w-3.5" />
@@ -5606,13 +6768,23 @@ export default function Cotacoes() {
                               </th>
                               <th rowSpan={2} className="text-center text-xs font-semibold text-gray-500 uppercase px-2 py-2 w-12 border-r border-gray-200 bg-gray-50">Un.</th>
                               <th colSpan={((mapa as any)?.tipoEfetivo ?? mapa?.cotacao?.tipo) === 'pacote' ? 4 : 3} className="text-center text-xs font-semibold text-blue-600 uppercase px-2 py-2 border-r border-blue-100 bg-blue-50/60">
-                                {((mapa as any)?.tipoEfetivo ?? mapa?.cotacao?.tipo) === 'servico'
-                                  ? "Meta MDO (Orçamento)"
-                                  : ((mapa as any)?.tipoEfetivo ?? mapa?.cotacao?.tipo) === 'pacote'
-                                  ? "Meta Total (Orçamento)"
-                                  : ((mapa as any)?.tipoEfetivo ?? mapa?.cotacao?.tipo) === 'equipamento'
-                                  ? "Meta EQUIP (Orçamento)"
-                                  : "Meta MAT (Orçamento)"}
+                                <div className="flex flex-col items-center gap-0.5">
+                                  <span>
+                                    {((mapa as any)?.tipoEfetivo ?? mapa?.cotacao?.tipo) === 'servico'
+                                      ? "Meta MDO (Orçamento)"
+                                      : ((mapa as any)?.tipoEfetivo ?? mapa?.cotacao?.tipo) === 'pacote'
+                                      ? "Meta Total (Orçamento)"
+                                      : ((mapa as any)?.tipoEfetivo ?? mapa?.cotacao?.tipo) === 'equipamento'
+                                      ? "Meta EQUIP (Orçamento)"
+                                      : "Meta MAT (Orçamento)"}
+                                  </span>
+                                  {/* Rev. 5066 — total da meta também no topo (pedido do user: evitar rolar até o rodapé) */}
+                                  {metaGrandTotal > 0 && (
+                                    <div className="normal-case font-bold text-sm px-2 py-0.5 rounded-lg border bg-blue-100 text-blue-800 border-blue-300">
+                                      {metaGrandTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                                    </div>
+                                  )}
+                                </div>
                               </th>
                               <th rowSpan={2} className="text-center text-xs font-semibold text-orange-600 uppercase px-2 py-2 border-r border-orange-100 bg-orange-50/60 w-24">Saldo<br/>Orç.</th>
                               {(mapa?.participantes ?? []).map((p: any) => {
@@ -5622,6 +6794,16 @@ export default function Cotacoes() {
                                 const scoreVal = sc?.score ?? 0;
                                 const isRecomendado = scoreVal >= 4.0 && sc && sc.totalOCs >= 1;
                                 const isAtencao = scoreVal > 0 && scoreVal < 2.5 && sc && sc.totalOCs >= 1;
+                                // Rev. 212 — desconto global aplicado pela IA: acha o primeiro item com descontoPct > 0
+                                const descontoForn = (() => {
+                                  const rm = mapa?.respostaMap as Record<string, { descontoPct?: string }> | undefined;
+                                  if (!rm) return 0;
+                                  for (const it of (mapa?.itens ?? [])) {
+                                    const d = parseFloat(rm[`${(it as any).id}_${p.fornecedorId}`]?.descontoPct ?? "0");
+                                    if (d > 0) return d;
+                                  }
+                                  return 0;
+                                })();
                                 return (
                                   <th key={p.fornecedorId} colSpan={4} className={`text-center text-xs font-semibold uppercase px-2 py-2 border-r border-gray-200 align-top ${isMelhor ? "text-emerald-700 bg-emerald-50/60" : "text-gray-500"}`}>
                                     <div className="flex flex-col items-center gap-0.5">
@@ -5676,10 +6858,16 @@ export default function Cotacoes() {
                                             <Trophy className="h-2.5 w-2.5" /> Vencedor
                                           </button>
                                         )}
-                                        {(p as any).arquivoUrl && (
-                                          <a href={(p as any).arquivoUrl} target="_blank" rel="noreferrer" className="text-blue-500 hover:text-blue-700" title="Ver cotação anexada">
+                                        {safeAnexoHref((p as any).arquivoUrl) && (
+                                          <a href={safeAnexoHref((p as any).arquivoUrl)} target="_blank" rel="noreferrer" className="text-blue-500 hover:text-blue-700" title="Ver cotação anexada">
                                             <ExternalLink className="h-3 w-3" />
                                           </a>
+                                        )}
+                                        {/* Rev. 212 — badge de desconto global aplicado pela IA */}
+                                        {descontoForn > 0 && (
+                                          <span className="flex items-center gap-0.5 text-[9px] normal-case font-semibold bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full border border-blue-200" title={`Desconto global de ${descontoForn}% aplicado a todos os itens deste fornecedor`}>
+                                            -{descontoForn}% desc.
+                                          </span>
                                         )}
                                       </div>
                                       {/* Rev. 1989 — Toolbar compacto: icon-only, sem wrap, gap mínimo. */}
@@ -5902,6 +7090,24 @@ export default function Cotacoes() {
                                                 className="h-6 text-[10px] border-emerald-200 text-emerald-700 hover:bg-emerald-50 gap-1 px-2">
                                                 <BarChart3 className="h-3 w-3" /> Valor Negociado
                                               </Button>
+                                              {mapaItemsChecked.size > 0 && (
+                                                <Button size="sm" variant="outline"
+                                                  onPointerDown={(e) => {
+                                                    e.stopPropagation(); e.preventDefault();
+                                                    // Rev. 5135 — expande grupos/pacotes selecionados p/ os itens brutos
+                                                    const ids: number[] = [];
+                                                    for (const o of itensParaRenderizarMemo as any[]) {
+                                                      if (!mapaItemsChecked.has(o.id)) continue;
+                                                      ids.push(o.id);
+                                                      for (const c of ((o._childItems ?? []) as any[])) ids.push(c.id);
+                                                    }
+                                                    setNegociadoModal({ fornecedorId: p.fornecedorId, itemIds: ids, label: `${mapaItemsChecked.size} ${mapaItemsChecked.size === 1 ? "item selecionado" : "itens selecionados"}` });
+                                                    setNegociadoValor(""); setNegociadoPreviewing(false);
+                                                  }}
+                                                  className="h-6 text-[10px] border-amber-300 text-amber-700 hover:bg-amber-50 gap-1 px-2">
+                                                  <BarChart3 className="h-3 w-3" /> Negociar seleção ({mapaItemsChecked.size})
+                                                </Button>
+                                              )}
                                               <Button size="sm" variant="outline" onClick={() => setEditingFornId(null)} className="h-6 text-[10px] border-gray-300 text-gray-600 px-2">
                                                 Cancelar
                                               </Button>
@@ -5922,7 +7128,23 @@ export default function Cotacoes() {
                                         <div className="mt-1 bg-indigo-50/50 border border-indigo-100 rounded-lg p-2 space-y-1 text-left">
                                           <span className="text-[9px] font-semibold text-indigo-700 uppercase tracking-wide">Propostas</span>
                                           {propostasQ.isLoading && <p className="text-[10px] text-gray-400">Carregando...</p>}
-                                          {propostasQ.data && propostasQ.data.length === 0 && (
+                                          {/* Rev. 5008 — o anexo salvo (arquivoUrl) NÃO aparecia aqui: este painel só
+                                              listava as propostas lidas por IA (tabela própria). Agora o arquivo anexado
+                                              pelo clipe aparece como "Proposta anexada" — é ele que vira o Anexo I. */}
+                                          {safeAnexoHref((p as any).arquivoUrl) && (
+                                            <a
+                                              href={safeAnexoHref((p as any).arquivoUrl)}
+                                              target="_blank"
+                                              rel="noreferrer"
+                                              className="flex items-center gap-1.5 bg-white border border-indigo-200 rounded-md px-2 py-1 hover:bg-indigo-50 transition-colors"
+                                              title="Abrir a proposta anexada (Anexo I do contrato)"
+                                            >
+                                              <Paperclip className="h-3 w-3 text-indigo-500 flex-shrink-0" />
+                                              <span className="text-[10px] text-indigo-700 font-medium truncate">{(p as any).arquivoNome || "Proposta anexada"}</span>
+                                              <span className="text-[8px] font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-full px-1.5 py-px flex-shrink-0 uppercase">Anexo I</span>
+                                            </a>
+                                          )}
+                                          {propostasQ.data && propostasQ.data.length === 0 && !(p as any).arquivoUrl && (
                                             <p className="text-[10px] text-gray-400 italic">Nenhuma proposta</p>
                                           )}
                                           {(propostasQ.data ?? []).map((prop: any) => (
@@ -5966,8 +7188,9 @@ export default function Cotacoes() {
                                 </>
                               ) : (
                                 <>
-                                  <th className="text-right text-xs font-medium text-blue-500 px-3 py-2 bg-blue-50/60 w-28">Preço Unit.</th>
+                                  {/* Rev. 4998 — ordem QTD | Preço Unit. | Total (pedido do user) */}
                                   <th className="text-right text-xs font-medium text-blue-500 px-3 py-2 bg-blue-50/60 w-20">QTD</th>
+                                  <th className="text-right text-xs font-medium text-blue-500 px-3 py-2 bg-blue-50/60 w-28">Preço Unit.</th>
                                   <th className="text-right text-xs font-medium text-blue-500 px-3 py-2 bg-blue-50/60 w-28 border-r border-blue-100">Total Meta</th>
                                 </>
                               )}
@@ -6037,7 +7260,7 @@ export default function Cotacoes() {
                           </thead>
                           <tbody>
                             {/* Rev. 4258 — itensParaRenderizarMemo pré-computado (useMemo) substitui IIFE de 80 linhas */}
-                            {itensParaRenderizarMemo.map((it: any) => {
+                            {itensParaRenderizarMemo.map((it: any, _idx: number, _arr: any[]) => {
                               const melhorPreco = melhorPrecoMap.get(it.id) ?? null;
                               const metaUnitRaw = parseFloat(it.metaUnitario ?? "0");
                               const metaUnit = Math.round(metaUnitRaw * 100) / 100;
@@ -6058,8 +7281,141 @@ export default function Cotacoes() {
                                 : 0;
                               const showPacoteMatMdo = pacoteMetaMat > 0 || pacoteMetaMdo > 0; // Rev. 1991: +1 col Saldo por fornecedor
                               const itPausado = !!(it as any).pausado;
+                              // Rev. 5067 — separador visual por etapa da EAP (pai): pavimento/trecho
+                              const grupoAtual = String((it as any).eapPath || (it as any).parentEapDescricao || "").trim();
+                              const grupoAnterior = _idx > 0 ? String((_arr[_idx - 1] as any).eapPath || (_arr[_idx - 1] as any).parentEapDescricao || "").trim() : null;
+                              const mostraGrupoHeader = !!grupoAtual && grupoAtual !== grupoAnterior;
+                              const grupoColSpan = (detalheFullscreen?.status === "pendente" ? 1 : 0) + 2 + (isPacoteTipoMapa ? 4 : 3) + 1 + numFornCols;
+                              // Rev. 5134 — região recolhida: só o header aparece
+                              const grupoCollapsed = !!grupoAtual && collapsedGrupos.has(grupoAtual);
+                              if (grupoCollapsed && !mostraGrupoHeader) return null;
                               return (
                                 <React.Fragment key={it.id}>
+                                {mostraGrupoHeader && (() => {
+                                  // Rev. 5068 — subtotal da meta por trecho/pavimento (pedido do user)
+                                  let subtotalGrupo = 0;
+                                  const grupoRows: any[] = [];
+                                  for (let gi = _idx; gi < _arr.length; gi++) {
+                                    const g = _arr[gi] as any;
+                                    if (String(g.eapPath || g.parentEapDescricao || "").trim() !== grupoAtual) break;
+                                    grupoRows.push(g);
+                                    const gu = Math.round(parseFloat(g.metaUnitario ?? "0") * 100) / 100;
+                                    const gq = parseFloat(g.metaQtd ?? g.quantidade ?? "0");
+                                    subtotalGrupo += Math.round(gu * gq * 100) / 100;
+                                  }
+                                  // Rev. 5133 — total de cada FORNECEDOR na região + desvio vs meta (pedido do user)
+                                  const totalItemForn = (g: any, fornId: number): number => {
+                                    const isEd = editingFornId === fornId;
+                                    const um = (itemId: number, qtdFallback: any): number => {
+                                      const k = `${itemId}_${fornId}`;
+                                      if (isEd) {
+                                        if (editTotaisOverride[k] != null) return editTotaisOverride[k];
+                                        const pr = parseBRNumber(editPrecos[k] ?? "0") || 0;
+                                        const qEd = editQtds[k] != null ? parseBRNumber(editQtds[k]) : 0;
+                                        const q = qEd > 0 ? qEd : (parseFloat(mapa?.respostaMap?.[k]?.quantidade ?? String(qtdFallback ?? "0")) || 0);
+                                        return pr * q;
+                                      }
+                                      const r: any = mapa?.respostaMap?.[k];
+                                      if (!r) return 0;
+                                      const tot = parseFloat(r.total ?? "0") || 0;
+                                      if (tot > 0) return tot; // total salvo é autoritativo (Rev. 5079)
+                                      return (parseFloat(r.precoUnitario ?? "0") || 0) * (parseFloat(r.quantidade ?? String(qtdFallback ?? "0")) || 0);
+                                    };
+                                    const kids = (g._childItems as any[]) ?? null;
+                                    if (g._isPacoteGroup && kids?.length) {
+                                      const first = kids[0];
+                                      const k = `${first.id}_${fornId}`;
+                                      if (isEd && editTotaisOverride[k] != null) return editTotaisOverride[k];
+                                      const compQtd = (first as any).composicaoQtdOrcada || parseFloat(g.quantidade ?? "0") || 0;
+                                      const r: any = mapa?.respostaMap?.[k];
+                                      if (!isEd && r && (parseFloat(r.total ?? "0") || 0) > 0) return parseFloat(r.total);
+                                      const pr = isEd ? (parseBRNumber(editPrecos[k] ?? "0") || 0) : (parseFloat(r?.precoUnitario ?? "0") || 0);
+                                      return pr * compQtd;
+                                    }
+                                    if (g._grouped && kids?.length) return kids.reduce((s: number, c: any) => s + um(c.id, c.quantidade), 0);
+                                    return um(g.id, g.quantidade ?? "1");
+                                  };
+                                  const fornTotais = (mapa?.participantes ?? []).map((p: any) => ({
+                                    p,
+                                    nome: p.fornecedor?.nomeFantasia || p.fornecedor?.razaoSocial || `#${p.fornecedorId}`,
+                                    total: Math.round(grupoRows.reduce((s: number, g: any) => s + totalItemForn(g, p.fornecedorId), 0) * 100) / 100,
+                                  })).filter((f: any) => f.total > 0);
+                                  return (
+                                    <tr className="bg-slate-100/90 border-y border-slate-200 cursor-pointer select-none hover:bg-slate-200/70 transition-colors"
+                                      onClick={() => setCollapsedGrupos(prev => {
+                                        const nx = new Set(prev);
+                                        if (nx.has(grupoAtual)) nx.delete(grupoAtual); else nx.add(grupoAtual);
+                                        return nx;
+                                      })}>
+                                      <td colSpan={grupoColSpan} className="px-4 py-1.5">
+                                        <span className="sticky left-4 inline-flex items-center gap-2 text-[11px] font-bold text-slate-600 uppercase tracking-wide">
+                                          {grupoCollapsed ? <ChevronRight className="h-3.5 w-3.5 text-slate-500" /> : <ChevronDown className="h-3.5 w-3.5 text-slate-500" />}
+                                          {/* Rev. 5135 — selecionar a região inteira de uma vez */}
+                                          {detalheFullscreen?.status === "pendente" && (() => {
+                                            const idsRegiao = grupoRows.map((g: any) => g.id);
+                                            const allSel = idsRegiao.length > 0 && idsRegiao.every((gid: number) => mapaItemsChecked.has(gid));
+                                            return (
+                                              <input type="checkbox" checked={allSel}
+                                                className="rounded border-gray-400 text-blue-600 focus:ring-blue-500 h-3.5 w-3.5 cursor-pointer"
+                                                title="Selecionar todos os itens desta região"
+                                                onClick={e => e.stopPropagation()}
+                                                onChange={e => {
+                                                  e.stopPropagation();
+                                                  setMapaItemsChecked(prev => {
+                                                    const nx = new Set(prev);
+                                                    idsRegiao.forEach((gid: number) => { if (allSel) nx.delete(gid); else nx.add(gid); });
+                                                    return nx;
+                                                  });
+                                                }} />
+                                            );
+                                          })()}
+                                          <FolderOpen className="h-3.5 w-3.5 text-slate-400" />
+                                          {grupoAtual}
+                                          {grupoCollapsed && (
+                                            <span className="normal-case tracking-normal text-[10px] font-semibold text-slate-400">({grupoRows.length} {grupoRows.length === 1 ? "item" : "itens"})</span>
+                                          )}
+                                          {subtotalGrupo > 0 && (
+                                            <span className="normal-case tracking-normal font-bold text-[11px] px-2 py-0.5 rounded-lg border bg-blue-100 text-blue-800 border-blue-300">
+                                              Meta: {subtotalGrupo.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                                            </span>
+                                          )}
+                                          {/* Rev. 5133 — total por fornecedor na região + desvio vs meta */}
+                                          {fornTotais.map((f: any) => {
+                                            const desvio = Math.round((f.total - subtotalGrupo) * 100) / 100;
+                                            const acima = desvio > 0;
+                                            return (
+                                              <span key={f.p.fornecedorId} className="normal-case tracking-normal font-bold text-[11px] px-2 py-0.5 rounded-lg border bg-white text-slate-700 border-slate-300 inline-flex items-center gap-1.5">
+                                                <span className="max-w-[120px] truncate font-semibold text-slate-500">{f.nome}:</span>
+                                                {f.total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                                                {subtotalGrupo > 0 && desvio !== 0 && (
+                                                  <span className={`font-bold ${acima ? "text-red-600" : "text-emerald-600"}`}>
+                                                    {acima ? "+" : "−"}{Math.abs(desvio).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                                                  </span>
+                                                )}
+                                              </span>
+                                            );
+                                          })}
+                                          {/* Rev. 5132 — negociar só esta região (fornecedor em edição) */}
+                                          {editingFornId != null && (
+                                            <button
+                                              type="button"
+                                              className="normal-case tracking-normal inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-lg border bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100 transition-colors"
+                                              title="Negociar valor só desta região"
+                                              onClick={e => e.stopPropagation()}
+                                              onPointerDown={e => {
+                                                e.stopPropagation(); e.preventDefault();
+                                                setNegociadoModal({ fornecedorId: editingFornId, grupo: grupoAtual });
+                                                setNegociadoValor(""); setNegociadoPreviewing(false);
+                                              }}>
+                                              <BarChart3 className="h-3 w-3" /> Negociar região
+                                            </button>
+                                          )}
+                                        </span>
+                                      </td>
+                                    </tr>
+                                  );
+                                })()}
+                                {!grupoCollapsed && (<>
                                 <tr className={`group border-b border-gray-100 hover:bg-gray-50/60 ${itPausado ? "opacity-50 bg-gray-50" : ""} ${it._isPacoteGroup && !itPausado ? "bg-indigo-50/30" : ""} ${mapaItemsChecked.has(it.id) && !itPausado ? "bg-blue-50/40" : ""}`}>
                                   {detalheFullscreen?.status === "pendente" && (
                                     <td className={`px-2 py-1 border-r border-gray-100 w-9 align-middle ${it._isPacoteGroup ? "bg-indigo-50/30" : mapaItemsChecked.has(it.id) ? "bg-blue-50" : "bg-white"}`}>
@@ -6102,6 +7458,13 @@ export default function Cotacoes() {
                                         </button>
                                       )}
                                       <div className="flex-1 min-w-0">
+                                        {(() => {
+                                          // Rev. 5074 — número do item conforme o orçamento, visível na linha
+                                          const cod = String((it as any).eapCodigo ?? (it as any).parentEapCodigo ?? "").trim();
+                                          return cod && !it._isPacoteGroup ? (
+                                            <span className="mr-1.5 inline-block px-1 py-0.5 rounded bg-gray-100 border border-gray-200 font-mono text-[9px] text-gray-500 align-middle whitespace-nowrap">{cod}</span>
+                                          ) : null;
+                                        })()}
                                         <span className="text-gray-900 text-xs font-medium">{it._isPacoteGroup && (it as any).composicaoEapCodigo ? `[${(it as any).composicaoEapCodigo}] ${it.descricao}` : it.descricao}</span>
                                         {it._isPacoteGroup && (
                                           <span className="ml-1.5 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-100 text-indigo-700 border border-indigo-200">
@@ -6144,6 +7507,47 @@ export default function Cotacoes() {
                                             </span>
                                           ) : null;
                                         })()}
+                                         {!it._grouped && ((it as any).comprasAnteriores ?? []).length > 0 && (
+                                           <div className="mt-1 flex flex-wrap items-center gap-1">
+                                             <span className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[9px] font-bold ${
+                                               (it as any).compraStatus === "total"
+                                                 ? "border-blue-200 bg-blue-50 text-blue-700"
+                                                 : "border-amber-200 bg-amber-50 text-amber-700"
+                                             }`}>
+                                               <History className="h-2.5 w-2.5" />
+                                               {(it as any).compraStatus === "total" ? "Compra anterior total" : "Compra anterior parcial"}
+                                             </span>
+                                             {((it as any).comprasAnteriores as any[]).slice(0, 3).map((ref: any) => (
+                                               <span key={`${ref.ocId}:${ref.scId ?? 0}`} className="inline-flex items-center gap-1 text-[9px]">
+                                                 {ref.scId && (
+                                                   <button
+                                                     type="button"
+                                                     onClick={(event) => {
+                                                       event.stopPropagation();
+                                                       navigate(`/compras/solicitacoes?destaque=${ref.scId}`);
+                                                     }}
+                                                     className="font-semibold text-blue-600 hover:text-blue-800 hover:underline"
+                                                     title="Abrir solicitação de compra anterior"
+                                                   >
+                                                     SC {formatNumeroScDisplay(ref.scNumero ?? String(ref.scId))}
+                                                   </button>
+                                                 )}
+                                                 <button
+                                                   type="button"
+                                                   onClick={(event) => {
+                                                     event.stopPropagation();
+                                                     navigate(`/compras/ordens?destaque=${ref.ocId}`);
+                                                   }}
+                                                   className="inline-flex items-center gap-0.5 font-semibold text-slate-600 hover:text-blue-800 hover:underline"
+                                                   title={`${ref.atendimento === "total" ? "Compra total" : "Compra parcial"} · ${Number(ref.quantidade ?? 0).toLocaleString("pt-BR")} · ${Number(ref.valor ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`}
+                                                 >
+                                                   <ExternalLink className="h-2.5 w-2.5" />
+                                                   OC {formatNumeroOcDisplay(ref.ocNumero ?? String(ref.ocId))}
+                                                 </button>
+                                               </span>
+                                             ))}
+                                           </div>
+                                         )}
                                       </div>
                                       <HistoricoPrecoPopover companyId={companyId} descricao={it.descricao} />
                                       {/* Rev. 4245 — botões editar/excluir visíveis no hover, só em pendente */}
@@ -6203,6 +7607,10 @@ export default function Cotacoes() {
                                     );
                                   })() : (
                                     <>
+                                      {/* Rev. 4998 — ordem QTD | Preço Unit. | Total (pedido do user) */}
+                                      <td className="px-3 py-2 text-blue-600 text-xs text-right bg-blue-50/30">
+                                        {metaQtdVal > 0 ? metaQtdVal.toLocaleString("pt-BR") : <span className="text-gray-300">—</span>}
+                                      </td>
                                       <td className="px-3 py-2 text-blue-700 text-xs text-right bg-blue-50/30 font-medium">
                                         <div className="flex items-center justify-end gap-1">
                                           {(it as any).incluirAjudante === false && (it as any).metaMdoProfissional > 0 && (
@@ -6210,9 +7618,6 @@ export default function Cotacoes() {
                                           )}
                                           {metaUnit > 0 ? metaUnit.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}
                                         </div>
-                                      </td>
-                                      <td className="px-3 py-2 text-blue-600 text-xs text-right bg-blue-50/30">
-                                        {metaQtdVal > 0 ? metaQtdVal.toLocaleString("pt-BR") : <span className="text-gray-300">—</span>}
                                       </td>
                                       <td className="px-3 py-2 text-blue-700 text-xs text-right bg-blue-50/30 font-semibold border-r border-blue-100">
                                         {metaTot > 0 ? metaTot.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}
@@ -6260,21 +7665,21 @@ export default function Cotacoes() {
                                       savedPreco = parseFloat(mapa?.respostaMap?.[`${childItems[0].id}_${p.fornecedorId}`]?.precoUnitario ?? "0");
                                       const compQtd = (childItems[0] as any).composicaoQtdOrcada || parseFloat(it.quantidade ?? "0");
                                       savedQty = compQtd;
-                                      displayPreco = isEditing ? parseFloat(editPrecos[key] ?? String(savedPreco)) : savedPreco;
+                                      displayPreco = isEditing ? parseBRNumber(editPrecos[key] ?? String(savedPreco)) : savedPreco;
                                       displayQty = compQtd;
                                       displayTotal = displayPreco * displayQty;
                                     } else if (it._grouped) {
                                       const childItems = it._childItems as any[];
                                       savedPreco = parseFloat(mapa?.respostaMap?.[`${childItems[0].id}_${p.fornecedorId}`]?.precoUnitario ?? "0");
                                       savedQty = childItems.reduce((s: number, ci: any) => s + parseFloat(mapa?.respostaMap?.[`${ci.id}_${p.fornecedorId}`]?.quantidade ?? ci.quantidade ?? "0"), 0);
-                                      displayPreco = isEditing ? parseFloat(editPrecos[key] ?? String(savedPreco)) : savedPreco;
+                                      displayPreco = isEditing ? parseBRNumber(editPrecos[key] ?? String(savedPreco)) : savedPreco;
                                       displayQty = savedQty || parseFloat(it.quantidade ?? "0");
                                       displayTotal = displayPreco * displayQty;
                                     } else {
                                       savedPreco = parseFloat(mapa?.respostaMap?.[key]?.precoUnitario ?? "0");
                                       savedQty = parseFloat(mapa?.respostaMap?.[key]?.quantidade ?? it.quantidade ?? "1");
-                                      displayPreco = isEditing ? parseFloat(editPrecos[key] ?? "0") : savedPreco;
-                                      displayQty = isEditing ? (parseFloat(editQtds[key] ?? "0") || savedQty) : savedQty;
+                                      displayPreco = isEditing ? parseBRNumber(editPrecos[key] ?? "0") : savedPreco;
+                                      displayQty = isEditing ? (parseBRNumber(editQtds[key] ?? "0") || savedQty) : savedQty;
                                       displayTotal = displayPreco * displayQty;
                                     }
 
@@ -6299,12 +7704,38 @@ export default function Cotacoes() {
                                       }
                                     };
 
+                                    // Rev. 5094 — aplicar o preço digitado NESTE item a TODOS os itens do
+                                    // fornecedor (pedido do user: listas grandes com preço unitário igual).
+                                    const aplicarPrecoEmTodos = () => {
+                                      const valPreco = editPrecos[key] ?? "";
+                                      const valMdo = editMatMdo[key]?.mdo;
+                                      if (!valPreco && !valMdo) { toast.error("Digite o preço neste item primeiro."); return; }
+                                      const updP: Record<string, string> = {};
+                                      const updM: Record<string, { mat: string; mdo: string }> = {};
+                                      const clearKeys: string[] = [];
+                                      let n = 0;
+                                      for (const o of itensParaRenderizarMemo as any[]) {
+                                        const ks = [`${o.id}_${p.fornecedorId}`, ...(((o._childItems ?? []) as any[]).map((c: any) => `${c.id}_${p.fornecedorId}`))];
+                                        for (const k of ks) {
+                                          updP[k] = valPreco || String(parseBRNumber(valMdo ?? "0") || 0);
+                                          if (valMdo != null) updM[k] = { mdo: valMdo, mat: editMatMdo[key]?.mat ?? "0" };
+                                          clearKeys.push(k);
+                                        }
+                                        n++;
+                                      }
+                                      setEditPrecos(prev => ({ ...prev, ...updP }));
+                                      if (valMdo != null) setEditMatMdo(prev => ({ ...prev, ...updM }));
+                                      setEditTotaisOverride(prev => { const nn = { ...prev }; for (const k of clearKeys) delete nn[k]; return nn; });
+                                      toast.success(`Preço aplicado a ${n} itens deste fornecedor.`);
+                                    };
+
                                     return (
                                       <>
                                         <td key={`qty_${p.fornecedorId}`} className={`px-1 py-1 text-right border-r border-gray-100 ${rowCls}`}>
                                           {isEditing && !it._grouped ? (
-                                            <Input type="number" step="0.001" min="0"
-                                              value={editQtds[key] ?? String(savedQty)}
+                                            <Input type="text" inputMode="decimal"
+                                              value={editQtds[key] ?? savedQty.toLocaleString("pt-BR", { maximumFractionDigits: 4 })}
+                                              onFocus={e => e.target.select()}
                                               onChange={e => setEditQtds(prev => ({ ...prev, [key]: e.target.value }))}
                                               className="h-8 text-sm text-right border-gray-300 bg-white text-gray-900 w-28 ml-auto" />
                                           ) : (
@@ -6414,58 +7845,73 @@ export default function Cotacoes() {
                                               const savedMat = parseFloat((mapa?.respostaMap?.[key] as any)?.totalMat ?? "0");
                                               const savedMdo = parseFloat((mapa?.respostaMap?.[key] as any)?.totalMdo ?? "0");
                                               if (isEditing && canMatMdo) {
+                                                // Rev. 4998 — MAT/MDO agora são preço UNITÁRIO (coluna "Preço Unit."):
+                                                // o total do item = (MAT + MDO) × QTD. Antes o campo era tratado como
+                                                // total do item e o valor digitado "não multiplicava" (bug reportado).
+                                                const qtdConv = displayQty > 0 ? displayQty : 1;
+                                                const fmtUnit = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+                                                // Rev. 5075 — cotação SÓ de mão de obra: aparece somente o campo MDO
+                                                // (sem MAT, para não atrelar custo fora do escopo). MAT/MDO juntos
+                                                // continuam existindo apenas na cotação tipo PACOTE.
                                                 return (
                                                   <div className="flex flex-col gap-0.5 items-end">
-                                                    <div className="flex items-center gap-1">
-                                                      <span className="text-[9px] text-blue-600 font-bold w-7 text-right">MAT</span>
-                                                      <span className="text-[10px] text-gray-400 select-none">R$</span>
-                                                      <Input type="text" inputMode="decimal"
-                                                        value={editMatMdo[key]?.mat != null ? editMatMdo[key].mat : (savedMat > 0 ? savedMat.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "")}
-                                                        onFocus={e => e.target.select()}
-                                                        onChange={e => {
-                                                          const mat = parseBRNumber(e.target.value) || 0;
-                                                          const mdo = parseBRNumber(editMatMdo[key]?.mdo ?? "0") || 0;
-                                                          setEditMatMdo(prev => ({ ...prev, [key]: { ...(prev[key] ?? { mat: "0", mdo: "0" }), mat: e.target.value } }));
-                                                          setEditPrecos(prev => ({ ...prev, [key]: String(mat + mdo) }));
-                                                        }}
-                                                        className="h-6 text-xs text-right border-blue-300 bg-white text-gray-900 w-24" placeholder="0,00" />
-                                                    </div>
                                                     <div className="flex items-center gap-1">
                                                       <span className="text-[9px] text-orange-600 font-bold w-7 text-right">MDO</span>
                                                       <span className="text-[10px] text-gray-400 select-none">R$</span>
                                                       <Input type="text" inputMode="decimal"
-                                                        value={editMatMdo[key]?.mdo != null ? editMatMdo[key].mdo : (savedMdo > 0 ? savedMdo.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "")}
+                                                        value={editMatMdo[key]?.mdo != null ? editMatMdo[key].mdo : (savedMdo > 0 ? fmtUnit(savedMdo / qtdConv) : "")}
                                                         onFocus={e => e.target.select()}
                                                         onChange={e => {
                                                           const mdo = parseBRNumber(e.target.value) || 0;
-                                                          const mat = parseBRNumber(editMatMdo[key]?.mat ?? "0") || 0;
-                                                          setEditMatMdo(prev => ({ ...prev, [key]: { ...(prev[key] ?? { mat: "0", mdo: "0" }), mdo: e.target.value } }));
+                                                          const mat = parseBRNumber(editMatMdo[key]?.mat ?? (savedMat > 0 ? fmtUnit(savedMat / qtdConv) : "0")) || 0;
+                                                          setEditMatMdo(prev => ({ ...prev, [key]: { mdo: e.target.value, mat: prev[key]?.mat ?? (savedMat > 0 ? fmtUnit(savedMat / qtdConv) : "0") } }));
                                                           setEditPrecos(prev => ({ ...prev, [key]: String(mat + mdo) }));
+                                                          setEditTotaisOverride(prev => { const n = { ...prev }; delete n[key]; return n; });
                                                         }}
                                                         className="h-6 text-xs text-right border-orange-300 bg-white text-gray-900 w-24" placeholder="0,00" />
                                                     </div>
+                                                    <button type="button" onClick={aplicarPrecoEmTodos}
+                                                      className="inline-flex items-center gap-0.5 text-[9px] font-semibold text-blue-600 hover:text-blue-800 hover:underline"
+                                                      title="Aplicar este preço unitário a todos os itens deste fornecedor">
+                                                      <ArrowDown className="h-2.5 w-2.5" /> aplicar em todos
+                                                    </button>
                                                   </div>
                                                 );
                                               }
                                               if (isEditing) {
                                                 return (
-                                                  <Input type="number" step="0.01" min="0"
-                                                    value={editPrecos[key] ?? ""}
-                                                    onChange={e => handleGroupedPrecoChange(e.target.value)}
-                                                    className={`h-8 text-sm text-right border-gray-300 bg-white text-gray-900 w-32 ml-auto ${isBest ? "border-emerald-400" : ""}`}
-                                                    placeholder="0,00" />
+                                                  <div className="flex flex-col items-end gap-0.5">
+                                                    <Input type="text" inputMode="decimal"
+                                                      value={editPrecos[key] ?? ""}
+                                                      onFocus={e => e.target.select()}
+                                                      onChange={e => handleGroupedPrecoChange(e.target.value)}
+                                                      className={`h-8 text-sm text-right border-gray-300 bg-white text-gray-900 w-32 ml-auto ${isBest ? "border-emerald-400" : ""}`}
+                                                      placeholder="0,00" />
+                                                    <button type="button" onClick={aplicarPrecoEmTodos}
+                                                      className="inline-flex items-center gap-0.5 text-[9px] font-semibold text-blue-600 hover:text-blue-800 hover:underline"
+                                                      title="Aplicar este preço unitário a todos os itens deste fornecedor">
+                                                      <ArrowDown className="h-2.5 w-2.5" /> aplicar em todos
+                                                    </button>
+                                                  </div>
                                                 );
                                               }
                                               if (canMatMdo && (savedMat > 0 || savedMdo > 0)) {
+                                                // Rev. 5095 — savedMat/savedMdo são TOTAIS do item; a coluna é
+                                                // "Preço Unit.", então exibir total ÷ quantidade (bug: unitário
+                                                // aparecia igual ao total após salvar).
+                                                const qtdDiv = savedQty > 0 ? savedQty : 1;
+                                                const fmtUnitBR = (v: number) => `R$ ${(v / qtdDiv).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`;
                                                 return (
                                                   <div className="flex flex-col items-end gap-0">
-                                                    <div className="flex items-center gap-1">
-                                                      <span className="text-[9px] text-blue-500 font-bold">MAT</span>
-                                                      <span className="text-xs text-gray-700">{savedMat > 0 ? savedMat.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}</span>
-                                                    </div>
+                                                    {savedMat > 0 && (
+                                                      <div className="flex items-center gap-1">
+                                                        <span className="text-[9px] text-blue-500 font-bold">MAT</span>
+                                                        <span className="text-xs text-gray-700">{fmtUnitBR(savedMat)}</span>
+                                                      </div>
+                                                    )}
                                                     <div className="flex items-center gap-1">
                                                       <span className="text-[9px] text-orange-500 font-bold">MDO</span>
-                                                      <span className="text-xs text-gray-700">{savedMdo > 0 ? savedMdo.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}</span>
+                                                      <span className="text-xs text-gray-700">{savedMdo > 0 ? fmtUnitBR(savedMdo) : <span className="text-gray-300">—</span>}</span>
                                                     </div>
                                                   </div>
                                                 );
@@ -6660,6 +8106,7 @@ export default function Cotacoes() {
                                     </tr>
                                   );
                                 })()}
+                                </>)}
                                 </React.Fragment>
                               );
                             })}
@@ -6668,14 +8115,24 @@ export default function Cotacoes() {
                             {/* Totais */}
                             <tr className="border-t-2 border-gray-300 bg-gray-50 font-bold">
                               <td colSpan={2} className="px-4 py-3 text-xs text-gray-700 uppercase border-r border-gray-200">Total</td>
-                              <td className="px-3 py-3 text-right text-xs text-blue-700 bg-blue-50/40">—</td>
+                              {/* Rev. 4998 — ordem QTD | Preço Unit. | Total (pedido do user) */}
                               <td className="px-3 py-3 text-right text-xs text-blue-700 bg-blue-50/40 font-bold">
                                 {qtdGrandTotal !== null
                                   ? <span title={`Total de ${qtdUnidade}`}>{qtdGrandTotal.toLocaleString("pt-BR")} <span className="font-normal text-blue-400">{qtdUnidade}</span></span>
                                   : "—"}
                               </td>
+                              <td className="px-3 py-3 text-right text-xs text-blue-700 bg-blue-50/40">—</td>
                               <td className="px-3 py-3 text-right text-xs text-blue-700 bg-blue-50/40 border-r border-blue-100 font-bold">
-                                {metaGrandTotal > 0 ? metaGrandTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "—"}
+                                 {metaGrandTotal > 0 ? (
+                                   <div>
+                                     <div>{metaGrandTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</div>
+                                     {comprasAnterioresTotal > 0 && (
+                                       <div className="mt-0.5 text-[9px] font-medium text-slate-500" title="Valor já comprometido por OCs anteriores válidas">
+                                         − {comprasAnterioresTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} anteriores
+                                       </div>
+                                     )}
+                                   </div>
+                                 ) : "—"}
                               </td>
                               <td className="px-2 py-3 text-center text-xs text-orange-600 bg-orange-50/40 border-r border-orange-100 font-bold">
                                 {(() => {
@@ -6711,14 +8168,14 @@ export default function Cotacoes() {
                                     <td key={`tftot_${p.fornecedorId}`} className={`px-3 py-3 text-right text-sm border-r border-gray-100 ${isMelhor ? "text-emerald-700 bg-emerald-50" : "text-gray-900"}`}>
                                       {totalForn > 0 ? totalForn.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "—"}
                                     </td>
-                                    {/* Rev. 1991 — Saldo total por fornecedor: metaGrandTotal - totalForn */}
+                                    {/* Saldo financeiro: meta original − OCs anteriores − cotação atual */}
                                     <td key={`tfsld_${p.fornecedorId}`} className={`px-3 py-3 text-center border-r border-gray-200 ${isMelhor ? "bg-emerald-50" : ""}`}>
                                       {(() => {
                                         if (!(metaGrandTotal > 0 && totalForn > 0)) return <span className="text-gray-300">—</span>;
-                                        const saldoFornTot = metaGrandTotal - totalForn;
+                                        const saldoFornTot = metaGrandTotal - comprasAnterioresTotal - totalForn;
                                         return (
                                           <span className={`text-sm font-bold px-2 py-1 rounded-full whitespace-nowrap ${saldoFornTot >= 0 ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}
-                                            title={`Meta total: ${metaGrandTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}\nFornecedor: ${totalForn.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}\nSaldo: ${saldoFornTot.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`}>
+                                            title={`Meta original: ${metaGrandTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}\nOCs anteriores: ${comprasAnterioresTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}\nCotação atual: ${totalForn.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}\nSaldo financeiro: ${saldoFornTot.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`}>
                                             {saldoFornTot >= 0 ? "+" : ""}{saldoFornTot.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
                                           </span>
                                         );
@@ -6746,7 +8203,28 @@ export default function Cotacoes() {
                         </table>
                       </div>
 
-                      {/* Alerta de saldo negativo + Realocação */}
+                      {/* Quantidade excedente é um alerta físico separado e não
+                          abre realocação enquanto a meta financeira ainda cobre. */}
+                      {(() => {
+                        const itensExcedentes = allItens.filter((item: any) =>
+                          Number(item.qtdOrcada ?? 0) > 0 &&
+                          Number(item.qtdTotalSolicitada ?? 0) > Number(item.qtdOrcada ?? 0) + 0.01
+                        );
+                        if (itensExcedentes.length === 0) return null;
+                        return (
+                          <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3">
+                            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                            <div>
+                              <p className="text-sm font-semibold text-amber-900">Quantidade acima do orçamento</p>
+                              <p className="text-xs text-amber-700">
+                                {itensExcedentes.length} item(ns) excedem a quantidade prevista. Revise a necessidade física; este alerta não exige realocação enquanto houver saldo financeiro na meta.
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {/* Alerta de saldo financeiro negativo + Realocação */}
                       {metaGrandTotal > 0 && fornParaSaldo && deficit > 0 && !cobertoPorRisco && (
                         <div className="bg-red-50 border border-red-200 rounded-xl p-4 space-y-3">
                           <div className="flex items-start justify-between gap-3">
@@ -6787,14 +8265,81 @@ export default function Cotacoes() {
                             <Package className="h-4 w-4 text-gray-500" />
                             <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Resumo Consolidado de Materiais</p>
                           </div>
-                          <div className="flex flex-wrap gap-2">
-                            {gruposAgrupados.map(g => (
-                              <div key={`${g.descricao}_${g.unidade}`} className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-700">
-                                <span className="font-bold text-gray-900">{g.qtdTotal.toLocaleString("pt-BR")}</span>
-                                {" "}<span className="text-gray-500">{g.unidade}</span>
-                                {" "}<span>{g.descricao}</span>
-                              </div>
-                            ))}
+                          {/* Rev. 5089 — layout com cores: zebra, badge de unidade, % do total com barra */}
+                          <div className="overflow-x-auto rounded-lg border border-gray-200">
+                            <table className="w-full text-xs">
+                              <thead>
+                                <tr className="text-[10px] uppercase tracking-wider text-white bg-slate-800">
+                                  <th className="text-left py-2 px-3 font-semibold">Material / Serviço</th>
+                                  <th className="text-center py-2 px-2 font-semibold">Un.</th>
+                                  <th className="text-right py-2 px-3 font-semibold">Qtd Total</th>
+                                  {temValorResumo && <th className="text-right py-2 px-3 font-semibold bg-emerald-700">Valor Fechado</th>}
+                                  {temValorResumo && <th className="text-left py-2 px-3 font-semibold bg-emerald-700 w-[140px]">% do Total</th>}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {gruposAgrupados.map((g, idx) => {
+                                  const pct = temValorResumo && resumoValorTotal > 0 ? (g.valorTotal / resumoValorTotal) * 100 : 0;
+                                  return (
+                                    <tr key={`${g.descricao}_${g.unidade}`} className={`border-b border-gray-100 ${idx % 2 === 1 ? "bg-gray-50/60" : "bg-white"}`}>
+                                      <td className="py-1.5 px-3 text-gray-700">{g.descricao}</td>
+                                      <td className="py-1.5 px-2 text-center">
+                                        <span className="inline-block bg-slate-100 border border-slate-200 rounded px-1.5 py-0.5 text-[10px] font-medium text-slate-600 whitespace-nowrap">{g.unidade}</span>
+                                      </td>
+                                      <td className="py-1.5 px-3 text-right font-semibold text-gray-900 whitespace-nowrap">{g.qtdTotal.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</td>
+                                      {temValorResumo && (
+                                        <td className="py-1.5 px-3 text-right font-semibold text-emerald-700 whitespace-nowrap bg-emerald-50/40">
+                                          {g.valorTotal > 0 ? `R$ ${g.valorTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
+                                        </td>
+                                      )}
+                                      {temValorResumo && (
+                                        <td className="py-1.5 px-3 bg-emerald-50/40">
+                                          <div className="flex items-center gap-1.5">
+                                            <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden min-w-[50px]">
+                                              <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${Math.max(pct, 1)}%` }} />
+                                            </div>
+                                            <span className="text-[10px] text-gray-500 tabular-nums w-9 text-right">{pct.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%</span>
+                                          </div>
+                                        </td>
+                                      )}
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                              <tfoot>
+                                {/* Rev. 5098 — subtotal por categoria (nome) + unidade */}
+                                {Object.entries(gruposAgrupados.reduce((acc: Record<string, { qtd: number; n: number; valor: number; label: string; un: string }>, g: any) => {
+                                  const cat = categoriaResumo(g.descricao, g.unidade);
+                                  if (!acc[cat.key]) acc[cat.key] = { qtd: 0, n: 0, valor: 0, label: cat.label, un: g.unidade || "un" };
+                                  acc[cat.key].qtd += g.qtdTotal; acc[cat.key].n++; acc[cat.key].valor += g.valorTotal;
+                                  return acc;
+                                }, {})).filter(([, v]) => v.n > 1).map(([k, v]) => (
+                                  <tr key={`cat_${k}`} className="bg-slate-100 border-t border-slate-200">
+                                    <td className="py-1.5 px-3 font-semibold text-slate-700 text-[11px]">Total {v.label} — {v.n} itens</td>
+                                    <td className="py-1.5 px-2 text-center">
+                                      <span className="inline-block bg-slate-200 rounded px-1.5 py-0.5 text-[10px] font-bold text-slate-700">{v.un}</span>
+                                    </td>
+                                    <td className="py-1.5 px-3 text-right font-bold text-slate-900 whitespace-nowrap">{v.qtd.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</td>
+                                    {temValorResumo && (
+                                      <td className="py-1.5 px-3 text-right font-semibold text-emerald-700 whitespace-nowrap">
+                                        {v.valor > 0 ? `R$ ${v.valor.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
+                                      </td>
+                                    )}
+                                    {temValorResumo && <td />}
+                                  </tr>
+                                ))}
+                                {temValorResumo && (
+                                  <tr className="bg-slate-800 text-white">
+                                    <td className="py-2 px-3 font-bold uppercase text-[10px] tracking-wider">Total Fechado</td>
+                                    <td /><td />
+                                    <td className="py-2 px-3 text-right font-bold text-emerald-300 whitespace-nowrap">
+                                      R$ {resumoValorTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </td>
+                                    <td className="py-2 px-3 text-[10px] text-slate-300">100%</td>
+                                  </tr>
+                                )}
+                              </tfoot>
+                            </table>
                           </div>
                         </div>
                       )}
@@ -7218,8 +8763,14 @@ export default function Cotacoes() {
             <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4" onClick={e => e.stopPropagation()}>
               <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border-b border-emerald-200 px-5 py-3 rounded-t-xl flex items-center justify-between">
                 <div>
-                  <h2 className="text-base font-bold text-emerald-800 flex items-center gap-2"><BarChart3 className="h-4 w-4" /> Valor Negociado</h2>
-                  <p className="text-[11px] text-emerald-600">Digite o valor total fechado — distribui proporcionalmente entre os itens</p>
+                  <h2 className="text-base font-bold text-emerald-800 flex items-center gap-2"><BarChart3 className="h-4 w-4" /> Valor Negociado{negociadoModal.itemIds ? " — Seleção" : negociadoModal.grupo ? " — Região" : ""}</h2>
+                  {negociadoModal.itemIds ? (
+                    <p className="text-[11px] text-emerald-600">Só os <b>{negociadoModal.label ?? "itens selecionados"}</b> — a soma deles fecha no valor digitado</p>
+                  ) : negociadoModal.grupo ? (
+                    <p className="text-[11px] text-emerald-600">Só os itens de: <b>{negociadoModal.grupo}</b> — a soma da região fecha no valor digitado</p>
+                  ) : (
+                    <p className="text-[11px] text-emerald-600">Digite o valor total fechado — distribui proporcionalmente entre os itens</p>
+                  )}
                 </div>
                 <button onClick={() => { setNegociadoModal(null); setNegociadoPreviewing(false); }} className="text-gray-400 hover:text-gray-600"><X className="h-4 w-4" /></button>
               </div>
@@ -7227,7 +8778,7 @@ export default function Cotacoes() {
               <div className="px-5 py-4 space-y-3">
                 <div className="flex items-end gap-3">
                   <div className="flex-1">
-                    <Label className="text-[11px] text-gray-600">Valor Negociado Total (R$)</Label>
+                    <Label className="text-[11px] text-gray-600">{negociadoModal.itemIds ? "Valor Negociado da Seleção (R$)" : negociadoModal.grupo ? "Valor Negociado da Região (R$)" : "Valor Negociado Total (R$)"}</Label>
                     <Input type="text" inputMode="decimal" value={negociadoValor}
                       onChange={e => {
                         const raw = e.target.value.replace(/[^\d,]/g, "");
@@ -7245,9 +8796,61 @@ export default function Cotacoes() {
                   </Button>
                 </div>
 
+                {/* Rev. 5136 — poka-yoke: se há itens marcados mas o modal é de região/global, oferecer trocar p/ seleção */}
+                {!negociadoModal.itemIds && mapaItemsChecked.size > 0 && (
+                  <div className="bg-amber-50 border border-amber-300 rounded-lg p-2.5 flex items-center justify-between gap-2">
+                    <p className="text-[11px] text-amber-800">
+                      Você tem <b>{mapaItemsChecked.size} {mapaItemsChecked.size === 1 ? "item marcado" : "itens marcados"}</b> na tabela — este ajuste vai aplicar em <b>{negociadoModal.grupo ? "toda a região" : "TODOS os itens"}</b>, não só nos marcados.
+                    </p>
+                    <Button size="sm" variant="outline"
+                      onClick={() => {
+                        const ids: number[] = [];
+                        for (const o of itensParaRenderizarMemo as any[]) {
+                          if (!mapaItemsChecked.has(o.id)) continue;
+                          ids.push(o.id);
+                          for (const c of ((o._childItems ?? []) as any[])) ids.push(c.id);
+                        }
+                        setNegociadoModal({ fornecedorId: negociadoModal.fornecedorId, itemIds: ids, label: `${mapaItemsChecked.size} ${mapaItemsChecked.size === 1 ? "item selecionado" : "itens selecionados"}` });
+                        setNegociadoPreviewing(false);
+                      }}
+                      className="h-7 text-[10px] border-amber-400 text-amber-800 hover:bg-amber-100 shrink-0 whitespace-nowrap">
+                      Aplicar só nos {mapaItemsChecked.size} selecionados
+                    </Button>
+                  </div>
+                )}
+
+                {/* Rev. 5136 — poka-yoke: lista dos itens que serão ajustados, ANTES de calcular */}
+                {!negociadoPreviewing && (() => {
+                  const selSet = negociadoModal.itemIds && negociadoModal.itemIds.length > 0 ? new Set(negociadoModal.itemIds) : null;
+                  const alvo = ((mapa?.itens ?? []) as any[]).filter((it: any) =>
+                    selSet ? selSet.has(it.id)
+                           : (!negociadoModal.grupo || String(it.eapPath || it.parentEapDescricao || "").trim() === negociadoModal.grupo)
+                  );
+                  if (!alvo.length) return (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-center">
+                      <p className="text-xs text-red-600 font-medium">Nenhum item encontrado para este ajuste</p>
+                    </div>
+                  );
+                  return (
+                    <div className="border border-gray-200 rounded-lg overflow-hidden">
+                      <div className="bg-gray-50 px-2 py-1.5 text-[10px] font-semibold text-gray-600 uppercase border-b border-gray-200">
+                        Itens que serão ajustados ({alvo.length}) — confira antes de calcular
+                      </div>
+                      <div className="max-h-[26vh] overflow-y-auto divide-y divide-gray-100">
+                        {alvo.map((it: any) => (
+                          <div key={it.id} className="px-2 py-1 flex items-start gap-1.5 text-[11px]">
+                            <CheckCircle className="h-3 w-3 text-emerald-500 mt-0.5 shrink-0" />
+                            <span className="text-gray-700">{it.descricao ?? it.titulo ?? `Item #${it.id}`}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {(() => {
                   if (!negociadoPreviewing) return null;
-                  const preview = calcNegociadoPreview(negociadoModal.fornecedorId, negociadoValor);
+                  const preview = calcNegociadoPreview(negociadoModal.fornecedorId, negociadoValor, negociadoModal.grupo, negociadoModal.itemIds);
                   if (!preview.length) return (
                     <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-center">
                       <p className="text-xs text-red-600 font-medium">Valor inválido — deve ser diferente do total atual e maior que zero</p>
@@ -7304,7 +8907,7 @@ export default function Cotacoes() {
               <div className="border-t border-gray-200 bg-gray-50 px-5 py-2.5 flex items-center justify-end gap-2 rounded-b-xl">
                 <Button size="sm" variant="outline" onClick={() => { setNegociadoModal(null); setNegociadoPreviewing(false); }} className="h-8 text-xs">Cancelar</Button>
                 <Button size="sm"
-                  disabled={!negociadoPreviewing || calcNegociadoPreview(negociadoModal.fornecedorId, negociadoValor).length === 0}
+                  disabled={!negociadoPreviewing || calcNegociadoPreview(negociadoModal.fornecedorId, negociadoValor, negociadoModal.grupo, negociadoModal.itemIds).length === 0}
                   onClick={() => aplicarNegociado()}
                   className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 text-xs">
                   <CheckCircle className="h-3.5 w-3.5" /> Aplicar
@@ -7337,7 +8940,7 @@ export default function Cotacoes() {
               </div>
               <div className="flex-1">
                 <Label className="text-[11px] text-gray-600">Quantidade</Label>
-                <Input type="text" inputMode="decimal" value={editItemDialog.quantidade} onChange={e => setEditItemDialog(p => p ? { ...p, quantidade: e.target.value } : null)} className="mt-1 text-sm" />
+                <Input type="number" inputMode="numeric" min="1" step="1" value={editItemDialog.quantidade} onChange={e => setEditItemDialog(p => p ? { ...p, quantidade: e.target.value === "" ? "" : String(Math.max(1, Math.floor(Number(e.target.value) || 1))) } : null)} className="mt-1 text-sm" />
               </div>
             </div>
             <label className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer select-none">
@@ -7382,7 +8985,7 @@ export default function Cotacoes() {
               </div>
               <div className="flex-1">
                 <Label className="text-[11px] text-gray-600">Quantidade</Label>
-                <Input type="text" inputMode="decimal" value={addItemForm.quantidade} onChange={e => setAddItemForm(p => ({ ...p, quantidade: e.target.value }))} className="mt-1 text-sm" />
+                <Input type="number" inputMode="numeric" min="1" step="1" value={addItemForm.quantidade} onChange={e => setAddItemForm(p => ({ ...p, quantidade: e.target.value === "" ? "" : String(Math.max(1, Math.floor(Number(e.target.value) || 1))) }))} className="mt-1 text-sm" />
               </div>
             </div>
             <label className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer select-none">
@@ -7407,7 +9010,8 @@ export default function Cotacoes() {
     {eapPickerOpen && showDetalhe && createPortal(
       <div className="fixed inset-0 z-[99998] flex items-center justify-center" style={{ pointerEvents: "auto" }}>
         <div className="absolute inset-0 bg-black/40" onClick={() => setEapPickerOpen(false)} />
-        <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-2xl mx-4 flex flex-col" style={{ maxHeight: "80vh" }} onClick={e => e.stopPropagation()}>
+        {/* Rev. 5070 — full screen (pedido do user) */}
+        <div className="relative bg-white rounded-xl shadow-2xl flex flex-col w-[calc(100vw-16px)] h-[calc(100vh-16px)] md:w-[calc(100vw-48px)] md:h-[calc(100vh-48px)]" onClick={e => e.stopPropagation()}>
           <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border-b border-emerald-200 px-5 py-3 rounded-t-xl flex items-center justify-between shrink-0">
             <div>
               <h2 className="text-base font-bold text-emerald-900 flex items-center gap-2"><ClipboardList className="h-4 w-4" /> Incluir da EAP</h2>
@@ -7426,6 +9030,13 @@ export default function Cotacoes() {
                 autoFocus
                 className="w-full pl-8 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-400"
               />
+            </div>
+            {/* Rev. 5071 — legenda das fases de compra (poka-yoke visual) */}
+            <div className="flex items-center gap-3 flex-wrap mt-2 text-[10px]">
+              <span className="inline-flex items-center gap-1 text-gray-500"><span className="h-2.5 w-2.5 rounded-full bg-white border border-gray-300 inline-block" /> Livre</span>
+              <span className="inline-flex items-center gap-1 text-amber-700"><span className="h-2.5 w-2.5 rounded-full bg-amber-300 inline-block" /> Em solicitação</span>
+              <span className="inline-flex items-center gap-1 text-blue-700"><span className="h-2.5 w-2.5 rounded-full bg-blue-300 inline-block" /> Em cotação</span>
+              <span className="inline-flex items-center gap-1 text-gray-500"><Lock className="h-2.5 w-2.5" /> <span className="line-through">Contratado</span></span>
             </div>
             {eapPickerSelected.size > 0 && (
               <div className="flex items-center justify-between mt-2">
@@ -7446,13 +9057,46 @@ export default function Cotacoes() {
               </div>
             )}
             {!eapItensQ.isLoading && (eapItensQ.data ?? []).length > 0 && (() => {
+              // Rev. 5070 — hierarquia pai/filho: pais (categorias) viram cabeçalhos de seção,
+              // filhos indentados pela profundidade da numeração, ordenados pelo código EAP.
+              const all = (eapItensQ.data ?? []) as any[];
+              // Rev. 5073 — cotação pacote: duas colunas (Material e MDO) p/ análise
+              const pacoteCols = all.some((x: any) => x.metaEscopoTipo === "pacote" && (x.metaUnitMat != null || x.metaUnitMdo != null));
+              const segsOf = (c: any) => String(c ?? "").split(/[^0-9]+/).filter(Boolean).map(Number);
+              const cmpEap = (a: any, b: any) => {
+                const ka = segsOf(a.eapCodigo), kb = segsOf(b.eapCodigo);
+                const len = Math.max(ka.length, kb.length);
+                for (let i = 0; i < len; i++) { const d = (ka[i] ?? 0) - (kb[i] ?? 0); if (d !== 0) return d; }
+                return 0;
+              };
+              const codes = new Set(all.map((it: any) => String(it.eapCodigo ?? "").trim()).filter(Boolean));
+              const isPai = (it: any) => {
+                const c = String(it.eapCodigo ?? "").trim();
+                if (!c) return false;
+                for (const o of codes) if (o !== c && o.startsWith(c + ".")) return true;
+                return false;
+              };
               const term = eapPickerSearch.toLowerCase();
-              const filtrados = (eapItensQ.data ?? []).filter((it: any) =>
+              let filtrados = all.filter((it: any) =>
                 !term || (it.descricao ?? "").toLowerCase().includes(term) || (it.eapCodigo ?? "").toLowerCase().includes(term)
               );
+              if (term && filtrados.length > 0) {
+                // mantém os pais (ancestrais) dos filhos que bateram, pra dar contexto
+                const keep = new Set(filtrados.map((it: any) => it.id));
+                for (const it of filtrados) {
+                  const c = String(it.eapCodigo ?? "").trim();
+                  for (const p of all) {
+                    const pc = String(p.eapCodigo ?? "").trim();
+                    if (pc && c !== pc && c.startsWith(pc + ".")) keep.add(p.id);
+                  }
+                }
+                filtrados = all.filter((it: any) => keep.has(it.id));
+              }
+              filtrados = [...filtrados].sort(cmpEap);
               if (filtrados.length === 0) return (
                 <div className="text-center py-10 text-gray-400 text-sm">Nenhum item encontrado para "{eapPickerSearch}"</div>
               );
+              const selecionaveis = filtrados.filter((it: any) => !isPai(it));
               return (
                 <table className="w-full text-xs border-collapse">
                   <thead className="sticky top-0 bg-gray-50 z-10">
@@ -7460,48 +9104,118 @@ export default function Cotacoes() {
                       <th className="w-8 px-2 py-2">
                         <input
                           type="checkbox"
-                          checked={filtrados.length > 0 && filtrados.every((it: any) => eapPickerSelected.has(it.id))}
+                          checked={selecionaveis.length > 0 && selecionaveis.every((it: any) => eapPickerSelected.has(it.id))}
                           onChange={e => {
                             setEapPickerSelected(prev => {
                               const next = new Set(prev);
-                              if (e.target.checked) filtrados.forEach((it: any) => next.add(it.id));
-                              else filtrados.forEach((it: any) => next.delete(it.id));
+                              if (e.target.checked) selecionaveis.forEach((it: any) => next.add(it.id));
+                              else selecionaveis.forEach((it: any) => next.delete(it.id));
                               return next;
                             });
                           }}
                           className="rounded border-gray-400 text-emerald-600 h-3.5 w-3.5 cursor-pointer"
                         />
                       </th>
-                      <th className="text-left px-2 py-2 text-gray-500 font-semibold uppercase">Cód. EAP</th>
+                      <th className="text-left px-2 py-2 text-gray-500 font-semibold uppercase w-28">Cód. EAP</th>
                       <th className="text-left px-2 py-2 text-gray-500 font-semibold uppercase">Descrição</th>
-                      <th className="text-center px-2 py-2 text-gray-500 font-semibold uppercase">Un.</th>
-                      <th className="text-right px-2 py-2 text-gray-500 font-semibold uppercase">Qtd.</th>
-                      <th className="text-right px-2 py-2 text-gray-500 font-semibold uppercase">Meta Unit.</th>
+                      <th className="text-center px-2 py-2 text-gray-500 font-semibold uppercase w-14">Un.</th>
+                      <th className="text-right px-2 py-2 text-gray-500 font-semibold uppercase w-24">Qtd.</th>
+                      {pacoteCols ? (
+                        <>
+                          <th className="text-right px-2 py-2 text-gray-500 font-semibold uppercase w-24">
+                            Meta Mat.<span className="block text-[9px] font-bold text-teal-600 normal-case">(material)</span>
+                          </th>
+                          <th className="text-right px-2 py-2 text-gray-500 font-semibold uppercase w-24">
+                            Meta MDO<span className="block text-[9px] font-bold text-indigo-500 normal-case">(mão de obra)</span>
+                          </th>
+                        </>
+                      ) : (
+                        <th className="text-right px-2 py-2 text-gray-500 font-semibold uppercase w-28">
+                          Meta Unit.
+                          {(() => {
+                            const t = (eapItensQ.data as any[])?.find((x: any) => x.metaEscopoTipo)?.metaEscopoTipo;
+                            if (!t || t === "pacote") return null;
+                            const lbl = t === "servico" ? "só MDO" : t === "equipamento" ? "só EQUIP" : "só MAT";
+                            return <span className="block text-[9px] font-bold text-indigo-500 normal-case">({lbl})</span>;
+                          })()}
+                        </th>
+                      )}
                     </tr>
                   </thead>
                   <tbody>
                     {filtrados.map((it: any) => {
+                      const depth = Math.max(segsOf(it.eapCodigo).length - 1, 0);
+                      const indent = { paddingLeft: `${8 + depth * 16}px` } as React.CSSProperties;
+                      if (isPai(it)) {
+                        return (
+                          <tr key={it.id} className="bg-slate-100/90 border-y border-slate-200">
+                            <td className="px-2 py-1.5" />
+                            <td className="px-2 py-1.5 font-mono font-bold text-slate-500 whitespace-nowrap">{it.eapCodigo}</td>
+                            <td colSpan={pacoteCols ? 5 : 4} className="py-1.5 pr-2" style={indent}>
+                              <span className="inline-flex items-center gap-1.5 font-bold text-slate-600 uppercase tracking-wide text-[11px]">
+                                <FolderOpen className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                {it.descricao}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      }
                       const sel = eapPickerSelected.has(it.id);
                       const jaEmCot = !!it.jaEmCotacao;
+                      // Rev. 5071 — fase de compra: contratado (riscado, bloqueado) / em cotação / em SC / livre
+                      const fase: string | null = (it as any).fase ?? null;
+                      const faseCls = fase === "contratado" ? "bg-gray-50 opacity-70"
+                        : fase === "cotacao" ? "bg-blue-50/50"
+                        : fase === "solicitacao" ? "bg-amber-50/50"
+                        : sel ? "bg-emerald-50" : jaEmCot ? "opacity-55" : "";
                       return (
                         <tr
                           key={it.id}
-                          onClick={() => setEapPickerSelected(prev => { const n = new Set(prev); sel ? n.delete(it.id) : n.add(it.id); return n; })}
-                          className={`border-b border-gray-100 cursor-pointer hover:bg-emerald-50/60 transition-colors ${sel ? "bg-emerald-50" : jaEmCot ? "opacity-55" : ""}`}
+                          onClick={() => {
+                            if (fase) { setEapFaseDialog(it); return; }
+                            setEapPickerSelected(prev => { const n = new Set(prev); sel ? n.delete(it.id) : n.add(it.id); return n; });
+                          }}
+                          className={`border-b border-gray-100 cursor-pointer hover:bg-emerald-50/60 transition-colors ${faseCls} ${sel && fase ? "ring-1 ring-inset ring-emerald-400" : ""}`}
                         >
                           <td className="px-2 py-1.5 text-center">
-                            <input type="checkbox" checked={sel} readOnly className="rounded border-gray-400 text-emerald-600 h-3.5 w-3.5 pointer-events-none" />
+                            {fase === "contratado"
+                              ? <Lock className="h-3.5 w-3.5 text-gray-400 mx-auto" />
+                              : <input type="checkbox" checked={sel} readOnly className="rounded border-gray-400 text-emerald-600 h-3.5 w-3.5 pointer-events-none" />}
                           </td>
-                          <td className="px-2 py-1.5 font-mono text-gray-500 whitespace-nowrap">{it.eapCodigo}</td>
-                          <td className="px-2 py-1.5 text-gray-800 break-words max-w-xs">
+                          <td className="px-2 py-1.5 whitespace-nowrap">
+                            <span className="inline-block px-1.5 py-0.5 rounded bg-gray-100 border border-gray-200 font-mono text-[10px] text-gray-600">{it.eapCodigo}</span>
+                          </td>
+                          <td className={`py-1.5 pr-2 break-words ${fase === "contratado" ? "line-through text-gray-400" : "text-gray-800"}`} style={indent}>
                             {it.descricao}
-                            {jaEmCot && <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700 whitespace-nowrap">Já na cotação</span>}
+                            {fase === "contratado" && <span className="ml-1.5 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-gray-200 text-gray-600 whitespace-nowrap no-underline"><Lock className="h-2.5 w-2.5" /> Contratado {(it as any).cotNumero ?? ""}</span>}
+                            {fase === "cotacao" && ((it as any).cotId === showDetalhe
+                              ? <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-700 whitespace-nowrap">Já nesta cotação</span>
+                              : <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700 whitespace-nowrap">Em cotação {(it as any).cotNumero ?? ""}</span>)}
+                            {fase === "solicitacao" && <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700 whitespace-nowrap">Em SC {formatNumeroScDisplay((it as any).scNumero ?? "")}</span>}
+                            {!fase && jaEmCot && <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700 whitespace-nowrap">Já na cotação</span>}
                           </td>
                           <td className="px-2 py-1.5 text-center text-gray-500">{it.unidade ?? "—"}</td>
                           <td className="px-2 py-1.5 text-right text-gray-700">{it.quantidade ? parseFloat(it.quantidade).toLocaleString("pt-BR", { maximumFractionDigits: 3 }) : "—"}</td>
-                          <td className="px-2 py-1.5 text-right text-blue-700">
-                            {it.metaUnitTotal ? `R$ ${parseFloat(it.metaUnitTotal).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
-                          </td>
+                          {pacoteCols ? (
+                            (it.metaUnitMat != null || it.metaUnitMdo != null) ? (
+                              <>
+                                <td className="px-2 py-1.5 text-right text-teal-700 whitespace-nowrap">
+                                  {it.metaUnitMat != null ? `R$ ${parseFloat(it.metaUnitMat).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
+                                </td>
+                                <td className="px-2 py-1.5 text-right text-indigo-700 whitespace-nowrap">
+                                  {it.metaUnitMdo != null ? `R$ ${parseFloat(it.metaUnitMdo).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
+                                </td>
+                              </>
+                            ) : (
+                              <td colSpan={2} className="px-2 py-1.5 text-right text-blue-700 whitespace-nowrap" title="Item sem decomposição MAT/MDO — meta total">
+                                {it.metaUnitTotal ? `R$ ${parseFloat(it.metaUnitTotal).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
+                              </td>
+                            )
+                          ) : (
+                            <td className="px-2 py-1.5 text-right text-blue-700 whitespace-nowrap">
+                              {it.metaUnitTotal ? `R$ ${parseFloat(it.metaUnitTotal).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
+                            </td>
+                          )}
                         </tr>
                       );
                     })}
@@ -7534,6 +9248,56 @@ export default function Cotacoes() {
               {adicionarItensEAP.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
               Adicionar {eapPickerSelected.size > 0 ? `${eapPickerSelected.size} ` : ""}itens
             </Button>
+          </div>
+        </div>
+      </div>,
+      document.body
+    )}
+
+    {/* Rev. 5071 — Poka-yoke: item da EAP já em SC/cotação/contratado */}
+    {eapFaseDialog && createPortal(
+      <div className="fixed inset-0 z-[99999] flex items-center justify-center" style={{ pointerEvents: "auto" }}>
+        <div className="absolute inset-0 bg-black/50" onClick={() => setEapFaseDialog(null)} />
+        <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 p-5" onClick={e => e.stopPropagation()}>
+          <div className="flex items-start gap-3">
+            <div className={`h-10 w-10 rounded-full flex items-center justify-center shrink-0 ${eapFaseDialog.fase === "contratado" ? "bg-gray-100" : eapFaseDialog.fase === "cotacao" ? "bg-blue-100" : "bg-amber-100"}`}>
+              {eapFaseDialog.fase === "contratado" ? <Lock className="h-5 w-5 text-gray-500" /> : <AlertTriangle className={`h-5 w-5 ${eapFaseDialog.fase === "cotacao" ? "text-blue-600" : "text-amber-600"}`} />}
+            </div>
+            <div className="min-w-0">
+              <h3 className="text-sm font-bold text-gray-900">
+                {eapFaseDialog.fase === "contratado" ? "Item já contratado" : eapFaseDialog.fase === "cotacao" ? (eapFaseDialog.cotId === showDetalhe ? "Item já está NESTA cotação" : "Item já está em cotação") : "Item já está em solicitação"}
+              </h3>
+              <p className="text-xs text-gray-600 mt-1 break-words">
+                <span className="font-mono text-[10px] bg-gray-100 border border-gray-200 rounded px-1 py-0.5 mr-1">{eapFaseDialog.eapCodigo}</span>
+                {eapFaseDialog.descricao}
+              </p>
+              <p className="text-xs text-gray-700 mt-2">
+                {eapFaseDialog.fase === "contratado" && <>Este item já foi <strong>cotado e contratado</strong> na cotação <strong>{eapFaseDialog.cotNumero}</strong>{eapFaseDialog.scNumero ? <> (via {formatNumeroScDisplay(eapFaseDialog.scNumero)})</> : null}. Se precisar de mais quantidade, faça uma <strong>compra complementar</strong>.</>}
+                {eapFaseDialog.fase === "cotacao" && (eapFaseDialog.cotId === showDetalhe
+                  ? <>Este item já faz parte <strong>desta cotação que está aberta</strong> ({eapFaseDialog.cotNumero}){eapFaseDialog.scNumero ? <> (via {formatNumeroScDisplay(eapFaseDialog.scNumero)})</> : null}. Adicionar de novo criaria uma <strong>linha duplicada</strong> no mapa.</>
+                  : <>Este item já está sendo cotado na cotação <strong>{eapFaseDialog.cotNumero}</strong>{eapFaseDialog.scNumero ? <> (via {formatNumeroScDisplay(eapFaseDialog.scNumero)})</> : null}. Deseja abrir a cotação, ou cotar novamente (compra complementar)?</>)}
+                {eapFaseDialog.fase === "solicitacao" && <>Este item já consta na solicitação <strong>{formatNumeroScDisplay(eapFaseDialog.scNumero ?? "")}</strong>, ainda sem cotação. Deseja abrir a solicitação, ou incluir mesmo assim nesta cotação?</>}
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-col gap-2 mt-4">
+            {eapFaseDialog.cotId && eapFaseDialog.cotId !== showDetalhe && (
+              <Button size="sm" variant="outline" className="h-8 text-xs justify-start gap-1.5"
+                onClick={() => { const cid = eapFaseDialog.cotId; setEapFaseDialog(null); setEapPickerOpen(false); setShowDetalhe(cid); }}>
+                <FileSearch className="h-3.5 w-3.5" /> Abrir cotação {eapFaseDialog.cotNumero}
+              </Button>
+            )}
+            {eapFaseDialog.scId && (
+              <Button size="sm" variant="outline" className="h-8 text-xs justify-start gap-1.5"
+                onClick={() => { const sid = eapFaseDialog.scId; setEapFaseDialog(null); setEapPickerOpen(false); navigate(`/compras/solicitacoes?destaque=${sid}`); }}>
+                <ClipboardList className="h-3.5 w-3.5" /> Abrir solicitação {formatNumeroScDisplay(eapFaseDialog.scNumero ?? "")}
+              </Button>
+            )}
+            <Button size="sm" variant="outline" className="h-8 text-xs justify-start gap-1.5 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+              onClick={() => { const id = eapFaseDialog.id; setEapFaseDialog(null); setEapPickerSelected(prev => { const n = new Set(prev); n.add(id); return n; }); }}>
+              <Plus className="h-3.5 w-3.5" /> {eapFaseDialog.fase === "contratado" ? "Compra complementar (cotar de novo)" : eapFaseDialog.fase === "cotacao" ? (eapFaseDialog.cotId === showDetalhe ? "Adicionar mesmo assim (linha duplicada)" : "Cotar novamente nesta cotação") : "Incluir mesmo assim nesta cotação"}
+            </Button>
+            <Button size="sm" variant="ghost" className="h-8 text-xs justify-center text-gray-500" onClick={() => setEapFaseDialog(null)}>Cancelar</Button>
           </div>
         </div>
       </div>,
@@ -7670,14 +9434,15 @@ export default function Cotacoes() {
             const key = `${fi.itemId}_${fi.fornecedorId}`;
             const resp = mapa?.respostaMap?.[key];
             const mapaItem = (mapa?.itens ?? []).find((it: any) => it.id === fi.itemId);
-            const pu = resp ? parseFloat((resp as any).precoUnitario ?? "0") : parseFloat(mapaItem?.precoUnitario ?? "0");
-            const qty = resp ? parseFloat((resp as any).quantidade ?? "1") : parseFloat(mapaItem?.quantidade ?? "1");
-            const tot = pu * qty;
+            const tot = resp
+              ? parseFloat((resp as any).total ?? "0")
+              : parseFloat(mapaItem?.precoUnitario ?? "0") * parseFloat(mapaItem?.quantidade ?? "1");
             if (!totaisPorForn[fi.fornecedorId]) totaisPorForn[fi.fornecedorId] = { fornecedorId: fi.fornecedorId, nome, total: 0, itens: 0 };
             totaisPorForn[fi.fornecedorId].total += tot;
             totaisPorForn[fi.fornecedorId].itens += 1;
           }
           const resumo = Object.values(totaisPorForn);
+          const financeiroParcial = getFechamentoParcialFinanceiro(fechamentoParcialItens);
           return (
             <>
               {resumo.length > 0 && (
@@ -7689,6 +9454,19 @@ export default function Cotacoes() {
                       <span className="text-blue-600">— {r.itens} {r.itens === 1 ? "item" : "itens"} · {r.total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
                     </div>
                   ))}
+                </div>
+              )}
+              {financeiroParcial.deficit > 0 && !cobertoPorRisco && !semVerbaAutorizado && (
+                <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
+                  <div>
+                    <p className="text-xs font-semibold text-red-800">
+                      Déficit financeiro deste fechamento: {financeiroParcial.deficit.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-red-600">
+                      Meta original {financeiroParcial.metaOriginal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} − compras anteriores {financeiroParcial.anteriores.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} − itens selecionados {financeiroParcial.cotacaoAtual.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}.
+                    </p>
+                  </div>
                 </div>
               )}
 
@@ -7709,9 +9487,9 @@ export default function Cotacoes() {
                       const key = `${fi.itemId}_${fi.fornecedorId}`;
                       const resp = mapa?.respostaMap?.[key];
                       const mapaItem = (mapa?.itens ?? []).find((it: any) => it.id === fi.itemId);
-                      const pu = resp ? parseFloat((resp as any).precoUnitario ?? "0") : parseFloat(mapaItem?.precoUnitario ?? "0");
-                      const qty = resp ? parseFloat((resp as any).quantidade ?? "1") : parseFloat(mapaItem?.quantidade ?? "1");
-                      const total = pu * qty;
+                      const total = resp
+                        ? parseFloat((resp as any).total ?? "0")
+                        : parseFloat(mapaItem?.precoUnitario ?? "0") * parseFloat(mapaItem?.quantidade ?? "1");
                       return (
                         <tr key={fi.itemId} className={`border-b border-gray-100 ${!fi.incluir ? "opacity-40" : "hover:bg-gray-50"}`}>
                           <td className="px-3 py-2">
@@ -7733,9 +9511,7 @@ export default function Cotacoes() {
                               {(mapa?.participantes ?? []).map((pp: any) => {
                                 const rKey = `${fi.itemId}_${pp.fornecedorId}`;
                                 const rResp = mapa?.respostaMap?.[rKey];
-                                const rPu = rResp ? parseFloat((rResp as any).precoUnitario ?? "0") : 0;
-                                const rQty = rResp ? parseFloat((rResp as any).quantidade ?? "1") : 1;
-                                const rTot = rPu * rQty;
+                                const rTot = rResp ? parseFloat((rResp as any).total ?? "0") : 0;
                                 const nome = pp.fornecedor?.nomeFantasia || pp.fornecedor?.razaoSocial || `#${pp.fornecedorId}`;
                                 return (
                                   <option key={pp.fornecedorId} value={pp.fornecedorId}>
@@ -8000,6 +9776,639 @@ export default function Cotacoes() {
     </Dialog>
 
     {/* Rev. 2091 — Modal "Transferir do Estoque" (substitui o flow normal quando o vencedor é o Almoxarifado). */}
+    {/* Rev. 4998 — Prévia do contrato antes da aprovação */}
+    {/* Rev. 5013 — título/assunto do contrato é OBRIGATÓRIO antes da prévia */}
+    {/* Rev. 5019 — WIZARD DE ANEXOS (poka-yoke): 6 etapas guiadas antes da prévia */}
+    <Dialog open={tituloPromptOpen} onOpenChange={(v) => { if (!v) setTituloPromptOpen(false); }}>
+      <DialogContent className="max-w-xl max-h-[88vh] flex flex-col p-0 gap-0 overflow-hidden">
+        {/* Rev. 5021 — visual moderno poka-yoke: header gradiente + trilha de etapas com ícones */}
+        <DialogHeader className="bg-gradient-to-r from-purple-700 via-purple-600 to-indigo-600 px-5 pt-4 pb-3 space-y-0">
+          <DialogTitle className="flex items-center gap-2 text-base text-white">
+            <span className="w-8 h-8 rounded-xl bg-white/15 flex items-center justify-center"><FileText className="w-[18px] h-[18px] text-white" /></span>
+            Preparar Contrato
+            <span className="ml-auto text-[11px] font-bold bg-white/15 text-white rounded-full px-2.5 py-1">Etapa {wizStep + 1} de 7</span>
+          </DialogTitle>
+          <div className="flex items-center gap-0 pt-3">
+            {([["Título", PenTool], ["Proposta", FileText], ["Materiais", Package], ["Projetos", Layers], ["Cronograma", Calendar], ["Outros", Paperclip], ["Revisão", CheckCircle]] as Array<[string, LucideIcon]>).map(([s, Icon], i, arr) => (
+              <React.Fragment key={s}>
+                <button type="button" onClick={() => { if (i < wizStep) setWizStep(i); }}
+                  className="flex flex-col items-center gap-1 min-w-[52px]" disabled={i > wizStep}>
+                  <span className={`w-7 h-7 rounded-full flex items-center justify-center border-2 transition-all ${
+                    i < wizStep ? "bg-emerald-400 border-emerald-300 text-emerald-950"
+                    : i === wizStep ? "bg-white border-white text-purple-700 shadow-lg scale-110"
+                    : "bg-white/10 border-white/30 text-white/50"}`}>
+                    {i < wizStep ? <Check className="w-3.5 h-3.5" strokeWidth={3} /> : <Icon className="w-3.5 h-3.5" />}
+                  </span>
+                  <span className={`text-[10px] leading-none ${i === wizStep ? "text-white font-bold" : i < wizStep ? "text-emerald-200 font-semibold" : "text-white/40"}`}>{s}</span>
+                </button>
+                {i < arr.length - 1 && <div className={`flex-1 h-0.5 mx-0.5 mb-3.5 rounded ${i < wizStep ? "bg-emerald-400" : "bg-white/20"}`} />}
+              </React.Fragment>
+            ))}
+          </div>
+        </DialogHeader>
+
+        <div className="flex-1 overflow-y-auto space-y-3 px-5 py-4 bg-gray-50/60">
+          {/* Bloqueia interação até a hidratação terminar (code review): resposta
+              tardia da query resetaria etapa/estado por cima do que o usuário editou */}
+          {anexosContratoQ.data === undefined && (
+            <div className="flex items-center justify-center gap-2 py-10 text-sm text-gray-500">
+              <Loader2 className="h-4 w-4 animate-spin" /> Carregando anexos salvos...
+            </div>
+          )}
+          {anexosContratoQ.data !== undefined && wizStep === 0 && (<div className="space-y-3">
+            <div className="flex items-start gap-2 rounded-xl bg-purple-50 border border-purple-200 px-3 py-2.5">
+              <Info className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" />
+              <p className="text-sm text-purple-900">Este é o título que aparecerá no topo do contrato. Já sugerimos um pelo tipo da cotação — ajuste se quiser algo mais específico.</p>
+            </div>
+            <input autoFocus value={tituloDraft} onChange={e => setTituloDraft(e.target.value)}
+              placeholder="ex.: Contrato de Prestação de Serviços para Fornecimento de Mão de Obra"
+              maxLength={200}
+              className="w-full h-12 px-4 rounded-xl border-2 border-purple-200 bg-white text-sm font-medium focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none shadow-sm" />
+            {!tituloDraft.trim() && <p className="text-xs font-semibold text-red-600 flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5" /> O título é obrigatório para continuar.</p>}
+          </div>)}
+
+          {/* Rev. 5053 — NOVA etapa: Proposta Comercial (Anexo I) gerida aqui mesmo */}
+          {wizStep === 1 && (<div className="space-y-3">
+            <div className="flex items-start gap-2 rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-2.5">
+              <FileText className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+              <p className="text-sm text-emerald-900">A <b>proposta comercial</b> do fornecedor vencedor vira o <b>Anexo I</b> do contrato. Anexe aqui — ou confira/substitua a versão já anexada.</p>
+            </div>
+            {!wizVencedor && <p className="text-xs font-semibold text-red-600 flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5" /> Nenhum fornecedor vencedor selecionado nesta cotação.</p>}
+            {wizVencedor && wizPropostaUrl && (
+              <div className="border border-emerald-200 bg-white rounded-xl p-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="w-9 h-9 rounded-lg bg-emerald-100 flex items-center justify-center shrink-0"><FileText className="w-4.5 h-4.5 text-emerald-700" /></span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-gray-800 truncate" title={wizPropostaNome}>{wizPropostaNome}</p>
+                    <p className="text-[11px] text-gray-500">Anexo I — Proposta Comercial · {wizVencedor?.fornecedor?.nomeFantasia || wizVencedor?.fornecedor?.razaoSocial || "fornecedor vencedor"}</p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {safeAnexoHref(wizPropostaUrl) && (
+                    <a href={safeAnexoHref(wizPropostaUrl)!} target="_blank" rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-gray-300 bg-white text-xs font-semibold text-gray-700">
+                      <ExternalLink className="w-3.5 h-3.5" /> Abrir
+                    </a>
+                  )}
+                  <label className={`inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-purple-300 bg-purple-50 text-xs font-semibold text-purple-700 cursor-pointer ${uploadPropostaWiz.isPending ? "opacity-60 pointer-events-none" : ""}`}>
+                    <input type="file" accept=".pdf,.jpg,.jpeg,application/pdf,image/jpeg" className="hidden" disabled={uploadPropostaWiz.isPending}
+                      onChange={async e => { const f = e.target.files?.[0]; e.target.value = ""; if (f) await wizUploadProposta(f); }} />
+                    {uploadPropostaWiz.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />} Nova versão
+                  </label>
+                  <button type="button" disabled={salvarPropostaWiz.isPending}
+                    className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-red-200 bg-red-50 text-xs font-semibold text-red-600 disabled:opacity-60"
+                    onClick={async () => {
+                      if (!showDetalhe || !wizVencedor) return;
+                      if (!(await confirm({ title: "Excluir a proposta anexada?", description: "O arquivo deixará de ser o Anexo I do contrato. Você poderá anexar outra versão em seguida.", tone: "destructive", confirmText: "Excluir", cancelText: "Cancelar" }))) return;
+                      try {
+                        await salvarPropostaWiz.mutateAsync({ cotacaoId: showDetalhe, fornecedorId: wizVencedor.fornecedorId, arquivoUrl: "", arquivoNome: "" });
+                        toast.success("Proposta removida.");
+                        mapaQ.refetch();
+                      } catch (e: any) { toast.error(e?.message || "Falha ao remover"); }
+                    }}>
+                    {salvarPropostaWiz.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />} Excluir
+                  </button>
+                </div>
+              </div>
+            )}
+            {wizVencedor && !wizPropostaUrl && (
+              <label className={`inline-flex items-center gap-1.5 text-sm font-semibold text-purple-700 cursor-pointer border border-dashed border-purple-300 rounded-lg px-4 py-3 w-full justify-center ${uploadPropostaWiz.isPending ? "opacity-60 pointer-events-none" : ""}`}>
+                <input type="file" accept=".pdf,.jpg,.jpeg,application/pdf,image/jpeg" className="hidden" disabled={uploadPropostaWiz.isPending}
+                  onChange={async e => { const f = e.target.files?.[0]; e.target.value = ""; if (f) await wizUploadProposta(f); }} />
+                {uploadPropostaWiz.isPending ? (<span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Enviando...</span>) : "Anexar proposta comercial (PDF ou JPG)"}
+              </label>
+            )}
+            {wizVencedor && !wizPropostaUrl && <p className="text-xs font-semibold text-amber-700 flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5" /> Sem a proposta anexada não é possível avançar — ela é obrigatória no contrato.</p>}
+          </div>)}
+
+          {wizStep === 2 && (<div className="space-y-3">
+            <div className="flex items-start gap-2 rounded-xl bg-blue-50 border border-blue-200 px-3 py-2.5">
+              <Package className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+              <p className="text-sm text-blue-900">Quem fornece cada material/recurso? Isso vira a <b>Matriz de Fornecimento</b> (subcláusula 1.4) e evita pedido de aditivo por ambiguidade.</p>
+            </div>
+            {/* Rev. 5020 — contrato só de MDO: matriz não se aplica */}
+            <button type="button" onClick={() => setWizMatrizNA(v => !v)}
+              className={`w-full flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-semibold text-left ${wizMatrizNA ? "bg-purple-50 border-purple-400 text-purple-800" : "bg-white border-gray-300 text-gray-600"}`}>
+              <span className={`w-4 h-4 rounded border flex items-center justify-center text-[10px] ${wizMatrizNA ? "bg-purple-600 border-purple-600 text-white" : "border-gray-400"}`}>{wizMatrizNA ? "✓" : ""}</span>
+              Não se aplica — contrato exclusivamente de mão de obra
+            </button>
+            {wizMatrizNA && <p className="text-xs text-gray-500">O contrato registrará: materiais e insumos por conta da FC; ferramentas, equipamentos da equipe e EPIs por conta da Contratada, salvo previsão diversa na proposta.</p>}
+            {!wizMatrizNA && (<>
+            <Button variant="outline" size="sm" className="gap-1.5 border-amber-300 text-amber-800 hover:bg-amber-50"
+              disabled={extrairMatrizIA.isPending}
+              onClick={async () => {
+                if (!showDetalhe) return;
+                try {
+                  const r = await extrairMatrizIA.mutateAsync({ cotacaoId: showDetalhe, companyId });
+                  if (!r.ok) { toast.error(r.motivo || "Não foi possível ler a proposta"); return; }
+                  if (!r.itens.length) { toast.info("A proposta não discrimina fornecimento de materiais — preencha manualmente."); return; }
+                  setWizMatriz(prev => {
+                    const jaTem = new Set(prev.map(m => m.item.toLowerCase()));
+                    const novos = r.itens.filter((it: any) => !jaTem.has(it.item.toLowerCase()));
+                    const atualizados = prev.map(m => {
+                      const ia = r.itens.find((it: any) => it.item.toLowerCase() === m.item.toLowerCase());
+                      return ia ? { ...m, fornecidoPor: ia.fornecidoPor } : m;
+                    });
+                    return [...atualizados, ...novos];
+                  });
+                  toast.success(`${r.itens.length} item(ns) lidos da proposta — revise antes de avançar.`);
+                } catch (e: any) { toast.error(e?.message || "Falha na leitura da proposta"); }
+              }}>
+              {extrairMatrizIA.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+              {extrairMatrizIA.isPending ? "Lendo a proposta..." : "Copiar escopo da proposta (IA)"}
+            </Button>
+            <div className="space-y-1.5">
+              {wizMatriz.map((m, idx) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <span className="flex-1 text-sm text-gray-800 truncate" title={m.item}>{m.item}</span>
+                  {(["CONTRATANTE", "CONTRATADA"] as const).map((op) => (
+                    <button key={op} type="button"
+                      onClick={() => setWizMatriz(prev => prev.map((x, i) => i === idx ? { ...x, fornecidoPor: op } : x))}
+                      className={`px-2 py-1 rounded-md text-[11px] font-bold border ${m.fornecidoPor === op ? (op === "CONTRATANTE" ? "bg-blue-600 border-blue-600 text-white" : "bg-emerald-600 border-emerald-600 text-white") : "bg-white border-gray-300 text-gray-500"}`}>
+                      {op === "CONTRATANTE" ? "FC (nós)" : "Contratada"}
+                    </button>
+                  ))}
+                  {!MATRIZ_PADRAO.includes(m.item) && (
+                    <button type="button" className="text-red-500 text-xs px-1" onClick={() => setWizMatriz(prev => prev.filter((_, i) => i !== idx))}>✕</button>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2 pt-1">
+              <input value={wizMatrizNovo} onChange={e => setWizMatrizNovo(e.target.value)} placeholder="Adicionar outro item (ex.: Kerabond, Isolastic...)" maxLength={120}
+                className="flex-1 h-9 px-3 rounded-lg border border-gray-300 text-sm outline-none focus:border-purple-400" />
+              <Button variant="outline" size="sm" disabled={!wizMatrizNovo.trim()}
+                onClick={() => { setWizMatriz(prev => [...prev, { item: wizMatrizNovo.trim(), fornecidoPor: "CONTRATADA" }]); setWizMatrizNovo(""); }}>Adicionar</Button>
+            </div>
+            </>)}
+          </div>)}
+
+          {wizStep === 3 && (<div className="space-y-3">
+            <div className="flex items-start gap-2 rounded-xl bg-indigo-50 border border-indigo-200 px-3 py-2.5">
+              <Layers className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+              <p className="text-sm text-indigo-900">Deseja anexar <b>projetos</b>? Eles entram como <b>Anexo II</b>, com uma folha separadora por disciplina. Se não tiver, é só avançar.</p>
+            </div>
+            {wizProjetos.map((p, pi) => (
+              <div key={pi} className="border border-gray-200 rounded-lg p-2 space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <input value={p.disciplina} onChange={e => { const v = e.target.value.toUpperCase(); setWizProjetos(prev => prev.map((x, i) => i === pi ? { ...x, disciplina: v } : x)); }}
+                    placeholder="Disciplina (ex.: Estrutural, Arquitetura...)" maxLength={80}
+                    className="flex-1 h-9 px-3 rounded-lg border border-gray-300 text-sm outline-none focus:border-purple-400" />
+                  <button type="button" className="text-red-500 text-xs px-1" onClick={() => setWizProjetos(prev => prev.filter((_, i) => i !== pi))}>✕</button>
+                </div>
+                {p.arquivos.map((a, ai) => (
+                  <div key={ai} className="flex items-center gap-2 text-xs text-gray-700 bg-gray-50 rounded px-2 py-1">
+                    <FileText className="w-3.5 h-3.5 text-gray-400 shrink-0" /><span className="flex-1 truncate" title={a.nome}>{a.nome}</span>
+                    <button type="button" className="text-red-500" onClick={() => setWizProjetos(prev => prev.map((x, i) => i === pi ? { ...x, arquivos: x.arquivos.filter((_, j) => j !== ai) } : x))}>✕</button>
+                  </div>
+                ))}
+                <label className="inline-flex items-center gap-1.5 text-xs font-semibold text-purple-700 cursor-pointer">
+                  <input type="file" accept=".pdf,application/pdf" multiple className="hidden" disabled={wizUploading}
+                    onChange={async e => {
+                      const files = Array.from(e.target.files || []); e.target.value = "";
+                      for (const f of files) { const up = await wizUpload(f); if (up) setWizProjetos(prev => prev.map((x, i) => i === pi ? { ...x, arquivos: [...x.arquivos, up] } : x)); }
+                    }} />
+                  {wizUploading ? (<span className="flex items-center gap-2 w-full"><Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" /> Enviando... {wizProgress}%<span className="flex-1 h-1.5 rounded-full bg-purple-100 overflow-hidden min-w-[60px]"><span className="block h-full bg-purple-600 rounded-full transition-all" style={{ width: `${wizProgress}%` }} /></span></span>) : "+ Adicionar PDF desta disciplina"}
+                </label>
+                {p.disciplina.trim() && p.arquivos.length === 0 && <p className="text-[11px] text-amber-600">Disciplina sem arquivo — anexe um PDF ou remova a disciplina.</p>}
+              </div>
+            ))}
+            <Button variant="outline" size="sm" onClick={() => setWizProjetos(prev => [...prev, { disciplina: "", arquivos: [] }])}>+ Adicionar disciplina</Button>
+          </div>)}
+
+          {wizStep === 4 && (<div className="space-y-3">
+            <div className="flex items-start gap-2 rounded-xl bg-amber-50 border border-amber-200 px-3 py-2.5">
+              <Calendar className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <p className="text-sm text-amber-900">Deseja anexar o <b>cronograma</b> da obra/serviço? Entra como anexo próprio, com folha de rosto. Se não tiver, é só avançar.</p>
+            </div>
+            {wizCronograma ? (
+              <div className="flex items-center gap-2 text-sm text-gray-700 bg-gray-50 rounded-lg px-3 py-2">
+                <FileText className="w-4 h-4 text-gray-400 shrink-0" /><span className="flex-1 truncate" title={wizCronograma.nome}>{wizCronograma.nome}</span>
+                <button type="button" className="text-red-500 text-xs" onClick={() => setWizCronograma(null)}>Remover</button>
+              </div>
+            ) : (
+              <label className="inline-flex items-center gap-1.5 text-sm font-semibold text-purple-700 cursor-pointer border border-dashed border-purple-300 rounded-lg px-4 py-3 w-full justify-center">
+                <input type="file" accept=".pdf,application/pdf" className="hidden" disabled={wizUploading}
+                  onChange={async e => { const f = e.target.files?.[0]; e.target.value = ""; if (f) { const up = await wizUpload(f); if (up) setWizCronograma(up); } }} />
+                {wizUploading ? (<span className="flex items-center gap-2 w-full justify-center"><Loader2 className="w-4 h-4 animate-spin shrink-0" /> Enviando... {wizProgress}%<span className="h-1.5 rounded-full bg-purple-100 overflow-hidden w-32"><span className="block h-full bg-purple-600 rounded-full transition-all" style={{ width: `${wizProgress}%` }} /></span></span>) : "Anexar cronograma (PDF)"}
+              </label>
+            )}
+          </div>)}
+
+          {wizStep === 5 && (<div className="space-y-3">
+            <div className="flex items-start gap-2 rounded-xl bg-rose-50 border border-rose-200 px-3 py-2.5">
+              <Paperclip className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+              <p className="text-sm text-rose-900">Deseja anexar <b>outros documentos</b> (memorial descritivo, especificações, quantitativos...)? Cada um vira um anexo numerado com folha de rosto própria.</p>
+            </div>
+            {wizOutros.map((o, oi) => (
+              <div key={oi} className="border border-gray-200 rounded-lg p-2 space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <input value={o.titulo} onChange={e => setWizOutros(prev => prev.map((x, i) => i === oi ? { ...x, titulo: e.target.value } : x))}
+                    placeholder="Nome do documento (ex.: Memorial 632-MC-07)" maxLength={120}
+                    className="flex-1 h-9 px-3 rounded-lg border border-gray-300 text-sm outline-none focus:border-purple-400" />
+                  <button type="button" className="text-red-500 text-xs px-1" onClick={() => setWizOutros(prev => prev.filter((_, i) => i !== oi))}>✕</button>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-gray-700 bg-gray-50 rounded px-2 py-1">
+                  <FileText className="w-3.5 h-3.5 text-gray-400 shrink-0" /><span className="flex-1 truncate" title={o.nome}>{o.nome}</span>
+                </div>
+                {!o.titulo.trim() && <p className="text-[11px] text-amber-600">Dê um nome ao documento.</p>}
+              </div>
+            ))}
+            <label className="inline-flex items-center gap-1.5 text-sm font-semibold text-purple-700 cursor-pointer border border-dashed border-purple-300 rounded-lg px-4 py-3 w-full justify-center">
+              <input type="file" accept=".pdf,application/pdf" multiple className="hidden" disabled={wizUploading}
+                onChange={async e => {
+                  const files = Array.from(e.target.files || []); e.target.value = "";
+                  for (const f of files) { const up = await wizUpload(f); if (up) setWizOutros(prev => [...prev, { titulo: f.name.replace(/\.pdf$/i, ""), nome: up.nome, url: up.url }]); }
+                }} />
+              {wizUploading ? (<span className="flex items-center gap-2 w-full justify-center"><Loader2 className="w-4 h-4 animate-spin shrink-0" /> Enviando... {wizProgress}%<span className="h-1.5 rounded-full bg-purple-100 overflow-hidden w-32"><span className="block h-full bg-purple-600 rounded-full transition-all" style={{ width: `${wizProgress}%` }} /></span></span>) : "+ Anexar documento (PDF)"}
+            </label>
+          </div>)}
+
+          {wizStep === 6 && (<div className="space-y-2.5">
+            <div className="flex items-center gap-2 rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-2.5">
+              <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
+              <p className="text-sm font-semibold text-emerald-800">Tudo pronto! Confira o resumo antes de abrir a prévia.</p>
+            </div>
+            {([
+              ["Título", <PenTool key="i" className="w-4 h-4 text-purple-600" />, tituloDraft.trim() || "—", "bg-purple-50 border-purple-200"],
+              ["Matriz de fornecimento", <Package key="i" className="w-4 h-4 text-blue-600" />, wizMatrizNA ? "Não se aplica (contrato só de mão de obra)" : wizMatriz.filter(m => m.fornecidoPor === "CONTRATANTE").length > 0 ? `FC fornece: ${wizMatriz.filter(m => m.fornecidoPor === "CONTRATANTE").map(m => m.item).join(", ")}; o restante é da Contratada` : "Tudo por conta da Contratada", "bg-blue-50 border-blue-200"],
+              ["Anexo I — Proposta Comercial", <FileText key="i" className="w-4 h-4 text-emerald-600" />, wizPropostaUrl ? `${wizPropostaNome} ✓` : "PENDENTE — volte à etapa Proposta", "bg-emerald-50 border-emerald-200"],
+              ["Projetos", <Layers key="i" className="w-4 h-4 text-indigo-600" />, wizProjetos.filter(p => p.disciplina.trim() && p.arquivos.length > 0).length > 0 ? wizProjetos.filter(p => p.disciplina.trim() && p.arquivos.length > 0).map(p => `${p.disciplina} (${p.arquivos.length})`).join("; ") : "sem projetos", "bg-indigo-50 border-indigo-200"],
+              ["Cronograma", <Calendar key="i" className="w-4 h-4 text-amber-600" />, wizCronograma ? wizCronograma.nome : "sem cronograma", "bg-amber-50 border-amber-200"],
+              ["Outros documentos", <Paperclip key="i" className="w-4 h-4 text-rose-600" />, wizOutros.filter(o => o.titulo.trim()).length > 0 ? wizOutros.filter(o => o.titulo.trim()).map(o => o.titulo).join("; ") : "nenhum", "bg-rose-50 border-rose-200"],
+            ] as Array<[string, React.ReactNode, string, string]>).map(([titulo, icone, valor, cor]) => (
+              <div key={titulo} className={`rounded-xl border px-3 py-2.5 ${cor}`}>
+                <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-gray-500">{icone}{titulo}</div>
+                <p className="text-sm text-gray-800 mt-0.5 break-words">{valor}</p>
+              </div>
+            ))}
+            <p className="text-xs text-gray-500">A numeração dos anexos e a cláusula 17.4.1 se ajustam sozinhas — o contrato só cita o que existe.</p>
+          </div>)}
+        </div>
+
+        <div className="flex justify-between items-center gap-2 px-5 py-3.5 border-t border-gray-200 bg-white">
+          <Button variant="outline" className="h-11 px-5 rounded-xl" onClick={() => wizStep === 0 ? setTituloPromptOpen(false) : setWizStep(s => s - 1)}>
+            {wizStep === 0 ? "Cancelar" : "← Voltar"}
+          </Button>
+          {wizStep < 6 ? (
+            <Button className="h-11 px-6 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold shadow-md shadow-purple-200 gap-1.5"
+              disabled={anexosContratoQ.data === undefined || (wizStep === 0 && !tituloDraft.trim()) || wizUploading || uploadPropostaWiz.isPending || (wizStep === 1 && (!wizVencedor || !wizPropostaUrl)) || (wizStep === 3 && wizProjetos.some(p => p.disciplina.trim() && p.arquivos.length === 0))}
+              onClick={() => setWizStep(s => s + 1)}>
+              Avançar <ChevronRight className="w-4 h-4" />
+            </Button>
+          ) : (
+            <Button className="h-11 px-6 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-bold shadow-md shadow-emerald-200 gap-1.5" disabled={salvarAnexosContrato.isPending || wizUploading}
+              onClick={wizConcluir}>
+              {salvarAnexosContrato.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+              {salvarAnexosContrato.isPending ? "Salvando..." : "Confirmar e abrir a prévia"}
+            </Button>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog open={previewContratoOpen} onOpenChange={(v) => { if (!v) setPreviewContratoOpen(false); }}>
+      <DialogContent className="max-w-4xl h-[90vh] flex flex-col p-0 gap-0">
+        <DialogHeader className="px-6 py-4 border-b border-gray-200 flex-shrink-0">
+          <DialogTitle className="flex items-center gap-2 text-lg">
+            <FileText className="w-5 h-5 text-purple-600" />
+            Prévia do Contrato de Serviço
+            {previewContratoQ.data?.numeroContrato && (
+              <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-purple-100 text-purple-700 border border-purple-200">
+                {previewContratoQ.data.numeroContrato}
+              </span>
+            )}
+          </DialogTitle>
+          <p className="text-xs text-gray-500 mt-1">
+            Revise o texto abaixo — é exatamente como o contrato será gerado. Nada foi criado ainda; a aprovação só acontece no botão roxo.
+          </p>
+        </DialogHeader>
+        <div className="flex-1 overflow-y-auto bg-gray-100 p-4 lg:p-6">
+          {previewContratoQ.isLoading ? (
+            <div className="flex flex-col items-center justify-center h-full gap-3 text-gray-500">
+              <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
+              <p className="text-sm font-medium">Montando a prévia do contrato...</p>
+            </div>
+          ) : previewContratoQ.error ? (
+            <div className="flex flex-col items-center justify-center h-full gap-3">
+              <AlertTriangle className="w-8 h-8 text-amber-500" />
+              <p className="text-sm font-semibold text-gray-700 text-center max-w-md break-words">{previewContratoQ.error.message}</p>
+            </div>
+          ) : previewContratoQ.data?.html ? (
+            /* Rev. 5006 — prévia 100% fiel ao documento final: mesmo motor de layout
+               da Central de Documentos (cabeçalho FC, faixa, corpo e assinaturas). */
+            <iframe
+              title="Prévia do contrato"
+              className="w-full h-full min-h-[70vh] bg-white rounded-lg shadow-md border-0"
+              sandbox=""
+              srcDoc={buildContratoPreviewSrcDoc(previewContratoQ.data, anexoPreviewPages ?? undefined, contratoLogoDataUrl, (user as any)?.name || (user as any)?.email)}
+            />
+          ) : (
+            <div className="bg-white rounded-lg shadow-md max-w-3xl mx-auto p-6 lg:p-10">
+              <pre className="whitespace-pre-wrap break-words font-serif text-[13px] leading-relaxed text-gray-800">{previewContratoQ.data?.texto}</pre>
+            </div>
+          )}
+          {/* Rev. 5008 — pedido do user (IMG_5522): o arquivo da proposta (Anexo I)
+              aparece embutido na prévia para conferência do escopo. iOS Safari não
+              pinta PDF em <iframe> → mostra card com botão "Abrir" (memória iOS). */}
+          {/* Rev. 5008 — card só como fallback: se as páginas do anexo já foram
+              renderizadas dentro da prévia (acima), não repete aqui. */}
+          {!previewContratoQ.isLoading && !previewContratoQ.error && !anexoPreviewPages?.length && safeAnexoHref((previewContratoQ.data as any)?.propostaUrl) && (() => {
+            const pUrl = safeAnexoHref((previewContratoQ.data as any).propostaUrl)!;
+            const pNome = (previewContratoQ.data as any).propostaNome || "Proposta Comercial";
+            const isPdf = /\.pdf($|\?)/i.test(pUrl) || /\.pdf$/i.test(pNome);
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+            return (
+              <div className="max-w-3xl mx-auto mt-4">
+                <div className="flex items-center justify-between gap-2 bg-purple-50 border border-purple-200 rounded-t-lg px-4 py-2.5">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Paperclip className="h-4 w-4 text-purple-600 flex-shrink-0" />
+                    <span className="text-sm font-semibold text-purple-800 truncate">Anexo I — {pNome}</span>
+                  </div>
+                  <Button size="sm" variant="outline" className="h-7 text-xs border-purple-300 text-purple-700 hover:bg-purple-100 flex-shrink-0" onClick={() => window.open(pUrl, "_blank")}>
+                    <ExternalLink className="h-3 w-3 mr-1" /> Abrir
+                  </Button>
+                </div>
+                <div className="bg-white border border-t-0 border-purple-200 rounded-b-lg overflow-hidden">
+                  {!isPdf ? (
+                    <img src={pUrl} alt={pNome} className="w-full h-auto" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+                  ) : isIOS ? (
+                    <button onClick={() => window.open(pUrl, "_blank")} className="w-full flex flex-col items-center justify-center gap-2 py-10 text-purple-700 hover:bg-purple-50 transition-colors">
+                      <FileText className="h-10 w-10 text-purple-400" />
+                      <span className="text-sm font-medium">Toque para abrir a proposta (PDF)</span>
+                      <span className="text-xs text-gray-500">O iPad não exibe PDF embutido — abre em nova aba</span>
+                    </button>
+                  ) : (
+                    <iframe title="Anexo I — Proposta Comercial" src={pUrl} className="w-full h-[70vh] border-0" />
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+        {/* Rev. 5019 — painel da dupla checagem (IA): contrato × proposta */}
+        {divergenciasPanel && (
+          <div className="px-6 py-3 border-t border-amber-200 bg-amber-50/70 flex-shrink-0 max-h-[32vh] overflow-y-auto">
+            {divergenciasPanel.motivo ? (
+              <p className="text-sm text-amber-800">{divergenciasPanel.motivo}</p>
+            ) : divergenciasPanel.divergencias.length === 0 ? (
+              <p className="text-sm text-emerald-700 font-semibold">✓ Nenhuma divergência relevante encontrada entre o contrato e a proposta.</p>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-xs font-bold text-amber-800 uppercase">Divergências contrato × proposta ({divergenciasPanel.divergencias.length}) — confira antes de aprovar:</p>
+                {divergenciasPanel.divergencias.map((d, i) => (
+                  <div key={i} className="bg-white rounded-lg border border-amber-200 p-2.5 text-xs space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className={`px-1.5 py-0.5 rounded font-bold uppercase text-[10px] ${d.gravidade === "alta" ? "bg-red-100 text-red-700" : d.gravidade === "media" ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-600"}`}>{d.gravidade}</span>
+                      <span className="font-bold text-gray-700 uppercase text-[10px]">{d.tema}</span>
+                    </div>
+                    {d.contrato && <p><b>Contrato:</b> {d.contrato}</p>}
+                    {d.proposta && <p><b>Proposta:</b> {d.proposta}</p>}
+                    {d.recomendacao && <p className="text-purple-700"><b>Sugestão:</b> {d.recomendacao}</p>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+        <DialogFooter className="px-6 py-4 border-t border-gray-200 flex-shrink-0 gap-2 flex-wrap">
+          <Button variant="outline" onClick={() => setPreviewContratoOpen(false)} disabled={gerarContrato.isPending}>
+            Voltar e revisar
+          </Button>
+          <Button variant="outline" className="gap-2 border-amber-300 text-amber-800 hover:bg-amber-50"
+            disabled={analisarDivergencias.isPending || !previewContratoQ.data?.texto}
+            onClick={async () => {
+              if (!showDetalhe || !previewContratoQ.data?.texto) return;
+              // Rev. 5023 — progresso estimado 0→95% (a IA não streama), 100% na chegada.
+              setAnaliseProgress(0);
+              pararProgressoAnalise();
+              analiseTimerRef.current = setInterval(() => {
+                setAnaliseProgress(p => p === null ? null : Math.min(95, p + Math.max(1, Math.round((95 - p) / 12))));
+              }, 400);
+              try {
+                const r = await analisarDivergencias.mutateAsync({ cotacaoId: showDetalhe, companyId, contratoTexto: String(previewContratoQ.data.texto) });
+                pararProgressoAnalise();
+                setAnaliseProgress(100);
+                setDivergenciasPanel({ motivo: r.motivo ?? null, divergencias: (r.divergencias || []) as any });
+                // Tela de resumo automática ao concluir (pedido do user 12/08/2026).
+                setResumoFiltro("todas");
+                setResumoAnaliseOpen(true);
+                setTimeout(() => setAnaliseProgress(null), 800);
+              } catch (e: any) {
+                pararProgressoAnalise();
+                setAnaliseProgress(null);
+                toast.error(e?.message || "Falha na análise");
+              }
+            }}>
+            {analisarDivergencias.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            {analisarDivergencias.isPending ? `Analisando... ${analiseProgress ?? 0}%` : "Checar contrato × proposta (IA)"}
+          </Button>
+          {/* Rev. 5009 — imprimir / baixar / WhatsApp da prévia (PDF server-side
+              com Anexo I emendado; nada é criado no banco). window.open síncrono
+              no gesto do clique — obrigatório no iOS Safari. */}
+          <Button
+            variant="outline"
+            className="gap-2"
+            disabled={previewContratoQ.isLoading || !!previewContratoQ.error}
+            onClick={() => { if (showDetalhe) window.open(`/api/contrato-preview-pdf?cotacaoId=${showDetalhe}&companyId=${companyId}&titulo=${encodeURIComponent(contratoTitulo.trim())}&modo=abrir`, "_blank"); }}
+          >
+            <Printer className="h-4 w-4" /> Imprimir
+          </Button>
+          <Button
+            variant="outline"
+            className="gap-2"
+            disabled={previewContratoQ.isLoading || !!previewContratoQ.error}
+            onClick={() => { if (showDetalhe) window.open(`/api/contrato-preview-pdf?cotacaoId=${showDetalhe}&companyId=${companyId}&titulo=${encodeURIComponent(contratoTitulo.trim())}&modo=baixar`, "_blank"); }}
+          >
+            <Download className="h-4 w-4" /> Baixar PDF
+          </Button>
+          <Button
+            variant="outline"
+            className="gap-2 text-green-700 border-green-300 hover:bg-green-50"
+            disabled={previewContratoQ.isLoading || !!previewContratoQ.error || previewPdfSharing}
+            onClick={async () => {
+              if (!showDetalhe) return;
+              // Janela pré-aberta SÍNCRONA (gesto do clique) — fallback se o
+              // compartilhamento nativo não estiver disponível/for negado.
+              const janela = window.open("", "_blank");
+              setPreviewPdfSharing(true);
+              try {
+                const resp = await fetch(`/api/contrato-preview-pdf?cotacaoId=${showDetalhe}&companyId=${companyId}&titulo=${encodeURIComponent(contratoTitulo.trim())}&modo=abrir`, { credentials: "include" });
+                if (!resp.ok) throw new Error(await resp.text().catch(() => "Falha ao gerar o PDF"));
+                const blob = await resp.blob();
+                const nome = `Previa_Contrato_${String((previewContratoQ.data as any)?.numeroContrato || showDetalhe).replace(/\//g, "-")}.pdf`;
+                const file = new File([blob], nome, { type: "application/pdf" });
+                const nav: any = navigator;
+                // Fallback (code review): abre o PDF na janela pré-aberta e revoga
+                // o object URL depois de 60s (tempo de sobra pro viewer carregar).
+                const abrirFallback = () => {
+                  const objUrl = URL.createObjectURL(blob);
+                  if (janela) janela.location.href = objUrl;
+                  else window.open(objUrl, "_blank");
+                  setTimeout(() => URL.revokeObjectURL(objUrl), 60_000);
+                };
+                if (nav.canShare?.({ files: [file] })) {
+                  try {
+                    // Só fecha a janela DEPOIS do share dar certo — iOS Safari
+                    // pode rejeitar share() se a ativação do clique expirou.
+                    await nav.share({ files: [file], title: "Prévia do Contrato" });
+                    janela?.close();
+                  } catch (err: any) {
+                    if (err?.name === "AbortError") janela?.close(); // usuário cancelou
+                    else abrirFallback(); // ativação expirada/negada → abre o PDF
+                  }
+                } else {
+                  abrirFallback();
+                }
+              } catch (e: any) {
+                janela?.close();
+                toast.error(String(e?.message || "Falha ao gerar o PDF da prévia"));
+              } finally {
+                setPreviewPdfSharing(false);
+              }
+            }}
+          >
+            {previewPdfSharing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Share2 className="h-4 w-4" />} WhatsApp
+          </Button>
+          <Button
+            className="bg-purple-600 hover:bg-purple-500 text-white gap-2"
+            disabled={gerarContrato.isPending || previewContratoQ.isLoading || !!previewContratoQ.error}
+            onClick={() => {
+              if (!showDetalhe) return;
+              setPreviewContratoOpen(false);
+              gerarContrato.mutate({ cotacaoId: showDetalhe, companyId, tituloContrato: contratoTitulo.trim() || undefined });
+            }}
+          >
+            {gerarContrato.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+            Está tudo certo — Aprovar e Gerar Contrato
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    {/* Rev. 5023 — Resumo da análise IA (abre automaticamente ao concluir).
+        Governança: o texto padrão do contrato FC é travado — só o ESCOPO pode
+        ser ajustado pelo usuário; demais cláusulas exigem aprovação do Sócio Adm. */}
+    <Dialog open={resumoAnaliseOpen} onOpenChange={setResumoAnaliseOpen}>
+      <DialogContent className="max-w-3xl max-h-[88vh] flex flex-col p-0 gap-0 overflow-hidden rounded-2xl border-0">
+        {(() => {
+          const divs = divergenciasPanel?.divergencias ?? [];
+          const nAlta = divs.filter(d => d.gravidade === "alta").length;
+          const nMedia = divs.filter(d => d.gravidade === "media").length;
+          const nBaixa = divs.length - nAlta - nMedia;
+          const ok = !divergenciasPanel?.motivo && divs.length === 0;
+          return (<>
+        <DialogHeader className="px-6 pt-5 pb-4 flex-shrink-0 bg-gradient-to-r from-purple-700 via-purple-600 to-indigo-600 text-white">
+          <DialogTitle className="flex items-center gap-2.5 text-lg text-white">
+            <span className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center"><Sparkles className="h-5 w-5 text-amber-300" /></span>
+            Resumo da Análise — Contrato × Proposta
+          </DialogTitle>
+          <p className="text-xs text-purple-100 mt-1">Confira tudo antes de aprovar. Nada foi criado ainda.</p>
+          {/* Placar da análise */}
+          <div className="flex flex-wrap gap-2 pt-3">
+            {ok ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-400/20 border border-emerald-300/40 px-3 py-1 text-xs font-bold text-emerald-100"><CheckCircle className="w-3.5 h-3.5" /> Sem divergências</span>
+            ) : divergenciasPanel?.motivo ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-400/20 border border-amber-300/40 px-3 py-1 text-xs font-bold text-amber-100"><AlertTriangle className="w-3.5 h-3.5" /> Análise não conclusiva</span>
+            ) : (<>
+              {/* Rev. 5024 — chips clicáveis: filtram a lista por gravidade */}
+              <button type="button" onClick={() => setResumoFiltro("todas")}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold transition-all ${resumoFiltro === "todas" ? "bg-white text-purple-700 border-white shadow" : "bg-white/15 border-white/25 text-white hover:bg-white/25"}`}>
+                {divs.length} divergência{divs.length > 1 ? "s" : ""}</button>
+              {nAlta > 0 && <button type="button" onClick={() => setResumoFiltro(f => f === "alta" ? "todas" : "alta")}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold transition-all ${resumoFiltro === "alta" ? "bg-red-500 text-white border-red-300 shadow ring-2 ring-white/60" : "bg-red-500/30 border-red-300/40 text-red-100 hover:bg-red-500/50"}`}>
+                ● {nAlta} alta{nAlta > 1 ? "s" : ""}</button>}
+              {nMedia > 0 && <button type="button" onClick={() => setResumoFiltro(f => f === "media" ? "todas" : "media")}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold transition-all ${resumoFiltro === "media" ? "bg-amber-400 text-amber-950 border-amber-200 shadow ring-2 ring-white/60" : "bg-amber-400/25 border-amber-300/40 text-amber-100 hover:bg-amber-400/45"}`}>
+                ● {nMedia} média{nMedia > 1 ? "s" : ""}</button>}
+              {nBaixa > 0 && <button type="button" onClick={() => setResumoFiltro(f => f === "baixa" ? "todas" : "baixa")}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold transition-all ${resumoFiltro === "baixa" ? "bg-white text-gray-700 border-white shadow ring-2 ring-white/60" : "bg-white/10 border-white/20 text-purple-100 hover:bg-white/25"}`}>
+                ● {nBaixa} baixa{nBaixa > 1 ? "s" : ""}</button>}
+            </>)}
+          </div>
+        </DialogHeader>
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3 bg-gray-50">
+          {/* Cartão do documento */}
+          <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-4 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3 text-sm">
+            <div className="flex items-start gap-2.5">
+              <span className="w-8 h-8 rounded-lg bg-purple-100 text-purple-600 flex items-center justify-center shrink-0"><FileText className="w-4 h-4" /></span>
+              <div><p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Contrato</p><p className="font-bold text-gray-900">{String((previewContratoQ.data as any)?.numeroContrato || "S/N")}</p></div>
+            </div>
+            <div className="flex items-start gap-2.5">
+              <span className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0"><Package className="w-4 h-4" /></span>
+              <div className="min-w-0"><p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Contratada</p><p className="font-semibold text-gray-900 break-words">{String((previewContratoQ.data as any)?.docMeta?.contratadaNome || "—")}</p></div>
+            </div>
+            <div className="flex items-start gap-2.5 sm:col-span-2">
+              <span className="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center shrink-0"><PenTool className="w-4 h-4" /></span>
+              <div className="min-w-0"><p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Título</p><p className="text-gray-800 break-words">{String((previewContratoQ.data as any)?.titulo || contratoTitulo || "—")}</p></div>
+            </div>
+            {!!anexoPreviewPages?.length && (
+              <div className="flex items-start gap-2.5 sm:col-span-2">
+                <span className="w-8 h-8 rounded-lg bg-rose-100 text-rose-600 flex items-center justify-center shrink-0"><Paperclip className="w-4 h-4" /></span>
+                <div className="min-w-0"><p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Anexos incluídos</p>
+                  <div className="flex flex-wrap gap-1.5 mt-1">{anexoPreviewPages.map((s, i) => (
+                    <span key={i} className="inline-flex rounded-full bg-gray-100 border border-gray-200 px-2.5 py-0.5 text-[11px] font-semibold text-gray-700">{s.titulo}</span>
+                  ))}</div></div>
+              </div>
+            )}
+          </div>
+          {/* Resultado */}
+          {divergenciasPanel?.motivo ? (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 flex items-start gap-2.5">
+              <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />{divergenciasPanel.motivo}
+            </div>
+          ) : ok ? (
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 flex items-center gap-3">
+              <span className="w-10 h-10 rounded-full bg-emerald-500 text-white flex items-center justify-center shrink-0"><Check className="w-5 h-5" strokeWidth={3} /></span>
+              <div>
+                <p className="text-sm font-bold text-emerald-800">Nenhuma divergência relevante encontrada</p>
+                <p className="text-xs text-emerald-700 mt-0.5">O contrato está alinhado com a proposta comercial da contratada.</p>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-2.5">
+              {resumoFiltro !== "todas" && (
+                <p className="text-[11px] font-semibold text-gray-500">Mostrando só gravidade <b className="uppercase">{resumoFiltro === "media" ? "média" : resumoFiltro}</b> — clique no chip de novo para ver todas.</p>
+              )}
+              {[...divs].filter(d => resumoFiltro === "todas" || d.gravidade === resumoFiltro).sort((a, b) => (a.gravidade === "alta" ? 0 : a.gravidade === "media" ? 1 : 2) - (b.gravidade === "alta" ? 0 : b.gravidade === "media" ? 1 : 2)).map((d, i) => {
+                const tone = d.gravidade === "alta"
+                  ? { borda: "border-l-red-500", badge: "bg-red-100 text-red-700", icone: "bg-red-100 text-red-600" }
+                  : d.gravidade === "media"
+                  ? { borda: "border-l-amber-500", badge: "bg-amber-100 text-amber-700", icone: "bg-amber-100 text-amber-600" }
+                  : { borda: "border-l-gray-300", badge: "bg-gray-100 text-gray-600", icone: "bg-gray-100 text-gray-500" };
+                return (
+                  <div key={i} className={`bg-white rounded-2xl border border-gray-200 border-l-4 ${tone.borda} shadow-sm p-3.5 text-xs space-y-2`}>
+                    <div className="flex items-center gap-2">
+                      <span className={`w-6 h-6 rounded-md flex items-center justify-center shrink-0 ${tone.icone}`}><AlertTriangle className="w-3.5 h-3.5" /></span>
+                      <span className="font-bold text-gray-800 uppercase tracking-wide text-[11px]">{d.tema}</span>
+                      <span className={`ml-auto px-2 py-0.5 rounded-full font-bold uppercase text-[10px] ${tone.badge}`}>{d.gravidade}</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {d.contrato && <div className="rounded-lg bg-indigo-50/70 border border-indigo-100 p-2"><p className="text-[10px] font-bold uppercase text-indigo-500 mb-0.5">📄 No contrato</p><p className="text-gray-800 leading-relaxed">{d.contrato}</p></div>}
+                      {d.proposta && <div className="rounded-lg bg-teal-50/70 border border-teal-100 p-2"><p className="text-[10px] font-bold uppercase text-teal-600 mb-0.5">📋 Na proposta</p><p className="text-gray-800 leading-relaxed">{d.proposta}</p></div>}
+                    </div>
+                    {d.recomendacao && <div className="rounded-lg bg-purple-50 border border-purple-100 p-2 flex items-start gap-1.5"><Sparkles className="w-3.5 h-3.5 text-purple-500 shrink-0 mt-0.5" /><p className="text-purple-800 leading-relaxed"><b>Sugestão:</b> {d.recomendacao}</p></div>}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {/* Governança */}
+          <div className="rounded-2xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-4 text-xs text-blue-900 flex items-start gap-2.5">
+            <span className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0">🔒</span>
+            <div>
+              <p className="font-bold text-sm">Contrato padrão FC — regras de alteração</p>
+              <p className="mt-1 leading-relaxed">O texto das cláusulas só pode ser alterado com <b>aprovação do Sócio Administrador</b>. Você pode ajustar diretamente apenas o <b>escopo</b>: título, matriz de fornecimento e anexos (botão "Voltar e revisar").</p>
+            </div>
+          </div>
+        </div>
+        <DialogFooter className="px-5 py-4 border-t border-gray-200 bg-white flex-shrink-0 gap-2">
+          <Button variant="outline" className="h-11 px-5 rounded-xl" onClick={() => setResumoAnaliseOpen(false)}>← Voltar e revisar</Button>
+          <Button className="h-11 px-6 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold shadow-md shadow-purple-200" onClick={() => setResumoAnaliseOpen(false)}>Entendi — continuar</Button>
+        </DialogFooter>
+          </>);
+        })()}
+      </DialogContent>
+    </Dialog>
     <TransferenciaEstoqueDialog
       open={showTransferenciaDialog}
       onOpenChange={(v) => { if (!v) { setShowTransferenciaDialog(false); setPendingGerarOCParams(null); setTransfObraOrigemId(undefined); } }}
@@ -8007,6 +10416,7 @@ export default function Cotacoes() {
       obraDestinoId={(detalheFullscreen as any)?.obraId ?? null}
       obraDestinoNome={(detalheFullscreen as any)?.obraNome ?? null}
       itensSC={(mapa?.itens ?? []) as any[]}
+      respostaMap={(mapa as any)?.respostaMap}
       obras={(obrasQ.data ?? []) as any[]}
       obraOrigemId={transfObraOrigemId}
       onChangeObraOrigem={setTransfObraOrigemId}
@@ -8495,6 +10905,10 @@ export default function Cotacoes() {
         </div>
       );
     })()}
+      {/* Rev. 4998 — o ConfirmDialog só era montado no return da LISTA; na visão
+          fullscreen o confirm() ficava pendurado para sempre (clique em "Reverter
+          Aprovação" não fazia nada). Renderiza também aqui. */}
+      {ConfirmDialog}
       </DetalheWrapper>
     );
   }
@@ -8529,6 +10943,8 @@ export default function Cotacoes() {
           className="h-9 px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-md text-gray-900 outline-none focus:ring-1 focus:ring-blue-400"
           value={filtroObraId}
           onChange={e => setFiltroObraId(e.target.value)}
+          onFocus={() => setObraFiltroAberto(true)}
+          onMouseDown={() => setObraFiltroAberto(true)}
           title="Filtrar por obra"
         >
           <option value="">Todas as obras</option>
@@ -8653,6 +11069,54 @@ export default function Cotacoes() {
         </div>
       )}
 
+      {/* Rev. 5100 — toggle Meta × Melhor preço + resumo da página visível */}
+      <div className="flex items-center justify-end">
+        <button
+          type="button"
+          onClick={() => setMostrarMeta(v => !v)}
+          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${mostrarMeta ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"}`}
+        >
+          <Scale className="h-3.5 w-3.5" />
+          Meta × Melhor preço
+        </button>
+      </div>
+      {mostrarMeta && (() => {
+        // Rev. 5103 — os 3 cards usam o MESMO universo: cotações com meta E melhor
+        // preço. Antes o "Melhor preço" somava TODAS as cotações (mesmo sem meta) e
+        // a Meta só as com meta → números incomparáveis (parecia que "compramos 5 mi
+        // com 3 mi de verba"). Agora: Saldo = disponível (meta) − comprado/cotado.
+        const pares = filt.filter(c => ((c as any).metaTotal ?? 0) > 0 && ((c as any).melhorPreco ?? 0) > 0);
+        const somaMeta = pares.reduce((a, c) => a + (c as any).metaTotal, 0);
+        const somaMelhor = pares.reduce((a, c) => a + (c as any).melhorPreco, 0);
+        const saldoPares = somaMeta - somaMelhor;
+        const semMeta = filt.filter(c => !(((c as any).metaTotal ?? 0) > 0) && ((c as any).melhorPreco ?? 0) > 0).length;
+        const fmtR$ = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+        return (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-blue-500">Meta (verba disponível)</p>
+              <p className="text-sm font-bold text-blue-800">{fmtR$(somaMeta)}</p>
+              <p className="text-[9px] text-gray-500">{pares.length} cotação(ões) comparável(is)</p>
+            </div>
+            <div className="rounded-xl border border-violet-200 bg-violet-50 px-3 py-2">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-violet-500">Comprado / cotado (melhor preço)</p>
+              <p className="text-sm font-bold text-violet-800">{fmtR$(somaMelhor)}</p>
+              <p className="text-[9px] text-gray-500">das mesmas {pares.length} cotação(ões)</p>
+            </div>
+            <div className={`rounded-xl border px-3 py-2 ${saldoPares >= 0 ? "border-emerald-200 bg-emerald-50" : "border-red-200 bg-red-50"}`}>
+              <p className={`text-[10px] font-bold uppercase tracking-wide ${saldoPares >= 0 ? "text-emerald-500" : "text-red-500"}`}>Saldo (disponível − comprado)</p>
+              <p className={`text-sm font-bold ${saldoPares >= 0 ? "text-emerald-700" : "text-red-700"}`}>{saldoPares >= 0 ? "+" : ""}{fmtR$(saldoPares)}</p>
+              <p className="text-[9px] text-gray-500">{saldoPares >= 0 ? "sobrou verba" : "estourou a verba"}</p>
+            </div>
+            <div className="rounded-xl border border-gray-200 bg-white px-3 py-2">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Cotações no filtro</p>
+              <p className="text-sm font-bold text-gray-800">{resumoTotal ?? "…"}</p>
+              {semMeta > 0 && <p className="text-[9px] text-gray-500">{semMeta} nesta página sem meta confiável</p>}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Tabela */}
       <div className="rounded-xl border border-gray-200 overflow-hidden bg-white shadow-sm">
         <Table>
@@ -8668,13 +11132,18 @@ export default function Cotacoes() {
                 { k: "obra",          label: "Obra" },
                 { k: "fornecedor",    label: "Fornecedor" },
                 { k: "total",         label: "Total" },
+                ...(mostrarMeta ? [
+                  { k: "total", label: "Meta" },
+                  { k: "total", label: "Melhor Preço" },
+                  { k: "total", label: "Saldo" },
+                ] : []),
                 { k: "validade",      label: "Validade" },
                 { k: "status",        label: "Status" },
               ] as { k: CotSortKey; label: string }[]).map(col => {
                 const active = sortKey === col.k;
                 const Icon = active ? (sortDir === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown;
                 return (
-                  <TableHead key={col.k} className="text-gray-500 text-xs font-semibold uppercase tracking-wider">
+                  <TableHead key={`${col.k}_${col.label}`} className="text-gray-500 text-xs font-semibold uppercase tracking-wider">
                     <button
                       type="button"
                       onClick={() => toggleSort(col.k)}
@@ -8692,12 +11161,27 @@ export default function Cotacoes() {
           </TableHeader>
           <TableBody>
             {q.isLoading ? (
-              <TableRow><TableCell colSpan={9} className="text-center py-10"><Loader2 className="h-5 w-5 animate-spin mx-auto text-gray-400" /></TableCell></TableRow>
+              <TableRow><TableCell colSpan={mostrarMeta ? 12 : 9} className="text-center py-10"><Loader2 className="h-5 w-5 animate-spin mx-auto text-gray-400" /></TableCell></TableRow>
+            ) : q.isError ? (
+              <TableRow>
+                <TableCell colSpan={mostrarMeta ? 12 : 9} className="text-center py-10">
+                  <div className="space-y-3">
+                    <p className="text-sm font-medium text-red-700">Não foi possível carregar as cotações.</p>
+                    <Button type="button" size="sm" variant="outline" onClick={() => q.refetch()} className="gap-1.5">
+                      <RefreshCw className="h-3.5 w-3.5" /> Tentar novamente
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
             ) : filt.length === 0 ? (
-              <TableRow><TableCell colSpan={9} className="text-center py-10 text-gray-400">Nenhuma cotação encontrada</TableCell></TableRow>
+              <TableRow><TableCell colSpan={mostrarMeta ? 12 : 9} className="text-center py-10 text-gray-400">Nenhuma cotação encontrada</TableCell></TableRow>
             ) : filt.map(cot => {
               const st = STATUS_LABELS[cot.status] ?? STATUS_LABELS.pendente;
+              // A própria página traz o nome leve para a tabela; catálogo completo só
+              // é carregado quando alguma ação precisar dele.
+              const fornNomeEnriq = (cot as any).fornecedorNome ?? (cot as any).fornecedorNomeFantasia ?? (cot as any).fornecedorRazaoSocial;
               const forn = fornecedores.find(f => f.id === cot.fornecedorId);
+              const fornNomeExibir = fornNomeEnriq || forn?.nomeFantasia || forn?.razaoSocial || "—";
               return (
                 <TableRow key={cot.id} className={`border-gray-100 cursor-pointer ${selectedIds.has(cot.id) ? "bg-blue-50/60" : "hover:bg-gray-50"}`} onClick={() => setShowDetalhe(cot.id)}>
                   <TableCell className="px-2" onClick={e => e.stopPropagation()}>
@@ -8735,19 +11219,42 @@ export default function Cotacoes() {
                     {(cot as any).obraId ? (
                       <div className="flex items-center gap-1 text-xs text-gray-600">
                         <Building2 className="h-3 w-3 text-gray-400" />
-                        {nomeObra((cot as any).obraId) ?? `#${(cot as any).obraId}`}
+                        {(cot as any).obraNome ?? nomeObra((cot as any).obraId) ?? `#${(cot as any).obraId}`}
                       </div>
                     ) : <span className="text-gray-300 text-xs">—</span>}
                   </TableCell>
-                  <TableCell className="text-gray-600 text-sm">{forn?.nomeFantasia || forn?.razaoSocial || "—"}</TableCell>
+                  <TableCell className="text-gray-600 text-sm">{fornNomeExibir}</TableCell>
                   <TableCell className="text-emerald-700 font-semibold text-sm">
                     {parseFloat(cot.total ?? "0").toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
                   </TableCell>
+                  {mostrarMeta && (() => {
+                    const meta = (cot as any).metaTotal ?? 0;
+                    const melhor = (cot as any).melhorPreco ?? 0;
+                    const temPar = meta > 0 && melhor > 0;
+                    const saldo = temPar ? meta - melhor : null;
+                    return (
+                      <>
+                        <TableCell className="text-blue-700 font-semibold text-sm whitespace-nowrap">
+                          {meta > 0 ? meta.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}
+                        </TableCell>
+                        <TableCell className="text-violet-700 font-semibold text-sm whitespace-nowrap">
+                          {melhor > 0 ? melhor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          {saldo != null ? (
+                            <span className={`inline-flex px-1.5 py-0.5 rounded-full text-[11px] font-bold ${saldo >= 0 ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
+                              {saldo >= 0 ? "+" : ""}{saldo.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                            </span>
+                          ) : <span className="text-gray-300 text-sm">—</span>}
+                        </TableCell>
+                      </>
+                    );
+                  })()}
                   <TableCell className="text-gray-500 text-sm">{cot.dataValidade ? new Date(cot.dataValidade + "T00:00:00").toLocaleDateString("pt-BR") : "—"}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium border ${st.cls}`}>{st.label}</span>
-                      <TimelineBadge companyId={companyId} cotacaoId={cot.id} />
+                      <TimelineBadge companyId={companyId} cotacaoId={cot.id} lazy />
                     </div>
                   </TableCell>
                   <TableCell><ChevronRight className="h-4 w-4 text-gray-400" /></TableCell>
@@ -8756,6 +11263,24 @@ export default function Cotacoes() {
             })}
           </TableBody>
         </Table>
+        {!q.isLoading && !q.isError && listaBase.length > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 bg-gray-50 px-4 py-3 text-xs text-gray-600">
+            <span>
+              Mostrando {(pagina - 1) * 50 + 1}–{(pagina - 1) * 50 + listaBase.length}
+              {resumoTotal != null ? ` de ${resumoTotal}` : ""}
+              {q.isFetching && <span className="ml-2 inline-flex items-center gap-1 text-blue-600"><Loader2 className="h-3 w-3 animate-spin" /> Atualizando</span>}
+            </span>
+            <div className="flex items-center gap-2">
+              <Button type="button" size="sm" variant="outline" className="h-8 gap-1" disabled={pagina <= 1 || q.isFetching} onClick={() => { setSelectedIds(new Set()); setPagina(p => Math.max(1, p - 1)); }}>
+                <ChevronLeft className="h-3.5 w-3.5" /> Anterior
+              </Button>
+              <span className="min-w-24 text-center tabular-nums">Página {pagina}{resumoTotal != null ? ` de ${totalPaginasCotacoes}` : ""}</span>
+              <Button type="button" size="sm" variant="outline" className="h-8 gap-1" disabled={pagina >= totalPaginasCotacoes || q.isFetching} onClick={() => { setSelectedIds(new Set()); setPagina(p => p + 1); }}>
+                Próxima <ChevronRight className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Dialog Nova Cotação */}
@@ -9100,13 +11625,17 @@ export default function Cotacoes() {
                         </div>
                       ) : (
                         <Button size="sm" onClick={() => {
+                          // Rev. 5053 (code review): este atalho pulava o wizard
+                          // Preparar Contrato (proposta, matriz, anexos, prévia).
+                          // Agora abre o MESMO fluxo do botão principal.
                           if (!validarCondicoesVencedor()) return;
-                          gerarContrato.mutate({ cotacaoId: detalhe.id, companyId });
+                          setTituloDraft(contratoTitulo || "Contrato de Prestação de Serviços");
+                          setTituloPromptOpen(true);
                         }}
                           disabled={gerarContrato.isPending}
                           className="bg-purple-600 hover:bg-purple-500 text-white text-xs gap-1">
                           {gerarContrato.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <FileText className="h-3 w-3" />}
-                          Aprovar e Gerar Contrato de Serviço
+                          Visualizar e Aprovar Contrato
                         </Button>
                       )}
                       <Button size="sm" variant="outline" onClick={() => atualizarStatus.mutate({ id: detalhe.id, status: "recusada" })}
@@ -9441,7 +11970,7 @@ export default function Cotacoes() {
               {[
                 { label: "Aprovando Cotação", icon: <FileSearch className="h-5 w-5" /> },
                 { label: "Gerando OS", icon: <ShoppingCart className="h-5 w-5" /> },
-                { label: "Criando Contrato PJ", icon: <FileText className="h-5 w-5" /> },
+                { label: "Criando Contrato de Prestador de Serviço", icon: <FileText className="h-5 w-5" /> },
                 { label: "Contrato Terceiros", icon: <ExternalLink className="h-5 w-5" /> },
               ].map((step, i) => {
                 const isDone = aprovacaoProgress.step > i;

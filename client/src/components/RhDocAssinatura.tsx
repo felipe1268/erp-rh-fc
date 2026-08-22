@@ -17,12 +17,16 @@ const TERMO = `Declaro que li e compreendi integralmente o documento acima ident
 interface Props {
   docId: number;
   docTitulo: string;
+  /** Rev. 5049 — tipo do documento (adesao_vt exige assinalar SIM/NÃO) */
+  docTipo?: string;
   employeeName: string;
   onComplete?: () => void;
   onCancel?: () => void;
 }
 
-export default function RhDocAssinatura({ docId, docTitulo, employeeName, onComplete, onCancel }: Props) {
+export default function RhDocAssinatura({ docId, docTitulo, docTipo, employeeName, onComplete, onCancel }: Props) {
+  const exigeOpcao = docTipo === "adesao_vt";
+  const [opcao, setOpcao] = useState<"sim" | "nao" | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [hasSignature, setHasSignature] = useState(false);
@@ -37,6 +41,24 @@ export default function RhDocAssinatura({ docId, docTitulo, employeeName, onComp
     },
     onError: (err) => toast.error(err.message),
   });
+
+  // Rev. 5046 — trava o scroll da página atrás do pad enquanto assina: mexer o
+  // mouse/dedo no canvas rolava/mexia a tela de fundo. Bloqueia o body e
+  // registra touchmove NÃO-passivo no canvas (o do React é passivo no iOS e o
+  // preventDefault não funcionava).
+  useEffect(() => {
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const canvas = canvasRef.current;
+    const blockTouch = (e: TouchEvent) => e.preventDefault();
+    canvas?.addEventListener("touchmove", blockTouch, { passive: false });
+    canvas?.addEventListener("touchstart", blockTouch, { passive: false });
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      canvas?.removeEventListener("touchmove", blockTouch);
+      canvas?.removeEventListener("touchstart", blockTouch);
+    };
+  }, []);
 
   useEffect(() => {
     if (!navigator.geolocation) { setGeoStatus("error"); return; }
@@ -128,13 +150,15 @@ export default function RhDocAssinatura({ docId, docTitulo, employeeName, onComp
     const canvas = canvasRef.current;
     if (!canvas || !hasSignature) return toast.error("Por favor, assine antes de confirmar");
     if (!termoAceito) return toast.error("Você precisa aceitar o termo de ciência");
+    if (exigeOpcao && !opcao) return toast.error("Assinale SIM ou NÃO (opção pelo benefício) antes de confirmar");
     assinarMut.mutate({
       docId,
       assinaturaBase64: canvas.toDataURL("image/png"),
       termoAceito: true,
       geoLocation,
-    });
-  }, [hasSignature, termoAceito, docId, geoLocation, assinarMut]);
+      opcaoAssinalada: exigeOpcao ? opcao : undefined,
+    } as any);
+  }, [hasSignature, termoAceito, docId, geoLocation, assinarMut, exigeOpcao, opcao]);
 
   return (
     <Card className="border-2 border-blue-200 max-h-[100dvh] flex flex-col">
@@ -158,6 +182,21 @@ export default function RhDocAssinatura({ docId, docTitulo, employeeName, onComp
           <Checkbox checked={termoAceito} onCheckedChange={(v) => setTermoAceito(!!v)} className="mt-0.5" />
           <span>Li e aceito o termo de ciência acima.</span>
         </label>
+        {exigeOpcao ? (
+          <div className="rounded-lg border-2 border-amber-300 bg-amber-50 p-3 space-y-2">
+            <p className="text-xs font-semibold text-amber-900">Opção pelo Vale-Transporte — assinale a opção desejada (será marcada no documento):</p>
+            <div className="flex gap-3">
+              <button type="button" onClick={() => setOpcao("sim")}
+                className={`flex-1 rounded-lg border-2 px-3 py-2 text-sm font-bold transition-colors ${opcao === "sim" ? "border-green-600 bg-green-600 text-white" : "border-slate-300 bg-white text-slate-600 hover:border-green-400"}`}>
+                ☑ SIM — opto pelo benefício
+              </button>
+              <button type="button" onClick={() => setOpcao("nao")}
+                className={`flex-1 rounded-lg border-2 px-3 py-2 text-sm font-bold transition-colors ${opcao === "nao" ? "border-red-600 bg-red-600 text-white" : "border-slate-300 bg-white text-slate-600 hover:border-red-400"}`}>
+                ☒ NÃO — não opto
+              </button>
+            </div>
+          </div>
+        ) : null}
         <canvas
           ref={canvasRef}
           className="w-full h-[160px] border-2 border-dashed rounded-lg bg-white touch-none"
@@ -168,7 +207,7 @@ export default function RhDocAssinatura({ docId, docTitulo, employeeName, onComp
           <Button variant="outline" size="sm" onClick={clearCanvas} className="gap-1"><RotateCcw className="h-3.5 w-3.5" /> Limpar</Button>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={onCancel} className="gap-1"><X className="h-3.5 w-3.5" /> Cancelar</Button>
-            <Button size="sm" onClick={handleSave} disabled={assinarMut.isPending || !hasSignature || !termoAceito} className="gap-1 bg-[#0A1E3C] hover:bg-[#0A1E3C]/90">
+            <Button size="sm" onClick={handleSave} disabled={assinarMut.isPending || !hasSignature || !termoAceito || (exigeOpcao && !opcao)} className="gap-1 bg-[#0A1E3C] hover:bg-[#0A1E3C]/90">
               <Check className="h-3.5 w-3.5" /> {assinarMut.isPending ? "Salvando…" : "Confirmar Assinatura"}
             </Button>
           </div>

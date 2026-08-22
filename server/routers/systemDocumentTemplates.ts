@@ -640,6 +640,39 @@ export const systemDocumentTemplatesRouter = router({
       return { ok: true, criados, total: criados.length };
     }),
 
+  // ── renomear (Rev. 5044): edita o TÍTULO de um documento CUSTOM em rascunho. ──
+  //    Só faz sentido em custom (os 7 fixos têm título do catálogo) e só em
+  //    rascunho (vigente é imutável — reabrir primeiro).
+  renomear: protectedProcedure
+    .input(z.object({
+      tipo: z.string().min(1).max(60),
+      titulo: z.string().min(3, "Informe um título.").max(200),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      requireAdmin(ctx);
+      const db = await getDb();
+      if (!isCustomTipo(input.tipo)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Documentos institucionais fixos têm título padronizado e não podem ser renomeados." });
+      }
+      const [row] = await db.select({ id: systemDocumentTemplates.id, status: systemDocumentTemplates.status })
+        .from(systemDocumentTemplates)
+        .where(eq(systemDocumentTemplates.tipo, input.tipo))
+        .limit(1);
+      if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Documento não encontrado." });
+      if (row.status !== "rascunho") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Só é possível renomear em modo Rascunho. Reabra o documento primeiro." });
+      }
+      await db.update(systemDocumentTemplates)
+        .set({
+          titulo: input.titulo.trim(),
+          atualizadoPorId: (ctx.user as any)?.id ?? null,
+          atualizadoPorNome: (ctx.user as any)?.name ?? "Sistema",
+          updatedAt: sql`NOW()`,
+        } as any)
+        .where(eq(systemDocumentTemplates.id, row.id));
+      return { success: true };
+    }),
+
   // ── criarNovo (Rev. 2751): cria um documento CUSTOM (fora dos 7 fixos). ────
   //    Gera um `tipo` slug único (custom_<slug>, com sufixo numérico se colidir)
   //    e um código ISO auto (FC-DOC-NNN) quando não informado. Nasce RASCUNHO
@@ -650,6 +683,9 @@ export const systemDocumentTemplatesRouter = router({
       descricao: z.string().max(500).optional(),
       conteudoHtml: z.string().min(1, "Conteúdo não pode ser vazio."),
       codigo: z.string().max(40).optional(),
+      // Rev. 5022 — setor do documento (define o prefixo do código ISO auto,
+      // ex.: sst → FC-SST-NNN). Sem efeito quando o código é informado.
+      setor: z.enum(["rh", "financeiro", "planejamento", "contratos", "medicoes", "contabilidade", "sst"]).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       requireAdmin(ctx);
@@ -680,16 +716,24 @@ export const systemDocumentTemplatesRouter = router({
           tipo = `${base.slice(0, 60 - suf.length)}${suf}`;
         }
 
-        // (2) Código ISO: usa o informado ou gera FC-DOC-NNN (próximo livre).
+        // (2) Código ISO: usa o informado ou gera <prefixo>-NNN (próximo livre).
+        //     Rev. 5022 — o prefixo vem do setor escolhido (SST → FC-SST), pra
+        //     que o doc caia na aba certa da Central (categoria deriva do código).
         let codigo = (input.codigo || "").trim();
         if (!codigo) {
+          const PREFIXO_SETOR: Record<string, string> = {
+            financeiro: "FC-FIN", planejamento: "FC-PL", medicoes: "FC-MED",
+            contratos: "FC-CON", contabilidade: "FC-CONT", sst: "FC-SST", rh: "FC-RH",
+          };
+          const prefixo = (input.setor && PREFIXO_SETOR[input.setor]) || "FC-DOC";
           const rows = await tx.select({ codigo: systemDocumentTemplates.codigo }).from(systemDocumentTemplates);
+          const re = new RegExp(`^${prefixo}-(\\d+)$`);
           let max = 0;
           for (const r of rows as any[]) {
-            const m = /^FC-DOC-(\d+)$/.exec(String(r.codigo || ""));
+            const m = re.exec(String(r.codigo || ""));
             if (m) max = Math.max(max, parseInt(m[1], 10));
           }
-          codigo = `FC-DOC-${String(max + 1).padStart(3, "0")}`;
+          codigo = `${prefixo}-${String(max + 1).padStart(3, "0")}`;
         }
 
         // (3) Insere a linha (RASCUNHO) + versão 1, na mesma transação.

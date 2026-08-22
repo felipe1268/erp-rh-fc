@@ -1019,6 +1019,14 @@ export default function FinanceiroConciliacao() {
     onSuccess: (res: any) => { toast({ title: `Grupo conciliado! ${formatInt(res.conciliados)} lançamento(s) baixado(s).` }); refetchSt(); refetchStAno(); refetchAccStatus(); setReportStale(true); refetchReport(); setConfirmGeralConciliar(null); setSelectedStatement(null); setSelectedEntry(null); setManualExtSel(null); setManualLanSel(null); },
     onError: (e: any) => toast({ title: "Erro ao conciliar grupo", description: e.message, variant: "destructive" }),
   });
+  const estornarFechamentoMut = (trpc as any).financial.estornarFechamentoPago.useMutation({
+    onSuccess: () => {
+      toast({ title: "Pagamento do fechamento estornado", description: "As baixas foram estornadas e o histórico foi preservado." });
+      refetchSt(); refetchStAno(); refetchAccStatus(); setReportStale(true); refetchReport();
+      setSelectedEntry(null); setManualLanSel(null);
+    },
+    onError: (e: any) => toast({ title: "Erro ao estornar fechamento", description: e.message, variant: "destructive" }),
+  });
   // Rev. 3399 — Conciliação de lançamento SEM conta bancária via sugestão automática.
   const [confirmSemConta, setConfirmSemConta] = useState<{ entry: any; sug: any } | null>(null);
   const conciliarSemContaMut = (trpc as any).financial.conciliarSemContaComExtrato.useMutation({
@@ -1892,6 +1900,22 @@ export default function FinanceiroConciliacao() {
               <p className="text-[11px] text-gray-400 truncate">Total unificado · clique para casar com o extrato</p>
             </button>
             <p className="text-sm font-bold shrink-0 text-rose-500">{formatBRL(Math.abs(Number(e.valor)))}</p>
+             {e.grupoTipo === "fechamento_forn" && e.fechamentoId && (
+               <button
+                 type="button"
+                 disabled={estornarFechamentoMut.isPending}
+                 onClick={(ev) => {
+                   ev.stopPropagation();
+                   const motivo = window.prompt("Informe o motivo do estorno deste pagamento:")?.trim();
+                   if (!motivo) return;
+                   estornarFechamentoMut.mutate({ companyId, fechamentoId: Number(e.fechamentoId), motivo });
+                 }}
+                 title="Estornar pagamento do fechamento"
+                 className="shrink-0 p-1.5 rounded-md text-red-500 hover:text-red-700 hover:bg-red-50 disabled:opacity-50"
+               >
+                 {estornarFechamentoMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+               </button>
+             )}
             <button type="button" onClick={() => setGruposExpandidos((prev) => { const n = new Set(prev); if (n.has(String(e.id))) n.delete(String(e.id)); else n.add(String(e.id)); return n; })} title={expandido ? "Recolher itens" : "Ver os itens do grupo"} className="shrink-0 p-1.5 rounded-md text-gray-400 hover:text-blue-600 hover:bg-blue-50">
               {expandido ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
             </button>
@@ -6099,7 +6123,12 @@ export default function FinanceiroConciliacao() {
                         onClick={() => {
                           if (!ext || !lan) return;
                           // Rev. 3239 — grupo unificado → conciliação N:1 (envia os itensIds).
-                          if (lan.agrupado) conciliarGrupoMut.mutate({ companyId, statementLineId: ext.id, entryIds: lan.itensIds });
+                          if (lan.agrupado) conciliarGrupoMut.mutate({
+                            companyId,
+                            statementLineId: ext.id,
+                            entryIds: lan.itensIds,
+                            fechamentoId: lan.fechamentoId || undefined,
+                          });
                           else conciliarMut.mutate({ companyId, statementLineId: ext.id, entryId: lan.id });
                         }}
                       >
@@ -6913,7 +6942,12 @@ export default function FinanceiroConciliacao() {
                   e.preventDefault();
                   const par = confirmGeralConciliar;
                   if (!par?.ext || !par?.lan) return;
-                  if (par.lan.agrupado) conciliarGrupoMut.mutate({ companyId, statementLineId: par.ext.id, entryIds: par.lan.itensIds });
+                  if (par.lan.agrupado) conciliarGrupoMut.mutate({
+                    companyId,
+                    statementLineId: par.ext.id,
+                    entryIds: par.lan.itensIds,
+                    fechamentoId: par.lan.fechamentoId || undefined,
+                  });
                   else conciliarMut.mutate({ companyId, statementLineId: par.ext.id, entryId: par.lan.id });
                 }}
               >

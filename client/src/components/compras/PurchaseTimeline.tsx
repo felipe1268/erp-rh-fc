@@ -1,5 +1,6 @@
 import { trpc } from "@/lib/trpc";
 import { Loader2, FileText, Search, CheckCircle, ShoppingCart, Package, CreditCard, Clock, AlertTriangle, CircleDot, type LucideIcon } from "lucide-react";
+import { useState } from "react";
 
 interface TimelineStep {
   key: string;
@@ -149,12 +150,41 @@ export function PurchaseTimeline({ companyId, cotacaoId, ordemId }: { companyId:
   );
 }
 
-export function TimelineBadge({ companyId, cotacaoId, ordemId }: { companyId: number; cotacaoId?: number; ordemId?: number }) {
+export function TimelineBadge({ companyId, cotacaoId, ordemId, lazy = false }: { companyId: number; cotacaoId?: number; ordemId?: number; lazy?: boolean }) {
+  const [requested, setRequested] = useState(!lazy);
+  const hasTarget = companyId > 0 && ((cotacaoId !== undefined && cotacaoId > 0) || (ordemId !== undefined && ordemId > 0));
   const q = trpc.compras.getTimelineCompra.useQuery(
     { companyId, cotacaoId, ordemId },
-    { enabled: companyId > 0 && ((cotacaoId !== undefined && cotacaoId > 0) || (ordemId !== undefined && ordemId > 0)) }
+    { enabled: hasTarget && requested }
   );
 
+  if (lazy && !requested) {
+    return (
+      <button
+        type="button"
+        onClick={(event) => { event.stopPropagation(); setRequested(true); }}
+        className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[10px] text-gray-500 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600"
+        title="Carregar a etapa atual desta compra"
+      >
+        <Clock className="h-2.5 w-2.5" /> Ver etapa
+      </button>
+    );
+  }
+  if (requested && q.isLoading) {
+    return <span className="inline-flex items-center gap-1 text-[10px] text-gray-400"><Loader2 className="h-2.5 w-2.5 animate-spin" /> Etapa</span>;
+  }
+  if (requested && q.isError) {
+    return (
+      <button
+        type="button"
+        onClick={(event) => { event.stopPropagation(); void q.refetch(); }}
+        className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-1.5 py-0.5 text-[10px] text-red-600"
+        title="Tentar carregar a etapa novamente"
+      >
+        <AlertTriangle className="h-2.5 w-2.5" /> Tentar etapa
+      </button>
+    );
+  }
   if (!q.data?.etapaAtual) return null;
 
   const hasAtraso = q.data.etapas?.some((e: { status: string }) => e.status === "atrasada");

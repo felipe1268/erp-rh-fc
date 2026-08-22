@@ -1,10 +1,11 @@
-modules = ["nodejs-20", "web", "python-3.12", "postgresql-16"]
+modules = ["nodejs-20", "web", "python-base-3.13", "postgresql-16"]
 [agent]
 expertMode = true
 integrations = ["github:1.0.0", "javascript_anthropic_ai_integrations:2.0.0", "javascript_openai_ai_integrations:2.0.0"]
 
 [nix]
 channel = "stable-25_05"
+packages = ["freetype", "gumbo", "harfbuzz", "jbig2dec", "libjpeg_turbo", "mupdf", "openjpeg", "swig", "xcbuild"]
 
 [userenv]
 
@@ -63,8 +64,8 @@ externalPort = 80
 
 [[ports]]
 localPort = 5001
-externalPort = 3000
+externalPort = 3001
 
 [[ports]]
 localPort = 5002
-externalPort = 3001
+externalPort = 5000

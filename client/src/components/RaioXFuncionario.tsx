@@ -292,31 +292,62 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
       ? { aniversario: PII_MASK, diasFaltando: -1, texto: PII_MASK }
       : calcDiasAniversario(val);
   const [activeTab, setActiveTab] = useState("timeline");
-  const { data: raioX, isLoading } = trpc.docs.raioX.useQuery(
-    { employeeId: employeeId! },
-    { enabled: !!employeeId && open }
+
+  // ── Controle de acesso via backend (docs.raioXAccessStatus) ──────────────
+  // mode 'full'  → Admin Master ou módulo RH/DP: acesso irrestrito.
+  // mode 'self'  → usuário vinculado ao próprio funcionário: só leitura da
+  //                própria ficha, sem ações de gestão.
+  // mode 'none'  → sem acesso: exibe mensagem de bloqueio e não carrega dados.
+  const { data: accessStatus, isLoading: accessLoading, error: accessError } = trpc.docs.raioXAccessStatus.useQuery(
+    undefined,
+    { enabled: open, retry: false }
   );
+  // FAIL-CLOSED: enquanto o status não resolve, accessMode fica "unresolved".
+  // Erro na consulta → tratado como "none" (bloqueio total). Só liberamos
+  // qualquer dado após um status válido retornar.
+  const accessMode: "full" | "self" | "none" | "unresolved" =
+    accessError ? "none" : (accessStatus?.mode ?? "unresolved");
+  const accessResolved = accessMode !== "unresolved";
+  const isSelfOnly = accessMode === "self";
+  // Em modo self, o alvo é SEMPRE o funcionário vinculado ao usuário
+  // (accessStatus.employeeId), nunca o employeeId arbitrário recebido por props/rota.
+  const effectiveEmployeeId =
+    accessMode === "self" ? (accessStatus?.employeeId ?? null) : employeeId;
+
+  const { data: raioX, isLoading, error: raioXError } = trpc.docs.raioX.useQuery(
+    { employeeId: effectiveEmployeeId! },
+    { enabled: !!effectiveEmployeeId && open && (accessMode === "full" || accessMode === "self"), retry: false }
+  );
+
+  // Detecta erro FORBIDDEN do backend (mensagem exata do servidor)
+  const isForbidden =
+    raioXError?.message === "Você não tem autorização pra isso" ||
+    (raioXError as any)?.data?.code === "FORBIDDEN";
+
+  // raioX foi carregado com sucesso (não bloqueado)
+  const raioXLoaded = !!raioX && !isForbidden;
 
   useEffect(() => {
     if (open) { document.body.style.overflow = "hidden"; return () => { document.body.style.overflow = ""; }; }
   }, [open]);
 
   // Avaliações de desempenho - MUST be called before any conditional return to avoid hooks order violation
+  // Só disparado após raioX ter retornado dados autorizados.
   const empSkillsQuery = trpc.skills.employeeSkills.useQuery(
-    { employeeId: employeeId! },
-    { enabled: !!employeeId && open }
+    { employeeId: effectiveEmployeeId! },
+    { enabled: !!effectiveEmployeeId && open && raioXLoaded }
   );
   const empSkills = empSkillsQuery.data || [];
 
   const avaliacoesQuery = trpc.avaliacao.avaliacoes.getByEmployee.useQuery(
-    { employeeId: employeeId!, companyId: selectedCompany?.id || 0 },
-    { enabled: !!employeeId && open && !!selectedCompany?.id }
+    { employeeId: effectiveEmployeeId!, companyId: selectedCompany?.id || 0 },
+    { enabled: !!effectiveEmployeeId && open && !!selectedCompany?.id && raioXLoaded }
   );
   const avaliacoesList = avaliacoesQuery.data || [];
 
   const terminationChecklistQ = trpc.employees.getTerminationChecklist.useQuery(
-    { companyId: selectedCompany?.id || 0, employeeId: employeeId! },
-    { enabled: !!employeeId && open && !!selectedCompany?.id }
+    { companyId: selectedCompany?.id || 0, employeeId: effectiveEmployeeId! },
+    { enabled: !!effectiveEmployeeId && open && !!selectedCompany?.id && raioXLoaded }
   );
   const terminationChecklist = terminationChecklistQ.data || [];
   const initChecklistMut = trpc.employees.initTerminationChecklist.useMutation({
@@ -327,21 +358,28 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
   });
 
   const coberturaSeguroQ = trpc.seguroVida.getCoberturaByEmployee.useQuery(
-    { companyId: selectedCompany?.id || 0, employeeId: employeeId! },
-    { enabled: !!employeeId && open && !!selectedCompany?.id }
+    { companyId: selectedCompany?.id || 0, employeeId: effectiveEmployeeId! },
+    { enabled: !!effectiveEmployeeId && open && !!selectedCompany?.id && raioXLoaded }
   );
 
   const integracoesQ = trpc.integracoes.listar.useQuery(
-    { companyId: selectedCompany?.id || 0, employeeId: employeeId! },
-    { enabled: !!employeeId && open && !!selectedCompany?.id }
+    { companyId: selectedCompany?.id || 0, employeeId: effectiveEmployeeId! },
+    { enabled: !!effectiveEmployeeId && open && !!selectedCompany?.id && raioXLoaded }
   );
   const integracoes = integracoesQ.data || [];
 
   const integracoesSSTQ = trpc.integracaoSST.historicoColaborador.useQuery(
-    { companyId: selectedCompany?.id || 0, employeeId: employeeId! },
-    { enabled: !!employeeId && open && !!selectedCompany?.id }
+    { companyId: selectedCompany?.id || 0, employeeId: effectiveEmployeeId! },
+    { enabled: !!effectiveEmployeeId && open && !!selectedCompany?.id && raioXLoaded }
   );
   const integracoesSST = integracoesSSTQ.data || [];
+
+  // Rev. 5052 — Reembolsos do colaborador (avulso + caixinha)
+  const reembolsosQ = trpc.reembolsos.listByEmployee.useQuery(
+    { companyId: selectedCompany?.id || 0, employeeId: effectiveEmployeeId! },
+    { enabled: !!effectiveEmployeeId && open && !!selectedCompany?.id && raioXLoaded }
+  );
+  const reembolsosList = reembolsosQ.data || [];
 
   const [novaIntegracaoForm, setNovaIntegracaoForm] = useState<any>(null);
   const utils2 = trpc.useUtils();
@@ -477,12 +515,17 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
   const [ddsDetalhe, setDdsDetalhe] = useState<{ sessaoId: number; sfId: number } | null>(null);
   const ddsDetalheQuery = trpc.dds.getSessao.useQuery(
     { companyId: selectedCompany?.id || 0, id: ddsDetalhe?.sessaoId || 0 },
-    { enabled: !!ddsDetalhe?.sessaoId && !!selectedCompany?.id }
+    { enabled: !!ddsDetalhe?.sessaoId && !!selectedCompany?.id && raioXLoaded }
   );
   const ddsAssinaturaQuery = trpc.dds.getAssinaturaImg.useQuery(
     { companyId: selectedCompany?.id || 0, sessaoId: ddsDetalhe?.sessaoId || 0, funcionarioId: ddsDetalhe?.sfId || 0 },
-    { enabled: !!ddsDetalhe?.sessaoId && !!ddsDetalhe?.sfId && !!selectedCompany?.id }
+    { enabled: !!ddsDetalhe?.sessaoId && !!ddsDetalhe?.sfId && !!selectedCompany?.id && raioXLoaded }
   );
+  // Limpa o detalhe DDS aberto ao fechar o modal, trocar de funcionário ou perder acesso,
+  // evitando que sessaoId/sfId obsoletos disparem getSessao/getAssinaturaImg em outro alvo.
+  useEffect(() => {
+    if (!open || !raioXLoaded) setDdsDetalhe(null);
+  }, [open, effectiveEmployeeId, raioXLoaded]);
   const gerarPdfDds = useCallback(() => {
     const sessao: any = ddsDetalheQuery.data;
     if (!sessao) return;
@@ -1092,16 +1135,22 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
           </div>
         </div>
         <div className="flex items-center gap-1 sm:gap-2 ml-auto sm:ml-0">
-          {/* Rev. 4644 — Ficha de EPI integrada ao Raio-X */}
-          <Button variant="ghost" size="sm" onClick={() => setShowFichaEpi(true)} className="text-white hover:bg-white/20 gap-1 sm:gap-1.5 border border-white/30 text-xs sm:text-sm px-2 sm:px-3 h-7 sm:h-9">
-            <HardHat className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> <span className="hidden sm:inline">Ficha EPI</span>
-          </Button>
-          <Button variant="ghost" size="sm" onClick={handlePrint} className="text-white hover:bg-white/20 gap-1 sm:gap-1.5 border border-white/30 text-xs sm:text-sm px-2 sm:px-3 h-7 sm:h-9">
-            <Printer className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> <span className="hidden sm:inline">Imprimir</span>
-          </Button>
-          <Button variant="ghost" size="sm" onClick={handlePrint} className="text-white hover:bg-white/20 gap-1 sm:gap-1.5 border border-white/30 text-xs sm:text-sm px-2 sm:px-3 h-7 sm:h-9">
-            <FileDown className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> <span className="hidden sm:inline">Gerar PDF</span>
-          </Button>
+          {/* Rev. 4644 — Ficha de EPI integrada ao Raio-X — oculta para self-only */}
+          {!isSelfOnly && (
+            <Button variant="ghost" size="sm" onClick={() => setShowFichaEpi(true)} className="text-white hover:bg-white/20 gap-1 sm:gap-1.5 border border-white/30 text-xs sm:text-sm px-2 sm:px-3 h-7 sm:h-9">
+              <HardHat className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> <span className="hidden sm:inline">Ficha EPI</span>
+            </Button>
+          )}
+          {!isSelfOnly && (
+            <Button variant="ghost" size="sm" onClick={handlePrint} className="text-white hover:bg-white/20 gap-1 sm:gap-1.5 border border-white/30 text-xs sm:text-sm px-2 sm:px-3 h-7 sm:h-9">
+              <Printer className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> <span className="hidden sm:inline">Imprimir</span>
+            </Button>
+          )}
+          {!isSelfOnly && (
+            <Button variant="ghost" size="sm" onClick={handlePrint} className="text-white hover:bg-white/20 gap-1 sm:gap-1.5 border border-white/30 text-xs sm:text-sm px-2 sm:px-3 h-7 sm:h-9">
+              <FileDown className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> <span className="hidden sm:inline">Gerar PDF</span>
+            </Button>
+          )}
           <Button variant="ghost" size="sm" onClick={onClose} className="text-white hover:bg-white/20 gap-1 sm:gap-1.5 border border-white/30 text-xs sm:text-sm px-2 sm:px-3 h-7 sm:h-9">
             <ArrowLeft className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> <span className="hidden sm:inline">Voltar</span>
           </Button>
@@ -1110,8 +1159,26 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
 
       {/* CONTEÚDO */}
       <div className="flex-1 overflow-y-auto bg-gray-50/50">
-        {isLoading ? (
+        {(!accessResolved || accessLoading) ? (
+          <div className="text-center py-20 text-muted-foreground text-lg">Carregando permissões...</div>
+        ) : (accessMode === "none") ? (
+          <div className="flex flex-col items-center justify-center py-24 gap-4">
+            <div className="h-16 w-16 rounded-full bg-slate-100 flex items-center justify-center">
+              <Lock className="h-8 w-8 text-slate-400" />
+            </div>
+            <p className="text-lg font-semibold text-slate-700">Você não tem autorização pra isso</p>
+            <p className="text-sm text-slate-500 text-center max-w-sm">Seu perfil não tem acesso ao Raio-X de funcionários.</p>
+          </div>
+        ) : isLoading ? (
           <div className="text-center py-20 text-muted-foreground text-lg">Carregando dados do funcionário...</div>
+        ) : isForbidden ? (
+          <div className="flex flex-col items-center justify-center py-24 gap-4">
+            <div className="h-16 w-16 rounded-full bg-slate-100 flex items-center justify-center">
+              <Lock className="h-8 w-8 text-slate-400" />
+            </div>
+            <p className="text-lg font-semibold text-slate-700">Você não tem autorização pra isso</p>
+            <p className="text-sm text-slate-500 text-center max-w-sm">Este colaborador não está disponível para o seu perfil de acesso.</p>
+          </div>
         ) : !emp ? (
           <div className="text-center py-20 text-muted-foreground text-lg">Funcionário não encontrado</div>
         ) : (
@@ -1486,7 +1553,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                       </Badge>
                     )}
                   </div>
-                  {terminationChecklist.length === 0 && emp.status === "Aviso" && (
+                  {terminationChecklist.length === 0 && emp.status === "Aviso" && !isSelfOnly && (
                     <Button size="sm" className="bg-orange-600 hover:bg-orange-700 text-white" onClick={() => initChecklistMut.mutate({ companyId: selectedCompany!.id, employeeId: emp.id })}>
                       Iniciar Checklist
                     </Button>
@@ -1499,8 +1566,9 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                         <input
                           type="checkbox"
                           checked={item.concluido === 1}
-                          onChange={(e) => toggleChecklistMut.mutate({ id: item.id, concluido: e.target.checked })}
-                          className="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-500"
+                          onChange={(e) => !isSelfOnly && toggleChecklistMut.mutate({ id: item.id, concluido: e.target.checked })}
+                          disabled={isSelfOnly}
+                          className="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
                         />
                         <div className="flex-1 min-w-0">
                           <span className={`text-sm font-medium ${item.concluido ? 'line-through text-gray-400' : 'text-gray-800'}`}>
@@ -1568,6 +1636,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                       { value: "he", label: emp?.tipoContrato === 'PJ' ? "Adicionais" : "Banco de Horas", icon: Zap, count: emp?.tipoContrato === 'PJ' ? horasExtras.length : (bancoHoras.lancamentos || []).length },
                       ...(emp?.tipoContrato === 'PJ' ? [{ value: "pj", label: "PJ", icon: FileSignature, count: (pjConformidade?.pendencias || 0) + pjContratos.length }] : []),
                       { value: "descontos_epi", label: "Descontos EPI", icon: Ban, count: (raioX as any)?.epiDiscountAlerts?.filter((a: any) => a.status === 'pendente').length || 0 },
+                      { value: "reembolsos", label: "Reembolsos", icon: DollarSign, count: reembolsosList.length },
                     ],
                   },
                   {
@@ -1733,6 +1802,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
               <TabsContent value="asos" className="mt-4">
                 <div className="flex justify-between items-center mb-3">
                   <span className="text-sm font-medium text-muted-foreground">{asos.length} registro(s)</span>
+                  {!isSelfOnly && (
                   <div className="flex gap-2">
                     <Button size="sm" variant="outline" onClick={handleExportSST} className="gap-1.5 text-blue-700 border-blue-300 hover:bg-blue-50">
                       <FileDown className="h-3.5 w-3.5" /> Exportar PDF
@@ -1741,6 +1811,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                       <FileDown className="h-3.5 w-3.5" /> {isDownloadingZip ? "Baixando..." : "Baixar ZIP"}
                     </Button>
                   </div>
+                  )}
                 </div>
                 {asos.length === 0 ? (
                   <div className="text-center py-12 text-muted-foreground">Nenhum ASO registrado</div>
@@ -1867,6 +1938,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
               <TabsContent value="trein" className="mt-4">
                 <div className="flex justify-between items-center mb-3">
                   <span className="text-sm font-medium text-muted-foreground">{treinamentos.length} registro(s)</span>
+                  {!isSelfOnly && (
                   <div className="flex gap-2">
                     <Button size="sm" variant="outline" onClick={handleExportSST} className="gap-1.5 text-emerald-700 border-emerald-300 hover:bg-emerald-50">
                       <FileDown className="h-3.5 w-3.5" /> Exportar PDF
@@ -1875,6 +1947,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                       <FileDown className="h-3.5 w-3.5" /> {isDownloadingZip ? "Baixando..." : "Baixar ZIP"}
                     </Button>
                   </div>
+                  )}
                 </div>
                 {treinamentos.length === 0 ? (
                   <div className="text-center py-12 text-muted-foreground">Nenhum treinamento registrado</div>
@@ -2160,6 +2233,44 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                     <div className="text-center py-12 text-muted-foreground">Nenhum registro de ponto encontrado</div>
                   )}
                 </div>
+              </TabsContent>
+
+              {/* ============ REEMBOLSOS (Rev. 5052) ============ */}
+              <TabsContent value="reembolsos" className="mt-4">
+                {reembolsosList.length === 0 ? (
+                  <div className="text-center py-12 text-muted-foreground">Nenhum reembolso registrado</div>
+                ) : (
+                  <div className="space-y-2">
+                    {reembolsosList.map((r: any) => (
+                      <div key={r.id} className="rounded-md border p-3 flex flex-wrap items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="font-medium">
+                            #{r.id} — {r.tipo === "caixinha" ? "Prestação de caixinha" : "Reembolso avulso"}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {String(r.criadoEm || "").slice(0, 10).split("-").reverse().join("/")}
+                            {r.motivo ? ` · ${r.motivo}` : ""}
+                            {r.aprovadoPorNome ? ` · decidido por ${r.aprovadoPorNome}` : ""}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold">{Number(r.valorAprovado ?? r.valorTotal ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
+                          <Badge variant="outline" className={
+                            r.status === "pendente" ? "bg-amber-100 text-amber-800 border-amber-300" :
+                            r.status === "reprovada" ? "bg-red-100 text-red-700 border-red-300" :
+                            r.status === "cancelada" ? "bg-slate-100 text-slate-600 border-slate-300" :
+                            "bg-emerald-100 text-emerald-800 border-emerald-300"
+                          }>
+                            {r.status === "pendente" ? "Aguardando" :
+                             r.status === "aprovada" ? "Aprovada" :
+                             r.status === "aprovada_parcial" ? "Aprovada parcial" :
+                             r.status === "reprovada" ? "Reprovada" : "Cancelada"}
+                          </Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </TabsContent>
 
               {/* ============ FOLHA ============ */}
@@ -2572,7 +2683,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                                   </Badge>
                                 </td>
                                 <td className="p-3 text-center">
-                                  {a.status === 'pendente' ? (
+                                  {a.status === 'pendente' && !isSelfOnly ? (
                                     <div className="flex items-center justify-center gap-1">
                                       <button
                                         onClick={() => {
@@ -2777,6 +2888,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                             <Briefcase className="h-5 w-5 text-blue-500" />
                             {funcaoDetalhes.nome} {funcaoDetalhes.cbo ? <Badge variant="outline" className="ml-2">CBO: {funcaoDetalhes.cbo}</Badge> : null}
                           </CardTitle>
+                          {!isSelfOnly && (
                           <Button variant="outline" size="sm" className="text-xs gap-1" onClick={() => {
                             const companyName = selectedCompany?.nomeFantasia || selectedCompany?.razaoSocial || 'Empresa';
                             const empName = emp?.nomeCompleto || 'Colaborador';
@@ -2833,6 +2945,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                           }}>
                             <Printer className="h-3.5 w-3.5" /> Imprimir Ficha
                           </Button>
+                          )}
                         </div>
                       </CardHeader>
                       <CardContent>
@@ -3182,13 +3295,15 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                       <ShieldCheck className="h-5 w-5 text-indigo-500" />
                       Integrações de Pessoal — {integracoes.length} registro{integracoes.length !== 1 ? "s" : ""}
                     </h3>
-                    <Button
-                      size="sm"
-                      onClick={() => setNovaIntegracaoForm({ tipo: "externa", clienteId: "", clienteNome: "", dataRealizacao: "", dataVencimento: "", evidencia: "", observacoes: "" })}
-                      className="gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white"
-                    >
-                      <Plus className="h-3.5 w-3.5" /> Registrar Integração
-                    </Button>
+                    {!isSelfOnly && (
+                      <Button
+                        size="sm"
+                        onClick={() => setNovaIntegracaoForm({ tipo: "externa", clienteId: "", clienteNome: "", dataRealizacao: "", dataVencimento: "", evidencia: "", observacoes: "" })}
+                        className="gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white"
+                      >
+                        <Plus className="h-3.5 w-3.5" /> Registrar Integração
+                      </Button>
+                    )}
                   </div>
 
                   {/* Form de nova integração */}
@@ -3324,12 +3439,14 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                                 </td>
                                 <td className="p-2 text-xs text-gray-500 max-w-[150px] truncate">{i.evidencia || "-"}</td>
                                 <td className="p-2">
-                                  <button
-                                    onClick={() => { if (confirm("Remover este registro de integração?")) excluirIntegracaoMut.mutate({ id: i.id, companyId: selectedCompany?.id || 0 }); }}
-                                    className="p-1 hover:bg-red-50 rounded text-red-400"
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                  </button>
+                                  {!isSelfOnly && (
+                                    <button
+                                      onClick={() => { if (confirm("Remover este registro de integração?")) excluirIntegracaoMut.mutate({ id: i.id, companyId: selectedCompany?.id || 0 }); }}
+                                      className="p-1 hover:bg-red-50 rounded text-red-400"
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </button>
+                                  )}
                                 </td>
                               </tr>
                             );
@@ -3525,6 +3642,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                     <div className="bg-white rounded-xl border p-6">
                       <div className="flex items-center justify-between mb-4">
                         <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2"><FileSignature className="h-5 w-5 text-purple-500" /> Contratos PJ — {pjContratos.length}</h3>
+                        {!isSelfOnly && (
                         <Button size="sm" variant="outline" className="gap-1.5 text-purple-700 border-purple-300 hover:bg-purple-50" onClick={() => {
                           const contrato = pjContratos[0];
                           if (!contrato) return;
@@ -3533,6 +3651,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
 
                           <Printer className="h-4 w-4" /> Gerar Contrato
                         </Button>
+                        )}
                       </div>
                       <div className="overflow-x-auto">
                         <table className="w-full text-sm">
@@ -3793,9 +3912,11 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                         <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
                           <Handshake className="h-5 w-5 text-amber-500" /> Avaliação do Cliente — {desempenho.avaliacaoCliente.total}
                         </h3>
+                        {!isSelfOnly && (
                         <Button variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={gerarFichaAvaliacaoCliente}>
                           <Printer className="h-4 w-4" /> Gerar Ficha (PDF)
                         </Button>
+                        )}
                       </div>
                       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
                         {[
@@ -4022,12 +4143,12 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
 
               {/* ============ ASSINATURA MEMORIAL ============ */}
               <TabsContent value="assinatura" className="mt-4">
-                <AssinaturaMemorialTab employeeId={employeeId!} empNome={emp?.nomeCompleto || ""} />
+                <AssinaturaMemorialTab employeeId={effectiveEmployeeId!} empNome={emp?.nomeCompleto || ""} />
               </TabsContent>
 
               {/* ============ CONTRATOS CLT ============ */}
               <TabsContent value="contratos_clt" className="mt-4">
-                <ContratosTab employeeId={employeeId!} companyId={selectedCompany?.id || 0} empNome={emp?.nomeCompleto || ""} />
+                <ContratosTab employeeId={effectiveEmployeeId!} companyId={selectedCompany?.id || 0} empNome={emp?.nomeCompleto || ""} />
               </TabsContent>
 
               {/* ============ ALMOXARIFADO — EMPRÉSTIMOS ============ */}
@@ -4076,7 +4197,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                                   </span>
                                 </td>
                                 <td className="px-3 py-2 text-center">
-                                  {loan.status === "emprestado" && (
+                                  {loan.status === "emprestado" && !isSelfOnly && (
                                     <Button
                                       size="sm"
                                       variant="outline"
@@ -4152,7 +4273,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                                   {d.motivoReprovacao && <div className="text-red-600">{d.motivoReprovacao}</div>}
                                 </td>
                                 <td className="px-3 py-2 text-center">
-                                  {d.status === "pendente" && (
+                                  {d.status === "pendente" && !isSelfOnly && (
                                     <div className="flex gap-1 justify-center">
                                       <Button
                                         size="sm"

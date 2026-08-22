@@ -7,6 +7,11 @@ import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
 import { parseBRL } from "../utils/parseBRL";
 import { getFeriadosObservadosForPeriod, indexFeriadosObservados, isFeriadoObservado } from "./feriados";
+import {
+  BANCO_HORAS_DATA_INICIO,
+  bancoHorasEstaVigente,
+  recalcularSaldosBancoHorasVigentes,
+} from "../utils/bancoHorasVigencia";
 
 // ============================================================
 // HELPERS (mirrored from payrollEngine — kept private here)
@@ -37,12 +42,34 @@ function getExpectedMins(jornadaTrabalho: string | null | undefined, dateStr: st
     if (!day?.entrada || !day?.saida) return 0;
     const toMins = (t: string) => { const [h, m] = t.split(":").map(Number); return (h || 0) * 60 + (m || 0); };
     let expectedMins = toMins(day.saida) - toMins(day.entrada);
-    if (day.intervalo) {
-      const [ih, im] = day.intervalo.split(":").map(Number);
-      expectedMins -= (ih || 0) * 60 + (im || 0);
-    }
+    expectedMins -= parseIntervaloMins(day.intervalo);
     return Math.max(0, expectedMins);
   } catch { return cargaHorariaDiaria * 60; }
+}
+
+// Tolerant parser for the jornada "intervalo" field. Accepts "01:00", "1:00",
+// and free-text forms like "1 hora", "1h", "1h30", "30 min". Legacy rows contain
+// text (e.g. "1 hora") which an HH:MM split parsed as 0 (lunch not subtracted).
+function parseIntervaloMins(intervalo: unknown): number {
+  if (intervalo == null) return 0;
+  const s = String(intervalo).trim().toLowerCase();
+  if (!s) return 0;
+  const hm = s.match(/^(\d{1,2}):(\d{2})$/);
+  if (hm) return Number(hm[1]) * 60 + Number(hm[2]);
+  const hText = s.match(/(\d+(?:[.,]\d+)?)\s*h(?:ora)?s?/);
+  const mText = s.match(/(\d+)\s*(?:min(?:uto)?s?)\b/);
+  const hAfter = s.match(/h(?:ora)?s?\s*(?:e\s*)?(\d+)\s*(?!h)/);
+  if (hText) {
+    const h = Number(hText[1].replace(",", "."));
+    let mins = Math.round(h * 60);
+    if (mText) mins = Math.floor(h) * 60 + Number(mText[1]);
+    else if (hAfter && Number.isInteger(h)) mins = h * 60 + Number(hAfter[1]);
+    return mins;
+  }
+  if (mText) return Number(mText[1]);
+  const n = Number(s.replace(",", "."));
+  if (Number.isFinite(n)) return n <= 3 ? Math.round(n * 60) : Math.round(n);
+  return 0;
 }
 
 async function getHECriteria(db: any, companyId: number) {
@@ -578,10 +605,23 @@ export const horasExtrasRouter = router({
       mesReferencia: z.string(),
       dataInicio: z.string(), // YYYY-MM-DD
       dataFim: z.string(),    // YYYY-MM-DD
+      // Rev. 5128 — recálculo PARCIAL: recalcula SÓ estes funcionários,
+      // preservando as linhas de HE dos demais no período existente.
+      employeeIds: z.array(z.number()).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+      // Rev. 5128 — tenant guard: valida as empresas pedidas contra as acessíveis
+      {
+        const permitidas = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+        const permitidasIds = new Set((permitidas || []).map((c: any) => Number(c.id)));
+        const pedidas = [input.companyId, ...(input.companyIds || [])];
+        if (pedidas.some(id => !permitidasIds.has(Number(id)))) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso às empresas solicitadas" });
+        }
+      }
 
       // --- GUARD: block recalculation if HE is consolidated ---
       const ppCheck = ((await db.execute(sql`
@@ -625,10 +665,48 @@ export const horasExtrasRouter = router({
         db, input.companyId, input.dataInicio, input.dataFim, criteria.cargaHorariaDiaria
       );
 
+      // Rev. 5128 — seleção parcial de funcionários (null = todos)
+      const selHE: Set<number> | null = (input.employeeIds && input.employeeIds.length > 0)
+        ? new Set(input.employeeIds.map(Number))
+        : null;
+
       // Get salary info for all employees with HE
-      const empIds = Array.from(heMap.keys());
+      const empIds = Array.from(heMap.keys()).filter(id => !selHE || selHE.has(Number(id)));
       if (empIds.length === 0) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Nenhuma hora extra encontrada no período informado." });
+        // Rev. 5128 — recálculo parcial que ZEROU: remove as linhas dos selecionados
+        // do período existente e recomputa os totais (não pode preservar HE obsoleta).
+        if (selHE && existingPeriodId) {
+          await db.execute(sql`
+            DELETE FROM he_period_employees
+            WHERE "hePeriodId" = ${existingPeriodId} AND "companyId" = ${input.companyId}
+              AND "employeeId" IN (${sql.join([...selHE].map(id => sql`${id}`), sql`,`)})
+          `);
+          const totRows0 = ((await db.execute(sql`
+            SELECT COUNT(DISTINCT "employeeId") AS funcs,
+                   COALESCE(SUM("heTotalMins"), 0) AS mins,
+                   COALESCE(SUM("valorHETotal"), 0) AS valor
+            FROM he_period_employees
+            WHERE "hePeriodId" = ${existingPeriodId} AND "companyId" = ${input.companyId}
+          `)) as any).rows || [];
+          const f0 = Number(totRows0[0]?.funcs) || 0;
+          const m0 = Number(totRows0[0]?.mins) || 0;
+          const v0 = Math.round((Number(totRows0[0]?.valor) || 0) * 100) / 100;
+          await db.execute(sql`
+            UPDATE he_periods SET "totalFuncionarios" = ${f0}, "totalHEMins" = ${m0}, "totalValorHE" = ${v0}
+            WHERE id = ${existingPeriodId} AND "companyId" = ${input.companyId}
+          `);
+          return {
+            hePeriodId: existingPeriodId,
+            totalFuncionarios: f0,
+            totalHEMins: m0,
+            totalValorHE: v0,
+            periodo: { dataInicio: input.dataInicio, dataFim: input.dataFim },
+            message: `Nenhuma hora extra encontrada para os selecionados — linhas removidas; período com ${f0} funcionários, total R$ ${v0.toFixed(2)}`,
+          };
+        }
+        throw new TRPCError({ code: "NOT_FOUND", message: selHE
+          ? "Nenhuma hora extra encontrada no período para os colaboradores selecionados."
+          : "Nenhuma hora extra encontrada no período informado." });
       }
 
       const empRows = ((await db.execute(sql`
@@ -704,6 +782,7 @@ export const horasExtrasRouter = router({
         await db.execute(sql`
           DELETE FROM he_period_employees
           WHERE "hePeriodId" = ${existingPeriodId} AND "companyId" = ${input.companyId}
+          ${selHE ? sql`AND "employeeId" IN (${sql.join([...selHE].map(id => sql`${id}`), sql`,`)})` : sql``}
         `);
         hePeriodId = existingPeriodId;
       } else {
@@ -748,13 +827,40 @@ export const horasExtrasRouter = router({
         `);
       }
 
+      // Rev. 5128 — recálculo PARCIAL: os totais do período devem refletir TODAS
+      // as linhas (preservadas + recalculadas), então recomputa a partir da tabela.
+      let retTotalFuncs = totalFuncs;
+      let retTotalHEMins = totalHEMins;
+      let retTotalValorHE = parseFloat(totalValorHE.toFixed(2));
+      if (selHE) {
+        const totRows = ((await db.execute(sql`
+          SELECT COUNT(DISTINCT "employeeId") AS funcs,
+                 COALESCE(SUM("heTotalMins"), 0) AS mins,
+                 COALESCE(SUM("valorHETotal"), 0) AS valor
+          FROM he_period_employees
+          WHERE "hePeriodId" = ${hePeriodId} AND "companyId" = ${input.companyId}
+        `)) as any).rows || [];
+        retTotalFuncs = Number(totRows[0]?.funcs) || 0;
+        retTotalHEMins = Number(totRows[0]?.mins) || 0;
+        retTotalValorHE = Math.round((Number(totRows[0]?.valor) || 0) * 100) / 100;
+        await db.execute(sql`
+          UPDATE he_periods SET
+            "totalFuncionarios" = ${retTotalFuncs},
+            "totalHEMins" = ${retTotalHEMins},
+            "totalValorHE" = ${retTotalValorHE}
+          WHERE id = ${hePeriodId} AND "companyId" = ${input.companyId}
+        `);
+      }
+
       return {
         hePeriodId,
-        totalFuncionarios: totalFuncs,
-        totalHEMins,
-        totalValorHE: parseFloat(totalValorHE.toFixed(2)),
+        totalFuncionarios: retTotalFuncs,
+        totalHEMins: retTotalHEMins,
+        totalValorHE: retTotalValorHE,
         periodo: { dataInicio: input.dataInicio, dataFim: input.dataFim },
-        message: `HE calculada: ${totalFuncs} funcionários com hora extra, total R$ ${totalValorHE.toFixed(2)}`,
+        message: selHE
+          ? `HE recalculada para ${totalFuncs} colaborador(es) selecionado(s); período com ${retTotalFuncs} funcionários, total R$ ${retTotalValorHE.toFixed(2)}`
+          : `HE calculada: ${totalFuncs} funcionários com hora extra, total R$ ${totalValorHE.toFixed(2)}`,
       };
     }),
 
@@ -854,10 +960,15 @@ export const horasExtrasRouter = router({
       dataInicio: z.string(),
       dataFim: z.string(),
     }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
-      const ids = resolveCompanyIds(input);
+      // Rev. 5141 — Tenant guard (IDOR): o espelho devolve CPF, salário e ponto;
+      // interseção das empresas pedidas com as autorizadas do usuário.
+      const allowedEsp = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      const allowedEspSet = new Set((allowedEsp as any[]).map(c => Number(c.id)));
+      const ids = resolveCompanyIds(input).filter((id: number) => allowedEspSet.has(Number(id)));
+      if (ids.length === 0) throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
 
       // Get employee info
       // Rev. 1877 — projeta cargo_confianca + inciso/desde/observacao p/ o frontend exibir
@@ -868,7 +979,7 @@ export const horasExtrasRouter = router({
       // são case-sensitive → "column does not exist" → query inteira falhava → tela em branco
       // (pré Rev. 1980) ou card vermelho "Erro ao carregar" (pós Rev. 1980 — como o user reportou).
       const empRows = ((await db.execute(sql`
-        SELECT id, "nomeCompleto", funcao, "codigoInterno", cpf, "salarioBase", "valorHora", "horasMensais",
+        SELECT id, "nomeCompleto", funcao, "codigoInterno", cpf, "salarioBase", "valorHora", "horasMensais", "jornadaTrabalho",
                "heNormal50", "he100", "heFeriado", "heNoturna", status, "dataDesligamentoEfetiva",
                "cargo_confianca" AS "cargoConfianca",
                "cargo_confianca_desde" AS "cargoConfiancaDesde",
@@ -993,6 +1104,12 @@ export const horasExtrasRouter = router({
       };
       const minsToHHMM = (m: number) => `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`;
 
+      // Rev. 5045 — déficit de jornada (saída antecipada / falta parcial): quando o
+      // fechamento converte um déficit ≥ limite em faltas='1' (com horas trabalhadas > 0),
+      // o campo atrasos fica 0:00 e o espelho perdia as horas negativas do dia. Aqui
+      // projetamos deficitMins = jornada esperada − trabalhado p/ o frontend exibir
+      // e somar no Saldo HE. Apenas exibição/resumo — não altera folha nem descontos.
+      const critEspelho = await getHECriteria(db, input.companyId);
       const recordMap: Record<string, any> = {};
       for (const r of records) {
         const dateStr = String(r.data).slice(0, 10);
@@ -1001,6 +1118,16 @@ export const horasExtrasRouter = router({
         if (isWeekend) {
           const trabMins = parseHHMM(r.horasTrabalhadas);
           r.horasExtras = trabMins > 0 ? minsToHHMM(trabMins) : "0:00";
+        }
+        r.deficitMins = 0;
+        if (!isWeekend) {
+          const trabMins = parseHHMM(r.horasTrabalhadas);
+          const atrasoMins = parseHHMM(r.atrasos);
+          const faltaParcial = trabMins > 0 && !!r.faltas && String(r.faltas) !== "0" && String(r.faltas).trim() !== "";
+          if (faltaParcial && atrasoMins === 0) {
+            const expected = getExpectedMins(emp.jornadaTrabalho, dateStr, critEspelho.cargaHorariaDiaria);
+            r.deficitMins = Math.max(0, expected - trabMins);
+          }
         }
         recordMap[dateStr] = r;
       }
@@ -1097,7 +1224,9 @@ export const horasExtrasRouter = router({
       const dataInicioStr = toDateStr(period.dataInicio);
 
       for (const emp of empRows) {
-        if (emp.destinacao === "banco_horas") {
+        // Horas anteriores ao marco inicial são preservadas no período de HE, mas
+        // não podem entrar no Banco de Horas ativo.
+        if (emp.destinacao === "banco_horas" && bancoHorasEstaVigente(dataFimStr)) {
           const mins = Number(emp.heTotalMins || 0);
           if (mins <= 0) continue;
           const minutosBase = mins;
@@ -1144,10 +1273,12 @@ export const horasExtrasRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) return [];
+      await recalcularSaldosBancoHorasVigentes(db, input.companyId);
       const rows = ((await db.execute(sql`
         SELECT bhs.*, e."nomeCompleto", e.funcao,
           (SELECT MAX(bhl."criadoEm") FROM banco_horas_lancamentos bhl
-           WHERE bhl."employeeId" = bhs."employeeId" AND bhl."companyId" = bhs."companyId") as "ultimoLancamento"
+           WHERE bhl."employeeId" = bhs."employeeId" AND bhl."companyId" = bhs."companyId"
+             AND bhl.data >= ${BANCO_HORAS_DATA_INICIO}::date) as "ultimoLancamento"
         FROM banco_horas_saldo bhs
         JOIN employees e ON e.id = bhs."employeeId"
         WHERE bhs."companyId" = ${input.companyId} AND bhs."saldoMinutos" <> 0
@@ -1174,7 +1305,9 @@ export const horasExtrasRouter = router({
           SELECT bhl."employeeId",
             SUM(CASE WHEN bhl.tipo = 'credito' THEN ABS(bhl.minutos) ELSE -ABS(bhl.minutos) END) AS saldo
           FROM banco_horas_lancamentos bhl, fim_mes
-          WHERE bhl."companyId" = ${input.companyId} AND bhl.data <= fim_mes.d
+          WHERE bhl."companyId" = ${input.companyId}
+            AND bhl.data >= ${BANCO_HORAS_DATA_INICIO}::date
+            AND bhl.data <= fim_mes.d
           GROUP BY bhl."employeeId"
         ),
         movimento AS (
@@ -1183,6 +1316,7 @@ export const horasExtrasRouter = router({
             MAX(bhl."criadoEm") AS "ultimoLancamento"
           FROM banco_horas_lancamentos bhl
           WHERE bhl."companyId" = ${input.companyId}
+            AND bhl.data >= ${BANCO_HORAS_DATA_INICIO}::date
             AND date_trunc('month', bhl.data) = make_date(${input.ano}::int, ${input.mes}::int, 1)
           GROUP BY bhl."employeeId"
         )
@@ -1211,7 +1345,9 @@ export const horasExtrasRouter = router({
       const rows = ((await db.execute(sql`
         SELECT EXTRACT(MONTH FROM bhl.data)::int AS mes, COUNT(*)::int AS qtd
         FROM banco_horas_lancamentos bhl
-        WHERE bhl."companyId" = ${input.companyId} AND EXTRACT(YEAR FROM bhl.data) = ${input.ano}
+        WHERE bhl."companyId" = ${input.companyId}
+          AND bhl.data >= ${BANCO_HORAS_DATA_INICIO}::date
+          AND EXTRACT(YEAR FROM bhl.data) = ${input.ano}
         GROUP BY 1
       `)) as any).rows || [];
       return rows;
@@ -1227,7 +1363,8 @@ export const horasExtrasRouter = router({
       const rows = ((await db.execute(sql`
         SELECT
           bhl.id, bhl."employeeId", bhl."companyId", bhl."hePeriodId",
-          bhl.tipo, bhl.minutos, bhl.descricao, bhl."criadoPor", bhl."criadoEm", bhl.data,
+          bhl.tipo, bhl.minutos, bhl."minutosBase", bhl."minutosAcrescimo",
+          bhl.descricao, bhl."criadoPor", bhl."criadoEm", bhl.data,
           hp."mesReferencia"    AS "periodoMesRef",
           hp."dataInicio"       AS "periodoDataInicio",
           hp."dataFim"          AS "periodoDataFim",
@@ -1246,10 +1383,178 @@ export const horasExtrasRouter = router({
               AND hpe."employeeId" = bhl."employeeId"
         WHERE bhl."employeeId" = ${input.employeeId}
           AND bhl."companyId"  = ${input.companyId}
+          AND bhl.data >= ${BANCO_HORAS_DATA_INICIO}::date
         ORDER BY bhl.data DESC, bhl."criadoEm" DESC
         LIMIT 100
       `)) as any).rows || [];
       return rows;
+    }),
+
+  // Rev. 5046 — Memória de cálculo do débito de atraso/falta gerado pela folha:
+  // reconstrói dia a dia (a partir do timecard_daily da competência) como o total
+  // do lançamento foi composto: falta cheia (dia sem batida), falta parcial
+  // (déficit real = jornada − trabalhado) e atrasos em minutos. Regra de ouro:
+  // todo valor agregado clicável precisa de memória de cálculo.
+  getDebitoFolhaDetalhe: protectedProcedure
+    .input(z.object({ employeeId: z.number(), companyId: z.number(), competencia: z.string().regex(/^\d{4}-\d{2}$/) }))
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) return { dias: [], totalMins: 0 };
+      // Rev. 5141 — Tenant guard (IDOR): companyId vinha do cliente sem validação.
+      const allowedDet = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!(allowedDet as any[]).some(c => Number(c.id) === Number(input.companyId))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+      const empRows = ((await db.execute(sql`
+        SELECT "jornadaTrabalho", "salarioBase", "valorHora", "horasMensais"
+        FROM employees WHERE id = ${input.employeeId} AND "companyId" = ${input.companyId} LIMIT 1
+      `)) as any).rows || [];
+      if (empRows.length === 0) return { dias: [], totalMins: 0 };
+      const emp = empRows[0];
+      const crit = await getHECriteria(db, input.companyId);
+      const parseMoney = (v: any) => {
+        const s = String(v ?? "").trim();
+        if (!s) return 0;
+        const n = s.includes(",") ? parseFloat(s.replace(/\./g, "").replace(",", ".")) : parseFloat(s.replace(/[^0-9.]/g, ""));
+        return isNaN(n) ? 0 : n;
+      };
+      const salario = parseMoney(emp.salarioBase);
+      let vh = parseMoney(emp.valorHora);
+      const horasMensais = Number(emp.horasMensais) || 220;
+      if (vh <= 0 && salario > 0) vh = salario / horasMensais;
+      const valorDia = salario > 0 ? salario / 30 : vh * (220 / 30);
+      const diaCheioMins = vh > 0 ? Math.round((valorDia / vh) * 60) : crit.cargaHorariaDiaria * 60;
+
+      const rows = ((await db.execute(sql`
+        SELECT to_char(data, 'YYYY-MM-DD') AS data, "horasTrabalhadas", "isFalta", "isAtraso", "minutosAtraso"
+        FROM timecard_daily
+        WHERE "employeeId" = ${input.employeeId} AND "companyId" = ${input.companyId}
+          AND "mesCompetencia" = ${input.competencia} AND "statusDia" = 'registrado'
+          AND ("isFalta" = 1 OR ("isAtraso" = 1 AND COALESCE("minutosAtraso", 0) > 0))
+        ORDER BY data
+      `)) as any).rows || [];
+
+      // Rev. 5046 — batidas reais do cartão de ponto (time_records) por dia, para
+      // o extrato mostrar o horário efetivamente feito (igual ao espelho).
+      const datas = rows.map((r: any) => String(r.data));
+      const trMap = new Map<string, any>();
+      if (datas.length > 0) {
+        const trRows = ((await db.execute(sql`
+          SELECT to_char(data, 'YYYY-MM-DD') AS data, entrada1, saida1, entrada2, saida2
+          FROM time_records
+          -- Rev. 5141 — array interpolado vira "data = record" com 2+ datas (erro
+          -- "operator does not exist: date = record") e o pop-up mostrava
+          -- "Nenhum dia encontrado". sql.join gera IN (d1, d2, ...) correto.
+          WHERE "employeeId" = ${input.employeeId} AND "companyId" = ${input.companyId}
+            AND data IN (${sql.join(datas.map((d: string) => sql`${d}`), sql`,`)})
+        `)) as any).rows || [];
+        for (const tr of trRows) trMap.set(String(tr.data), tr);
+      }
+      // Jornada prevista do dia da semana (entrada–saída, intervalo) a partir do JSON
+      let jornadaObj: any = null;
+      try { jornadaObj = typeof emp.jornadaTrabalho === "string" ? JSON.parse(emp.jornadaTrabalho) : emp.jornadaTrabalho; } catch { /* jornada padrão */ }
+      const DOW_KEYS = ["dom", "seg", "ter", "qua", "qui", "sex", "sab"];
+      const jornadaPrevista = (dateStr: string): string => {
+        const dow = new Date(dateStr + "T12:00:00Z").getUTCDay();
+        const j = jornadaObj?.[DOW_KEYS[dow]];
+        if (!j?.entrada || !j?.saida) return "";
+        return `${j.entrada}–${j.saida}${j.intervalo ? ` (int. ${j.intervalo})` : ""}`;
+      };
+
+      const dias: any[] = [];
+      let totalMins = 0;
+      for (const r of rows) {
+        const trabStr = String(r.horasTrabalhadas || "0:00");
+        const m = trabStr.match(/^(\d+):(\d+)$/);
+        const trabMin = m ? Number(m[1]) * 60 + Number(m[2]) : 0;
+        const expMin = getExpectedMins(emp.jornadaTrabalho, r.data, crit.cargaHorariaDiaria);
+        const tr = trMap.get(String(r.data));
+        const horarios = tr
+          ? `${tr.entrada1 || "--:--"}-${tr.saida1 || "--:--"} ${tr.entrada2 || "--:--"}-${tr.saida2 || "--:--"}`.trim()
+          : "";
+        const base = { data: r.data, trabalhadoMins: trabMin, jornadaMins: expMin, horarios, jornadaPrevista: jornadaPrevista(String(r.data)) };
+        if (Number(r.isFalta) === 1 && trabMin > 0) {
+          const deficit = Math.max(0, expMin - trabMin);
+          if (deficit > 0) { dias.push({ ...base, tipo: "falta_parcial", debitadoMins: deficit }); totalMins += deficit; }
+        } else if (Number(r.isFalta) === 1) {
+          // Rev. 5140 — Convenção coletiva: falta cheia debita a JORNADA REAL do dia
+          // (seg-qui 9h, sexta 8h), não mais o valor-dia legal (7h20). Espelha o motor
+          // da folha (payrollEngine).
+          dias.push({ ...base, tipo: "falta", trabalhadoMins: 0, debitadoMins: expMin });
+          totalMins += expMin;
+        } else {
+          const atr = Number(r.minutosAtraso) || 0;
+          if (atr > 0) { dias.push({ ...base, tipo: "atraso", debitadoMins: atr }); totalMins += atr; }
+        }
+      }
+      return { dias, totalMins, diaCheioMins };
+    }),
+
+  // Rev. 5153 — Resumo de faltas e atrasos do período para o extrato do Banco de Horas.
+  // Fonte: timecard_daily (dados do fechamento de ponto processado — mais preciso que
+  // batidas brutas do time_records). Separado em faltas completas, parciais e atrasos.
+  getFaltasDoExtrato: protectedProcedure
+    .input(z.object({
+      employeeId: z.number(),
+      companyId: z.number(),
+      dataInicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      dataFim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    }))
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+      const empty = { faltasCompletas: 0, faltasCompletasMins: 0, faltasParciais: 0, faltasParciaisMins: 0, atrasos: 0, atrasosMins: 0, dias: [] as any[] };
+      if (!db) return empty;
+      const allowed = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!(allowed as any[]).some(c => Number(c.id) === Number(input.companyId))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+      const empRows = ((await db.execute(sql`
+        SELECT "jornadaTrabalho", "horasMensais"
+        FROM employees WHERE id = ${input.employeeId} AND "companyId" = ${input.companyId} LIMIT 1
+      `)) as any).rows || [];
+      if (empRows.length === 0) return empty;
+      const emp = empRows[0];
+      const crit = await getHECriteria(db, input.companyId);
+      const rows = ((await db.execute(sql`
+        SELECT to_char(data, 'YYYY-MM-DD') AS data, "horasTrabalhadas", "isFalta", "isAtraso", "minutosAtraso"
+        FROM timecard_daily
+        WHERE "employeeId" = ${input.employeeId} AND "companyId" = ${input.companyId}
+          AND data >= ${BANCO_HORAS_DATA_INICIO}::date
+          AND data BETWEEN ${input.dataInicio}::date AND ${input.dataFim}::date
+          AND "statusDia" = 'registrado'
+          AND ("isFalta" = 1 OR ("isAtraso" = 1 AND COALESCE("minutosAtraso", 0) > 0))
+        ORDER BY data
+      `)) as any).rows || [];
+      let faltasCompletas = 0, faltasCompletasMins = 0;
+      let faltasParciais = 0, faltasParciaisMins = 0;
+      let atrasos = 0, atrasosMins = 0;
+      const dias: Array<{ data: string; tipo: "falta" | "falta_parcial" | "atraso"; debitadoMins: number }> = [];
+      for (const r of rows) {
+        const trabStr = String(r.horasTrabalhadas || "0:00");
+        const m = trabStr.match(/^(\d+):(\d+)$/);
+        const trabMin = m ? Number(m[1]) * 60 + Number(m[2]) : 0;
+        const expMin = getExpectedMins(emp.jornadaTrabalho, String(r.data), crit.cargaHorariaDiaria);
+        if (Number(r.isFalta) === 1 && trabMin > 0) {
+          const deficit = Math.max(0, expMin - trabMin);
+          if (deficit > 0) {
+            faltasParciais++;
+            faltasParciaisMins += deficit;
+            dias.push({ data: String(r.data), tipo: "falta_parcial", debitadoMins: deficit });
+          }
+        } else if (Number(r.isFalta) === 1) {
+          faltasCompletas++;
+          faltasCompletasMins += expMin;
+          dias.push({ data: String(r.data), tipo: "falta", debitadoMins: expMin });
+        } else {
+          const atr = Number(r.minutosAtraso) || 0;
+          if (atr > 0) {
+            atrasos++;
+            atrasosMins += atr;
+            dias.push({ data: String(r.data), tipo: "atraso", debitadoMins: atr });
+          }
+        }
+      }
+      return { faltasCompletas, faltasCompletasMins, faltasParciais, faltasParciaisMins, atrasos, atrasosMins, dias };
     }),
 
   // Debit hours from banco de horas (compensatory day off)
@@ -1264,6 +1569,10 @@ export const horasExtrasRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      if (!bancoHorasEstaVigente(input.data)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `O Banco de Horas é válido somente a partir de ${BANCO_HORAS_DATA_INICIO.split("-").reverse().join("/")}.` });
+      }
+      await recalcularSaldosBancoHorasVigentes(db, input.companyId);
 
       const saldoRows = ((await db.execute(sql`
         SELECT "saldoMinutos" FROM banco_horas_saldo
@@ -1301,6 +1610,10 @@ export const horasExtrasRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      if (!bancoHorasEstaVigente(input.data)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `O Banco de Horas é válido somente a partir de ${BANCO_HORAS_DATA_INICIO.split("-").reverse().join("/")}.` });
+      }
+      await recalcularSaldosBancoHorasVigentes(db, input.companyId);
 
       let processados = 0;
       let totalMinutos = 0;
@@ -1352,6 +1665,7 @@ export const horasExtrasRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) return [];
+      await recalcularSaldosBancoHorasVigentes(db, input.companyId);
       const meses = input.mesesValidade ?? 12;
       const cutoff = new Date();
       cutoff.setMonth(cutoff.getMonth() - meses);
@@ -1365,6 +1679,7 @@ export const horasExtrasRouter = router({
         WHERE bhl."companyId" = ${input.companyId}
           AND COALESCE(e."cargo_confianca", 0) = 0
           AND bhl.tipo = 'credito'
+          AND bhl.data >= ${BANCO_HORAS_DATA_INICIO}::date
           AND bhl.data < ${cutoffStr}::date
           AND bhs."saldoMinutos" > 0
         GROUP BY bhl."employeeId", e."nomeCompleto", bhs."saldoMinutos"
@@ -1376,10 +1691,38 @@ export const horasExtrasRouter = router({
   // Rev. 3977 — Alerta MENSAL: funcionários com saldo NEGATIVO no banco de horas (débito de
   // atraso/falta acumulado). Apenas alerta — NÃO gera pagamento/desconto automático.
   getAlertasSaldoNegativo: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    // Rev. 5044 — o alerta é escopado ao MÊS visualizado: saldo acumulado até o
+    // fim do mês (via lançamentos), não o saldo corrente. Sem ano/mes, usa o
+    // saldo corrente (comportamento antigo).
+    .input(z.object({ companyId: z.number(), ano: z.number().optional(), mes: z.number().min(1).max(12).optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) return [];
+      if (!input.ano || !input.mes) await recalcularSaldosBancoHorasVigentes(db, input.companyId);
+      if (input.ano && input.mes) {
+        const rows = ((await db.execute(sql`
+          WITH fim_mes AS (
+            SELECT (date_trunc('month', make_date(${input.ano}::int, ${input.mes}::int, 1)) + interval '1 month' - interval '1 day')::date AS d
+          ),
+          acumulado AS (
+            SELECT bhl."employeeId",
+              SUM(CASE WHEN bhl.tipo = 'credito' THEN ABS(bhl.minutos) ELSE -ABS(bhl.minutos) END) AS saldo,
+              MAX(bhl.data) AS "ultimaData"
+            FROM banco_horas_lancamentos bhl, fim_mes
+            WHERE bhl."companyId" = ${input.companyId}
+              AND bhl.data >= ${BANCO_HORAS_DATA_INICIO}::date
+              AND bhl.data <= fim_mes.d
+            GROUP BY bhl."employeeId"
+          )
+          SELECT a."employeeId", e."nomeCompleto", a.saldo::int AS "saldoMinutos", a."ultimaData" AS "atualizadoEm"
+          FROM acumulado a
+          JOIN employees e ON e.id = a."employeeId"
+          WHERE COALESCE(e."cargo_confianca", 0) = 0
+            AND a.saldo < 0
+          ORDER BY a.saldo ASC
+        `)) as any).rows || [];
+        return rows;
+      }
       const rows = ((await db.execute(sql`
         SELECT bhs."employeeId", e."nomeCompleto", bhs."saldoMinutos", bhs."atualizadoEm"
         FROM banco_horas_saldo bhs
@@ -1399,6 +1742,7 @@ export const horasExtrasRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) return [];
+      await recalcularSaldosBancoHorasVigentes(db, input.companyId);
       const cutoff = new Date();
       cutoff.setMonth(cutoff.getMonth() - 3);
       const cutoffStr = cutoff.toISOString().slice(0, 10);
@@ -1411,6 +1755,7 @@ export const horasExtrasRouter = router({
         WHERE bhl."companyId" = ${input.companyId}
           AND COALESCE(e."cargo_confianca", 0) = 0
           AND bhl.tipo = 'credito'
+          AND bhl.data >= ${BANCO_HORAS_DATA_INICIO}::date
           AND bhl.data < ${cutoffStr}::date
           AND bhs."saldoMinutos" > 0
         GROUP BY bhl."employeeId", e."nomeCompleto", bhs."saldoMinutos"

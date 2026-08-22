@@ -394,6 +394,14 @@ export const dixiPontoRouter = router({
       const afdMarcacoesToInsert: any[] = [];
       let unmatchedCpfs: string[] = [];
       const mesesAfetados = new Set<string>();
+      // Rev. — sobreposição por PERÍODO do arquivo, não por mês inteiro:
+      // rastreia a menor e a maior data efetivamente presentes no arquivo.
+      let dataMinArquivo: string | null = null;
+      let dataMaxArquivo: string | null = null;
+      const registrarDataArquivo = (data: string) => {
+        if (!dataMinArquivo || data < dataMinArquivo) dataMinArquivo = data;
+        if (!dataMaxArquivo || data > dataMaxArquivo) dataMaxArquivo = data;
+      };
 
       // Create import log first
       const [importLog] = await db.insert(dixiAfdImportacoes).values({
@@ -461,6 +469,7 @@ export const dixiPontoRouter = router({
           for (const [data, horas] of Object.entries(days)) {
             const mesRef = dateToMesRef(data);
             mesesAfetados.add(mesRef);
+            registrarDataArquivo(data);
             inconsistenciesToInsert.push({
               companyId: input.companyId,
               employeeId: null,
@@ -479,6 +488,7 @@ export const dixiPontoRouter = router({
           horas.sort();
           const mesRef = dateToMesRef(data);
           mesesAfetados.add(mesRef);
+          registrarDataArquivo(data);
 
           // Remove duplicate punches (within 2 minutes)
           const filtered: string[] = [];
@@ -583,21 +593,23 @@ export const dixiPontoRouter = router({
       }
 
       // ===== INSERIR REGISTROS NO BANCO =====
-      // Delete existing DIXI records for affected months/obra (preserva manuais e apontamentos)
-      for (const mesRef of Array.from(mesesAfetados)) {
+      // Rev. — Delete existing DIXI records SOMENTE no intervalo de datas coberto pelo arquivo
+      // (antes apagava o mês inteiro: reimportar 15/06–15/07 destruía 01–14/06 de todos).
+      // Preserva manuais e apontamentos (fonte='dixi' apenas) e tudo fora do período do arquivo.
+      if (dataMinArquivo && dataMaxArquivo) {
         await db.delete(timeRecords).where(
           and(
             companyFilter(timeRecords.companyId, input),
-            eq(timeRecords.mesReferencia, mesRef),
             eq(timeRecords.obraId, obraId!),
             eq(timeRecords.fonte, "dixi"),
+            between(timeRecords.data, dataMinArquivo, dataMaxArquivo),
           )
         );
         await db.delete(timeInconsistencies).where(
           and(
             companyFilter(timeInconsistencies.companyId, input),
-            eq(timeInconsistencies.mesReferencia, mesRef),
             eq(timeInconsistencies.obraId, obraId!),
+            between(timeInconsistencies.data, dataMinArquivo, dataMaxArquivo),
           )
         );
       }
@@ -662,8 +674,11 @@ export const dixiPontoRouter = router({
         const prot = protectedRecords.get(key);
         if (!prot) {
           toInsert.push(r);
-        } else if (prot.fonte === 'campo') {
-          // Apontamento de Campo: mescla a entrada do apontamento com as batidas do Dixi
+        } else if (prot.fonte === 'campo' || prot.fonte === 'apontamento' || prot.fonte === 'dixi+apontamento') {
+          // Rev. 5049 — Apontamento de Campo grava fonte='apontamento' (ou 'dixi+apontamento'
+          // quando já havia Dixi), não 'campo'. Todos mesclam: o horário do apontamento é
+          // mantido e as batidas do relógio complementam — nunca se descartam mutuamente.
+          // Só fonte='manual' continua protegida integralmente (descarta Dixi).
           const existingPunches = [prot.entrada1, prot.saida1, prot.entrada2, prot.saida2, prot.entrada3, prot.saida3]
             .filter((p): p is string => !!p);
           const meta = dixiExpectedMap.get(key) ?? { expectedMinutes: 480, isDiaFolga: false };
@@ -726,6 +741,8 @@ export const dixiPontoRouter = router({
           atrasos: atrasoMin > 0 ? minutesToHHMM(atrasoMin) : "0:00",
           faltas: faltasMerge,
           batidasBrutas: JSON.stringify(merged),
+          // Rev. 5049 — marca a origem mista p/ o próximo import reconhecer e re-mesclar
+          fonte: "dixi+apontamento",
         }).where(eq(timeRecords.id, existingId));
       }
 

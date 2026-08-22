@@ -51,7 +51,9 @@ export type DocumentTemplateTipo =
   | "proposta_comercial"
   | "contrato_pj"
   | "contrato_terceiros"
-  | "aviso_encerramento_pj";
+  | "aviso_encerramento_pj"
+  // Compras (Rev. 5107)
+  | "termo_adesao_premio";
 
 // ── Categorias canônicas ─────────────────────────────────────────────────────
 export const CATEGORIAS_DOCS = [
@@ -61,6 +63,7 @@ export const CATEGORIAS_DOCS = [
   { id: "contratos",     label: "Contratos" },
   { id: "medicoes",      label: "Medições" },
   { id: "contabilidade", label: "Contabilidade" },
+  { id: "sst",           label: "SST" },
 ] as const;
 
 export type CategoriaDoc = (typeof CATEGORIAS_DOCS)[number]["id"];
@@ -75,11 +78,12 @@ export function getCategoriaFromDoc(tipo: string, codigo?: string | null): strin
   if (meta?.categoria) return meta.categoria;
   if (codigo) {
     const u = codigo.toUpperCase();
+    if (u.startsWith("FC-SST"))  return "sst";
     if (u.startsWith("FC-FIN"))  return "financeiro";
     if (u.startsWith("FC-PL"))   return "planejamento";
     if (u.startsWith("FC-MED"))  return "medicoes";
+    if (u.startsWith("FC-CONT")) return "contabilidade"; // antes de FC-CON (prefixo colide)
     if (u.startsWith("FC-CON"))  return "contratos";
-    if (u.startsWith("FC-CONT")) return "contabilidade";
   }
   return "rh";
 }
@@ -194,6 +198,24 @@ export const DOCUMENT_TEMPLATES_META: DocumentTemplateMeta[] = [
       ...PH_EMPRESA,
       ...PH_DOCUMENTO,
       { chave: "itensTabela", rotulo: "Tabela de Itens (auto)", exemplo: "(gerada automaticamente do formulário)", grupo: "Específicos" },
+    ],
+  },
+  {
+    tipo: "termo_adesao_premio",
+    titulo: "Termo de Adesão — Prêmio de Compras",
+    descricao: "Adesão ao Programa de Prêmio por Desempenho em Compras (art. 457 CLT), com scorecard de KPIs e assinatura eletrônica do participante e do sócio administrador.",
+    icone: "Award",
+    categoria: "contratos",
+    placeholders: [
+      ...PH_COLABORADOR,
+      ...PH_EMPRESA,
+      ...PH_DOCUMENTO,
+      { chave: "pctPremio",     rotulo: "% do prêmio sobre o saving",      exemplo: "10",  grupo: "Específicos" },
+      { chave: "faixasTexto",   rotulo: "Tabela de faixas do prêmio escalonado", exemplo: "até 3% → 5%; 3% a 5% → 10%; ...", grupo: "Específicos" },
+      { chave: "gatilhoMin",    rotulo: "Gatilho mínimo de saving (%)",    exemplo: "2",   grupo: "Específicos" },
+      { chave: "antecMax",      rotulo: "Antecipação máxima (%)",          exemplo: "40",  grupo: "Específicos" },
+      { chave: "versaoRegra",   rotulo: "Versão do regulamento",           exemplo: "1",   grupo: "Específicos" },
+      { chave: "kpisTabela",    rotulo: "Tabela do Scorecard de KPIs (auto)", exemplo: "(gerada automaticamente das regras vigentes)", grupo: "Específicos" },
     ],
   },
   {
@@ -448,27 +470,18 @@ export const DOCUMENT_TEMPLATES_META: DocumentTemplateMeta[] = [
       { chave: "coparticipacao", rotulo: "Coparticipação/desconto", exemplo: "R$ 120,00/mês", grupo: "Específicos" },
     ],
   },
+  // Rev. 4981 — UNIFICADO: adesão + recusa viraram uma única "Declaração para
+  // Benefício de Vale-Transporte" (Lei 7.619/87) em que o colaborador assinala
+  // ( ) SIM / ( ) NÃO. O tipo "recusa_vt" foi aposentado (docs antigos seguem visíveis).
   {
     tipo: "adesao_vt",
-    titulo: "Termo de Adesão — Vale-Transporte",
-    descricao: "Opção pelo vale-transporte com autorização de desconto de até 6% (Lei 7.418/85).",
+    titulo: "Declaração — Vale-Transporte",
+    descricao: "Declaração para benefício de vale-transporte (Lei 7.619/87): o colaborador assinala se opta ou não pelo benefício.",
     icone: "Bus",
     categoria: "rh",
     placeholders: [
       ...PH_COLABORADOR, ...PH_EMPRESA, ...PH_DOCUMENTO,
-      { chave: "linhas",   rotulo: "Linhas/percurso",       exemplo: "Linha 010 — Centro ↔ Pedregulho (ida e volta)", grupo: "Específicos" },
-      { chave: "valorDia", rotulo: "Valor diário (R$)",     exemplo: "R$ 9,00", grupo: "Específicos" },
-    ],
-  },
-  {
-    tipo: "recusa_vt",
-    titulo: "Termo de Recusa — Vale-Transporte",
-    descricao: "Declaração de NÃO opção pelo vale-transporte (Decreto 95.247/87).",
-    icone: "BusFront",
-    categoria: "rh",
-    placeholders: [
-      ...PH_COLABORADOR, ...PH_EMPRESA, ...PH_DOCUMENTO,
-      { chave: "motivo", rotulo: "Motivo da recusa", exemplo: "Utilizo veículo próprio", grupo: "Específicos" },
+      { chave: "empEndereco", rotulo: "Endereço do colaborador", exemplo: "Rua X, 123 - Bairro - Cidade/UF - CEP", grupo: "Específicos" },
     ],
   },
   {
@@ -479,7 +492,10 @@ export const DOCUMENT_TEMPLATES_META: DocumentTemplateMeta[] = [
     categoria: "rh",
     placeholders: [
       ...PH_COLABORADOR, ...PH_EMPRESA, ...PH_DOCUMENTO,
-      { chave: "valorMensal", rotulo: "Valor mensal (R$)", exemplo: "R$ 550,00", grupo: "Específicos" },
+      { chave: "valorMensal",       rotulo: "Valor mensal total (R$)",   exemplo: "R$ 880,48", grupo: "Específicos" },
+      { chave: "vaValeAlimentacao", rotulo: "Vale-alimentação (R$/mês)", exemplo: "R$ 484,48", grupo: "Específicos" },
+      { chave: "vaCafeManha",       rotulo: "Café da manhã (R$/dia)",    exemplo: "R$ 9,00", grupo: "Específicos" },
+      { chave: "vaLancheTarde",     rotulo: "Lanche da tarde (R$/dia)",  exemplo: "R$ 9,00", grupo: "Específicos" },
     ],
   },
   {
@@ -692,9 +708,17 @@ export function getDocMetaOrFallback(tipo: string, titulo?: string): DocumentTem
     titulo: titulo || "Documento Institucional",
     descricao: "Documento institucional avulso (custom).",
     icone: "FileText",
-    placeholders: PH_COMUM,
+    placeholders: [...PH_COMUM, ...PH_CUSTOM_GERACAO],
   };
 }
+
+// Rev. 5048 — placeholders extras disponíveis nos documentos CUSTOM, preenchidos
+// na hora de GERAR o documento do colaborador (não vêm do cadastro).
+export const PH_CUSTOM_GERACAO: PlaceholderDef[] = [
+  { chave: "itensEntregues",    rotulo: "Tabela de itens entregues (preenchida ao gerar)", exemplo: "Tabela #/Item/Qtd./Estado", grupo: "Geração" },
+  { chave: "observacoes",       rotulo: "Observações (digitadas ao gerar)",                exemplo: "Entrega com carregador.",   grupo: "Geração" },
+  { chave: "baseLegalDesconto", rotulo: "Base legal do desconto (CLT ou Cód. Civil, automático)", exemplo: "nos termos do artigo 462, §1º, da CLT", grupo: "Geração" },
+];
 
 /**
  * Interpola placeholders {{chave}} no HTML do template.
@@ -766,6 +790,7 @@ export const DEFAULT_CODIGOS: Record<DocumentTemplateTipo, string> = {
   ordem_servico:              "FC-CON-001",
   proposta_comercial:         "FC-CON-002",
   aviso_encerramento_pj:      "FC-CON-003",
+  termo_adesao_premio:        "FC-CON-004",
 };
 
 // ── Seed: Aviso de Encerramento de Contrato PJ ───────────────────────────────
@@ -1109,14 +1134,31 @@ const SEED_FICHA_REGISTRO = `
 `;
 
 const SEED_TERMO_EQUIPAMENTOS = `
-<p style="margin-bottom:10px;text-align:justify">Eu, <strong>{{empNome}}</strong>, CPF <strong>{{empCpf}}</strong>, {{empFuncao}}, colaborador(a) da empresa <strong>{{empresaRazaoSocial}}</strong> (CNPJ {{empresaCnpj}}), declaro ter recebido, em perfeito estado de conservação e funcionamento, os equipamentos abaixo relacionados, de propriedade da empresa:</p>
-<p style="margin:10px 0;padding:10px 12px;border:1px solid #D0D5DD;background:#F8FAFC"><strong>Equipamentos:</strong> {{equipamentos}}</p>
-<p style="margin-bottom:8px;text-align:justify">Comprometo-me a:</p>
+<p style="margin-bottom:10px;text-align:justify">Eu, <strong>{{empNome}}</strong>, CPF <strong>{{empCpf}}</strong>, {{empFuncao}}, colaborador(a) da empresa <strong>{{empresaRazaoSocial}}</strong> (CNPJ {{empresaCnpj}}), firmo o presente <strong>Termo de Responsabilidade pela Utilização de Equipamentos, Máquinas e Ferramentas</strong>, aplicável a todo e qualquer equipamento, máquina, ferramenta (manual ou elétrica), instrumento de medição ou dispositivo de propriedade da empresa, ou por ela locado de terceiros, que me seja entregue, emprestado ou disponibilizado durante a vigência do meu contrato de trabalho — inclusive retiradas registradas no almoxarifado.</p>
+<p style="margin:10px 0;padding:10px 12px;border:1px solid #D0D5DD;background:#F8FAFC"><strong>Equipamentos entregues nesta data (quando aplicável):</strong> {{equipamentos}}</p>
+<p style="margin-bottom:6px"><strong>1. Compromissos de uso</strong></p>
 <ol style="margin:0 0 10px 20px;text-align:justify">
-  <li>Utilizar os equipamentos exclusivamente no exercício das minhas funções;</li>
-  <li>Zelar pela guarda e conservação, comunicando imediatamente qualquer defeito, perda, roubo ou extravio;</li>
-  <li>Devolvê-los quando solicitado pela empresa ou ao término do contrato de trabalho, no estado em que se encontrarem, ressalvado o desgaste natural de uso;</li>
-  <li>Autorizar, nos termos do Art. 462, §1º da CLT, o desconto salarial do valor correspondente em caso de dano ou perda decorrente de dolo ou negligência comprovada.</li>
+  <li>Utilizar os equipamentos exclusivamente no exercício das minhas funções e nos locais de trabalho determinados pela empresa;</li>
+  <li>Operar cada equipamento conforme as instruções do fabricante e as orientações/treinamentos recebidos, utilizando os EPIs adequados;</li>
+  <li>Não realizar adaptações, improvisações ou remoção de proteções de segurança;</li>
+  <li>Não emprestar, ceder ou permitir o uso por terceiros não autorizados, nem retirar equipamentos da obra sem autorização;</li>
+  <li>Zelar pela guarda, limpeza e conservação, mantendo-os abrigados de chuva e umidade quando fora de uso;</li>
+  <li>Comunicar IMEDIATAMENTE ao almoxarifado/encarregado qualquer defeito, ruído anormal, dano, perda, furto, roubo ou extravio, interrompendo o uso do equipamento defeituoso;</li>
+  <li>Devolver os equipamentos ao almoxarifado ao término de cada utilização, quando solicitado pela empresa ou ao término do contrato de trabalho, no estado em que se encontrarem, ressalvado o desgaste natural de uso.</li>
+</ol>
+<p style="margin-bottom:6px"><strong>2. Responsabilidade por dano, perda ou extravio</strong></p>
+<ol style="margin:0 0 10px 20px;text-align:justify">
+  <li><strong>AUTORIZO EXPRESSAMENTE</strong>, nos termos do Art. 462, §1º, da CLT, o desconto em meu salário do valor correspondente ao reparo ou reposição do equipamento, em caso de dano, perda ou extravio decorrente de <strong>dolo</strong> (ato intencional) ou de <strong>culpa comprovada</strong> (mau uso, negligência, imprudência ou imperícia);</li>
+  <li>A caracterização de mau uso será apurada pela empresa mediante análise técnica do equipamento e das circunstâncias, garantido ao colaborador o direito de apresentar sua versão dos fatos antes de qualquer desconto;</li>
+  <li>O <strong>desgaste natural</strong> pelo uso regular e os defeitos de fabricação NÃO geram desconto;</li>
+  <li>O valor a ressarcir será o do conserto ou, se inviável, o valor de mercado do bem, podendo ser <strong>parcelado</strong> de forma que cada parcela não ultrapasse 30% (trinta por cento) do meu salário-base mensal;</li>
+  <li>Em caso de rescisão contratual antes da quitação, autorizo a compensação do saldo nas verbas rescisórias, observados os limites legais.</li>
+</ol>
+<p style="margin-bottom:6px"><strong>3. Disposições gerais</strong></p>
+<ol style="margin:0 0 10px 20px;text-align:justify">
+  <li>Este termo abrange também os equipamentos que eu vier a retirar futuramente no almoxarifado, cujas retiradas e devoluções ficam registradas no sistema da empresa;</li>
+  <li>Declaro ter recebido orientação sobre o uso correto dos equipamentos e estar ciente de que o descumprimento deste termo poderá acarretar as sanções disciplinares previstas em lei (advertência, suspensão e, conforme a gravidade, justa causa — Art. 482 da CLT);</li>
+  <li>Este termo vigora por todo o período do contrato de trabalho.</li>
 </ol>
 <p style="margin-top:10px">{{docLocal}}, {{docData}}.</p>
 `;
@@ -1261,13 +1303,22 @@ const SEED_ADESAO_PLANO_SAUDE = `
 <p style="margin-top:20px">{{docLocal}}, {{docData}}.</p>
 `;
 
+// Rev. 4981 — Declaração unificada (Lei 7.619/87): colaborador assinala SIM ou NÃO.
 const SEED_ADESAO_VT = `
-<p style="margin-bottom:12px;text-align:justify">Eu, <strong>{{empNome}}</strong>, CPF <strong>{{empCpf}}</strong>, nos termos da Lei 7.418/85 e do Decreto 95.247/87, declaro que OPTO pelo recebimento de vale-transporte:</p>
+<p style="text-align:left;margin-bottom:14px">Lei 7.619/87</p>
 <table style="width:100%;border-collapse:collapse;margin:10px 0" border="1" cellpadding="6">
-<tr><td><strong>Linhas/percurso</strong></td><td>{{linhas}}</td></tr>
-<tr><td><strong>Valor diário</strong></td><td>{{valorDia}}</td></tr>
+<tr><td style="width:28%;text-align:left"><strong>EMPRESA</strong></td><td style="text-align:left">{{empresaRazaoSocial}}</td></tr>
+<tr><td style="text-align:left"><strong>ENDEREÇO</strong></td><td style="text-align:left">{{empresaEndereco}}</td></tr>
+<tr><td style="text-align:left"><strong>COLABORADOR</strong></td><td style="text-align:left">{{empNome}}</td></tr>
+<tr><td style="text-align:left"><strong>FUNÇÃO</strong></td><td style="text-align:left">{{empFuncao}}</td></tr>
+<tr><td style="text-align:left"><strong>ENDEREÇO</strong></td><td style="text-align:left">{{empEndereco}}</td></tr>
 </table>
-<p style="margin-top:10px;text-align:justify">AUTORIZO o desconto de até 6% (seis por cento) do meu salário-base, na forma da lei. Comprometo-me a utilizar o benefício exclusivamente para deslocamento residência-trabalho e a comunicar qualquer alteração de endereço ou percurso, ciente de que declaração falsa constitui falta grave.</p>
+<p style="margin-top:14px;text-align:justify"><strong>1)</strong> O Vale Transporte (excedente a 6,00% do salário mensal) é um direito do trabalhador. Interessa-lhe usufruí-lo?</p>
+<p style="margin:14px 0;text-align:center;font-size:12pt"><span style="display:inline-block;border:1.5px solid #000;width:18px;height:18px;vertical-align:middle;margin-right:6px"></span><strong>SIM</strong>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="display:inline-block;border:1.5px solid #000;width:18px;height:18px;vertical-align:middle;margin-right:6px"></span><strong>NÃO</strong></p>
+<p style="margin-top:10px;text-align:justify"><strong>2)</strong> A presente declaração será renovada anualmente ou sempre que houver alteração de endereço residencial, ou alteração no meio de transporte utilizado, sob pena de suspensão do benefício, até o cumprimento da exigência.</p>
+<p style="margin-top:10px;text-align:justify"><strong>3)</strong> O beneficiário compromete-se a utilizar o Vale Transporte exclusivamente ao efetivo deslocamento Residência-Trabalho e vice-versa.</p>
+<p style="margin-top:10px;text-align:justify"><strong>4)</strong> A declaração falsa ou uso indevido do benefício, caracteriza a Rescisão do Contrato Individual de Trabalho por justa causa, ato de improbidade, conforme a CLT, artigo 482.</p>
+<p style="margin-top:14px;text-align:justify">Declaro serem verdadeiras as informações acima e estou ciente que qualquer alteração com relação às mesmas, devo comunicar prontamente, sob pena de estar incorrendo em falta grave.</p>
 <p style="margin-top:20px">{{docLocal}}, {{docData}}.</p>
 `;
 
@@ -1278,9 +1329,20 @@ const SEED_RECUSA_VT = `
 <p style="margin-top:20px">{{docLocal}}, {{docData}}.</p>
 `;
 
+// Rev. 4982 — itens em lista + inciso (iv) do subsídio de 95% (pedido do user)
 const SEED_ADESAO_VA = `
-<p style="margin-bottom:12px;text-align:justify">Eu, <strong>{{empNome}}</strong>, CPF <strong>{{empCpf}}</strong>, declaro minha ADESÃO ao vale-alimentação/refeição oferecido por <strong>{{empresaRazaoSocial}}</strong> no âmbito do PAT — Programa de Alimentação do Trabalhador, no valor mensal de <strong>{{valorMensal}}</strong>.</p>
-<p style="margin-top:10px;text-align:justify">Estou ciente de que: (i) o benefício não integra o salário para nenhum efeito (art. 457, §2º, CLT); (ii) faltas não justificadas geram desconto proporcional do benefício, conforme política interna; (iii) o crédito é pessoal e intransferível.</p>
+<p style="margin-bottom:12px;text-align:justify">Eu, <strong>{{empNome}}</strong>, CPF <strong>{{empCpf}}</strong>, declaro minha ADESÃO ao vale-alimentação/refeição oferecido por <strong>{{empresaRazaoSocial}}</strong> no âmbito do PAT — Programa de Alimentação do Trabalhador, no valor mensal total de <strong>{{valorMensal}}</strong>, composto por:</p>
+<table style="width:100%;border-collapse:collapse;margin:10px 0" border="1" cellpadding="6">
+<tr><td><strong>Vale-alimentação</strong></td><td style="text-align:right">{{vaValeAlimentacao}}</td></tr>
+<tr><td><strong>Café da manhã (valor diário)</strong></td><td style="text-align:right">{{vaCafeManha}}</td></tr>
+<tr><td><strong>Lanche da tarde (valor diário)</strong></td><td style="text-align:right">{{vaLancheTarde}}</td></tr>
+<tr><td><strong>Total mensal</strong></td><td style="text-align:right"><strong>{{valorMensal}}</strong></td></tr>
+</table>
+<p style="margin-top:12px;text-align:justify">Estou ciente de que:</p>
+<p style="margin:6px 0 0 20px;text-align:justify">(i) o benefício não integra o salário para nenhum efeito (art. 457, §2º, CLT);</p>
+<p style="margin:6px 0 0 20px;text-align:justify">(ii) faltas não justificadas geram desconto proporcional do benefício, conforme política interna;</p>
+<p style="margin:6px 0 0 20px;text-align:justify">(iii) o crédito é pessoal e intransferível;</p>
+<p style="margin:6px 0 0 20px;text-align:justify">(iv) a empresa é obrigada a subsidiar 95% (noventa e cinco por cento) do valor total.</p>
 <p style="margin-top:20px">{{docLocal}}, {{docData}}.</p>
 `;
 
@@ -1295,9 +1357,53 @@ const SEED_ADESAO_SEGURO_VIDA = `
 <p style="margin-top:20px">{{docLocal}}, {{docData}}.</p>
 `;
 
+// ── Rev. 5107 — Termo de Adesão ao Programa de Prêmio por Desempenho em Compras ──
+const SEED_TERMO_ADESAO_PREMIO = `
+<div style="border-bottom:3px solid #0f172a;padding-bottom:8px;margin-bottom:14px;text-align:center">
+  <h1 style="font-size:15px;font-weight:bold;margin:0 0 2px;color:#0f172a">TERMO DE ADESÃO — PROGRAMA DE PRÊMIO POR DESEMPENHO EM COMPRAS</h1>
+  <p style="color:#64748b;font-size:11px;margin:0">Regulamento versão {{versaoRegra}} · {{docLocal}}, {{docData}}</p>
+</div>
+
+<div style="border:1px solid #e2e8f0;border-radius:6px;padding:8px 12px;margin:0 0 10px;background:#f8fafc">
+  <p style="margin:2px 0"><b>EMPREGADORA:</b> {{empresaRazaoSocial}}, CNPJ {{empresaCnpj}}, com sede em {{empresaEndereco}}.</p>
+  <p style="margin:2px 0"><b>PARTICIPANTE:</b> {{empNome}}, CPF {{empCpf}}, função {{empFuncao}}.</p>
+</div>
+
+<h2 style="font-size:13px;font-weight:bold;margin:16px 0 4px;border-left:4px solid #eab308;padding-left:8px;color:#0f172a">Cláusula 1ª — Natureza jurídica</h2>
+<p style="margin:4px 0;text-align:justify;line-height:1.55">O programa institui <b>PRÊMIO por desempenho superior ao ordinariamente esperado</b>, por liberalidade da EMPREGADORA, nos termos do art. 457, §§ 2º e 4º, da CLT. O prêmio <b>não constitui salário</b>, não integra a remuneração para nenhum efeito e não gera habitualidade nem reflexos em férias, 13º, FGTS, INSS ou verbas rescisórias.</p>
+
+<h2 style="font-size:13px;font-weight:bold;margin:16px 0 4px;border-left:4px solid #eab308;padding-left:8px;color:#0f172a">Cláusula 2ª — Base de cálculo e apuração por projeto</h2>
+<p style="margin:4px 0;text-align:justify;line-height:1.55">O prêmio é apurado <b>por obra (projeto)</b> sobre o saving global validado (Meta do orçamento − Total comprado em OCs entregues), somente quando o saving da obra atingir o gatilho mínimo de {{gatilhoMin}}% da meta. O percentual de prêmio é <b>escalonado e progressivo por faixas de economia</b>: cada fatia do saving paga o percentual da sua faixa, conforme a tabela vigente: {{faixasTexto}}. Todo crédito é computado no <b>login que emitiu a Ordem de Compra</b>, inclusive em atuação como comprador suplente, e o valor da obra é dividido entre os compradores proporcionalmente à economia gerada por cada um.</p>
+
+<h2 style="font-size:13px;font-weight:bold;margin:16px 0 4px;border-left:4px solid #eab308;padding-left:8px;color:#0f172a">Cláusula 3ª — Scorecard de KPIs (fator de desempenho)</h2>
+<p style="margin:4px 0;text-align:justify;line-height:1.55">O valor apurado é multiplicado pela nota do scorecard abaixo (0 a 100%), medida individualmente por login:</p>
+{{kpisTabela}}
+
+<h2 style="font-size:13px;font-weight:bold;margin:16px 0 4px;border-left:4px solid #eab308;padding-left:8px;color:#0f172a">Cláusula 4ª — Pagamento: prazo e condições</h2>
+<p style="margin:4px 0;text-align:justify;line-height:1.55">O direito ao prêmio <b>somente se constitui no apuramento final da obra</b>, assim entendido o encerramento do projeto com a <b>entrega de todas as pendências e o aceite final do cliente</b>. O valor de cada participante é <b>proporcional à economia gerada pelo seu login</b> (Cláusula 2ª), multiplicado pela sua nota individual no scorecard de KPIs. Valores exibidos em painéis, relatórios ou provisões durante a execução são <b>mera expectativa</b>, não configurando direito adquirido, verba devida ou promessa de pagamento.</p>
+<div style="border:1px solid #fcd34d;background:#fffbeb;border-radius:6px;padding:8px 12px;margin:8px 0">
+  <p style="margin:2px 0;font-weight:bold;color:#92400e">📅 Quando o prêmio é pago</p>
+  <p style="margin:2px 0;text-align:justify;line-height:1.55"><b>1.</b> A obra é encerrada: todas as pendências entregues e aceite final do cliente registrado.</p>
+  <p style="margin:2px 0;text-align:justify;line-height:1.55"><b>2.</b> O cliente libera a <b>retenção final da obra</b> — retenção contratual de garantia (usualmente 5% do valor total) retida até a quitação de todas as pendências.</p>
+  <p style="margin:2px 0;text-align:justify;line-height:1.55"><b>3.</b> O pagamento do prêmio ocorre em <b>até 30 (trinta) dias úteis</b> contados dessa liberação.</p>
+</div>
+<p style="margin:4px 0;text-align:justify;line-height:1.55">Antecipações são liberalidade excepcional, limitadas a {{antecMax}}% do provisionado, autorizadas exclusivamente pelo Administrador Master, e serão descontadas do valor final; se a apuração final resultar menor que o antecipado, o excedente será compensado na forma da lei.</p>
+
+<h2 style="font-size:13px;font-weight:bold;margin:16px 0 4px;border-left:4px solid #eab308;padding-left:8px;color:#0f172a">Cláusula 5ª — Desligamento</h2>
+<p style="margin:4px 0;text-align:justify;line-height:1.55">(a) Dispensa por <b>justa causa</b>: perda integral do prêmio ainda não pago. (b) Pedido de demissão ou dispensa sem justa causa: o PARTICIPANTE recebe apenas o <b>proporcional ao que já estiver apurado e validado</b> até a data do desligamento, pago no ciclo normal (encerramento da obra), nada sendo devido sobre projeções ou obras não fechadas, pois o direito só nasce com a apuração final (Cláusula 4ª).</p>
+
+<h2 style="font-size:13px;font-weight:bold;margin:16px 0 4px;border-left:4px solid #eab308;padding-left:8px;color:#0f172a">Cláusula 6ª — Vigência e alterações</h2>
+<p style="margin:4px 0;text-align:justify;line-height:1.55">O programa é por prazo indeterminado, podendo ser alterado ou extinto pela EMPREGADORA a qualquer tempo, respeitados os valores já apurados e validados. Toda alteração gera nova versão do regulamento, registrada com autor, data e histórico no sistema.</p>
+
+<h2 style="font-size:13px;font-weight:bold;margin:16px 0 4px;border-left:4px solid #eab308;padding-left:8px;color:#0f172a">Declaração de ciência e adesão</h2>
+<p style="border:1px solid #e2e8f0;border-radius:6px;padding:8px 12px;margin:6px 0;text-align:justify;line-height:1.55;background:#f8fafc">Declaro que li e compreendi integralmente o regulamento acima, aderindo voluntariamente ao programa mediante o aceite <b>"Estou ciente de tudo"</b> e minha assinatura eletrônica. Estou ciente de que o prêmio é liberalidade condicionada a desempenho e apuração final por projeto, <b>não integra meu salário</b> e que os valores provisionados constituem mera expectativa até o fechamento de cada obra. A habilitação para participar do ranking e do programa só se completa após a assinatura do sócio administrador.</p>
+`;
+
 export const SEED_BODIES: Record<DocumentTemplateTipo, string> = {
   // RH
   contrato_experiencia:   SEED_CONTRATO_EXPERIENCIA.trim(),
+  // Compras (Rev. 5107)
+  termo_adesao_premio:    SEED_TERMO_ADESAO_PREMIO.trim(),
   termo_responsabilidade: SEED_TERMO_RESPONSABILIDADE.trim(),
   comunicado_interno:     SEED_COMUNICADO_INTERNO.trim(),
   advertencia:            SEED_ADVERTENCIA.trim(),
@@ -1346,14 +1452,13 @@ export const RH_COLAB_DOCS: { tipo: DocumentTemplateTipo; obrigatorio: boolean }
   { tipo: "codigo_etica",            obrigatorio: true },
   { tipo: "termo_lgpd",              obrigatorio: true },
   { tipo: "termo_confidencialidade", obrigatorio: false },
-  { tipo: "termo_equipamentos",      obrigatorio: false },
+  { tipo: "termo_equipamentos",      obrigatorio: true },
   { tipo: "acordo_banco_horas",      obrigatorio: false },
   { tipo: "acordo_compensacao",      obrigatorio: false },
   // Rev. 4672 — Fases 2/3
   { tipo: "contrato_trabalho_clt",   obrigatorio: false },
   { tipo: "adesao_plano_saude",      obrigatorio: false },
   { tipo: "adesao_vt",               obrigatorio: false },
-  { tipo: "recusa_vt",               obrigatorio: false },
   { tipo: "adesao_va",               obrigatorio: false },
   { tipo: "adesao_seguro_vida",      obrigatorio: false },
 ];
@@ -1414,13 +1519,6 @@ export const RH_DOC_CAMPOS_EXTRAS: Partial<Record<DocumentTemplateTipo, CampoExt
     { chave: "operadora",      rotulo: "Operadora", obrigatorio: true },
     { chave: "plano",          rotulo: "Plano", obrigatorio: true },
     { chave: "coparticipacao", rotulo: "Coparticipação/desconto mensal" },
-  ],
-  adesao_vt: [
-    { chave: "linhas",   rotulo: "Linhas/percurso", obrigatorio: true },
-    { chave: "valorDia", rotulo: "Valor diário (R$)" },
-  ],
-  recusa_vt: [
-    { chave: "motivo", rotulo: "Motivo da recusa", placeholder: "Utilizo veículo próprio", obrigatorio: true },
   ],
   adesao_va: [
     { chave: "valorMensal", rotulo: "Valor mensal (R$)" },

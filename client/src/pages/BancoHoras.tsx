@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, Fragment } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -41,6 +41,504 @@ const MESES_CURTOS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "S
 const MESES_LONGOS = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
 type TabView = "saldos" | "extrato" | "alertas" | "configuracao";
+
+// Rev. 5045 — datas de lançamento SEM passar por new Date().toLocaleDateString:
+// "2026-05-15T00:00:00Z" em BRT vira 14/05 (UTC−3). Extrai o Y-M-D literal.
+function isoDataKey(v: any): string {
+  const s = v instanceof Date ? v.toISOString() : String(v);
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  const d = new Date(v);
+  return isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
+}
+function dataBRSegura(v: any): string {
+  const k = isoDataKey(v);
+  return k ? `${k.slice(8, 10)}/${k.slice(5, 7)}/${k.slice(0, 4)}` : "—";
+}
+
+// Rev. 5141 — Espelho de Ponto embutido no Extrato do Banco de Horas: mostra o
+// dia a dia do período (batidas, trabalhado e a diferença que gerou crédito ou
+// débito), reutilizando horasExtras.getEspelhoPontoRange (mesma fonte da tela
+// Espelho de Ponto). Pedido do usuário 17/08/2026: "quero que apareça as
+// informações do espelho de ponto dele" — sem isso não ficava claro quais dias
+// geraram horas de desconto ou de crédito.
+function parseHHMM(v: any): number {
+  const m = /^(\d+):(\d+)/.exec(String(v || ""));
+  return m ? Number(m[1]) * 60 + Number(m[2]) : 0;
+}
+const PT_DOW = ["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SÁB"];
+function expectedMinsJornada(jornadaObj: any, dateStr: string, fallbackMins: number): number {
+  const keys = ["dom", "seg", "ter", "qua", "qui", "sex", "sab"];
+  const j = jornadaObj?.[keys[new Date(dateStr + "T12:00:00Z").getUTCDay()]];
+  if (!jornadaObj) return fallbackMins;
+  if (!j?.entrada || !j?.saida) return 0; // dia não útil pela jornada
+  const toM = (t: string) => { const [h, m] = String(t).split(":").map(Number); return (h || 0) * 60 + (m || 0); };
+  let exp = toM(j.saida) - toM(j.entrada);
+  if (j.intervalo) exp -= toM(j.intervalo);
+  return Math.max(0, exp);
+}
+
+// A Folha usa segunda-feira como início da semana de apuração do DSR. Datas são
+// tratadas ao meio-dia UTC para não deslocarem um dia no fuso BRT.
+function inicioSemanaISO(dateStr: string): string {
+  const d = new Date(`${dateStr}T12:00:00Z`);
+  const dow = d.getUTCDay();
+  d.setUTCDate(d.getUTCDate() - (dow === 0 ? 6 : dow - 1));
+  return d.toISOString().slice(0, 10);
+}
+function adicionarDiasISO(dateStr: string, qtd: number): string {
+  const d = new Date(`${dateStr}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + qtd);
+  return d.toISOString().slice(0, 10);
+}
+
+type FaltasExtratoResumo = {
+  faltasCompletas: number;
+  faltasCompletasMins: number;
+  faltasParciais: number;
+  faltasParciaisMins: number;
+  atrasos: number;
+  atrasosMins: number;
+  dias?: Array<{ data: string; tipo: "falta" | "falta_parcial" | "atraso"; debitadoMins: number }>;
+};
+
+// Rev. 5154 — Composição transparente do saldo: créditos, faltas, DSR e atrasos
+// em colunas distintas, alinhada ao cálculo de fechamento da Folha.
+function ComposicaoBancoHoras({
+  lancamentos,
+  faltas,
+}: {
+  lancamentos: any[];
+  faltas?: FaltasExtratoResumo;
+}) {
+  const linhas = useMemo(() => {
+    type Linha = {
+      semana: string; creditoBase: number; faltasQtd: number; faltasCompletas: number;
+      faltasParciais: number; faltasMins: number; dsrMins: number; atrasosMins: number;
+    };
+    const mapa = new Map<string, Linha>();
+    const garantir = (semana: string) => {
+      let linha = mapa.get(semana);
+      if (!linha) {
+        linha = { semana, creditoBase: 0, faltasQtd: 0, faltasCompletas: 0, faltasParciais: 0, faltasMins: 0, dsrMins: 0, atrasosMins: 0 };
+        mapa.set(semana, linha);
+      }
+      return linha;
+    };
+
+    // A coluna exibe a base de cada crédito; o total aplica o multiplicador BH de 1,5.
+    for (const lancamento of lancamentos) {
+      if (lancamento.tipo !== "credito") continue;
+      const data = isoDataKey(lancamento.data);
+      if (!data) continue;
+      garantir(inicioSemanaISO(data)).creditoBase += Number(lancamento.minutosBase ?? lancamento.minutos ?? 0);
+    }
+
+    // timecard_daily é a fonte processada. Falta parcial é discriminada no contador
+    // e entra no débito de faltas, mas nunca gera DSR.
+    for (const dia of faltas?.dias || []) {
+      const semana = inicioSemanaISO(dia.data);
+      const linha = garantir(semana);
+      if (dia.tipo === "falta") {
+        linha.faltasQtd++;
+        linha.faltasCompletas++;
+        linha.faltasMins += dia.debitadoMins;
+        // Regra da Folha: uma perda de DSR (7h20) por semana com falta completa.
+        linha.dsrMins = 440;
+      } else if (dia.tipo === "falta_parcial") {
+        linha.faltasQtd++;
+        linha.faltasParciais++;
+        linha.faltasMins += dia.debitadoMins;
+      } else {
+        linha.atrasosMins += dia.debitadoMins;
+      }
+    }
+    return Array.from(mapa.values()).sort((a, b) => a.semana.localeCompare(b.semana));
+  }, [lancamentos, faltas]);
+
+  const totais = useMemo(() => linhas.reduce((acc, linha) => ({
+    creditoBase: acc.creditoBase + linha.creditoBase,
+    faltasQtd: acc.faltasQtd + linha.faltasQtd,
+    faltasMins: acc.faltasMins + linha.faltasMins,
+    dsrMins: acc.dsrMins + linha.dsrMins,
+    atrasosMins: acc.atrasosMins + linha.atrasosMins,
+  }), { creditoBase: 0, faltasQtd: 0, faltasMins: 0, dsrMins: 0, atrasosMins: 0 }), [linhas]);
+  const acrescimo = Math.round(totais.creditoBase * 0.5);
+  const creditoComMultiplicador = totais.creditoBase + acrescimo;
+  const saldoComposicao = creditoComMultiplicador - totais.faltasMins - totais.dsrMins - totais.atrasosMins;
+
+  return (
+    <div className="mb-6 rounded-lg border overflow-hidden print:break-inside-avoid">
+      <div className="px-3 py-2.5 border-b bg-slate-50">
+        <p className="text-sm font-semibold text-slate-800">Composição do Banco de Horas</p>
+        <p className="text-[11px] text-muted-foreground">
+          Créditos lançados × 1,5; faltas e atrasos vêm do fechamento de ponto. DSR: 7h20 por semana com falta completa.
+        </p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[860px] text-xs border-collapse">
+          <thead>
+            <tr className="bg-slate-100 text-[10px] uppercase tracking-wide text-slate-600">
+              <th className="px-3 py-2 text-left font-semibold">Semana</th>
+              <th className="px-3 py-2 text-right font-semibold text-blue-700">Horas de Crédito (+)</th>
+              <th className="px-3 py-2 text-center font-semibold">Faltas (qtd.)</th>
+              <th className="px-3 py-2 text-right font-semibold text-red-700">Horas de Débito (Faltas)</th>
+              <th className="px-3 py-2 text-right font-semibold text-violet-700">Horas de Débito (−) DSR</th>
+              <th className="px-3 py-2 text-right font-semibold text-amber-700">Horas de Débito (−) Atrasos</th>
+            </tr>
+          </thead>
+          <tbody>
+            {linhas.length === 0 ? (
+              <tr><td colSpan={6} className="px-3 py-5 text-center text-muted-foreground">Nenhum crédito, falta ou atraso processado neste período.</td></tr>
+            ) : linhas.map((linha, index) => (
+              <tr key={linha.semana} className={`border-t ${index % 2 === 0 ? "bg-white" : "bg-slate-50/40"}`}>
+                <td className="px-3 py-2 font-medium text-slate-600">
+                  {dataBRSegura(linha.semana).slice(0, 5)} a {dataBRSegura(adicionarDiasISO(linha.semana, 6)).slice(0, 5)}
+                </td>
+                <td className="px-3 py-2 text-right font-mono font-semibold text-blue-700">
+                  {linha.creditoBase > 0 ? `+${minsToHHMM(linha.creditoBase)}` : "—"}
+                </td>
+                <td className="px-3 py-2 text-center font-semibold text-slate-700">
+                  {linha.faltasQtd || "—"}
+                  {linha.faltasParciais > 0 && <span className="ml-1 text-[10px] font-normal text-slate-400">({linha.faltasParciais} parcial)</span>}
+                </td>
+                <td className="px-3 py-2 text-right font-mono font-semibold text-red-600">
+                  {linha.faltasMins > 0 ? `−${minsToHHMM(linha.faltasMins)}` : "—"}
+                </td>
+                <td className="px-3 py-2 text-right font-mono font-semibold text-violet-700">
+                  {linha.dsrMins > 0 ? `−${minsToHHMM(linha.dsrMins)}` : "—"}
+                </td>
+                <td className="px-3 py-2 text-right font-mono font-semibold text-amber-700">
+                  {linha.atrasosMins > 0 ? `−${minsToHHMM(linha.atrasosMins)}` : "—"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr className="border-t-2 border-slate-300 bg-slate-50 font-semibold">
+              <td className="px-3 py-2 text-slate-700">Subtotal</td>
+              <td className="px-3 py-2 text-right font-mono text-blue-700">+{minsToHHMM(totais.creditoBase)}</td>
+              <td className="px-3 py-2 text-center text-slate-700">{totais.faltasQtd || "—"}</td>
+              <td className="px-3 py-2 text-right font-mono text-red-600">−{minsToHHMM(totais.faltasMins)}</td>
+              <td className="px-3 py-2 text-right font-mono text-violet-700">−{minsToHHMM(totais.dsrMins)}</td>
+              <td className="px-3 py-2 text-right font-mono text-amber-700">−{minsToHHMM(totais.atrasosMins)}</td>
+            </tr>
+            <tr className="border-t bg-blue-50/40">
+              <td className="px-3 py-1.5 text-blue-700 font-semibold">Multiplicador BH</td>
+              <td className="px-3 py-1.5 text-right font-mono font-bold text-blue-700">1,5 <span className="text-[10px] font-normal">(+{minsToHHMM(acrescimo)})</span></td>
+              <td colSpan={4} />
+            </tr>
+            <tr className="border-t bg-slate-100 font-bold">
+              <td className="px-3 py-2 text-slate-800">Total</td>
+              <td className="px-3 py-2 text-right font-mono text-emerald-700">+{minsToHHMM(creditoComMultiplicador)}</td>
+              <td className="px-3 py-2 text-center text-slate-500">{totais.faltasQtd || "—"}</td>
+              <td className="px-3 py-2 text-right font-mono text-red-700">−{minsToHHMM(totais.faltasMins)}</td>
+              <td className="px-3 py-2 text-right font-mono text-violet-700">−{minsToHHMM(totais.dsrMins)}</td>
+              <td className="px-3 py-2 text-right font-mono text-amber-700">−{minsToHHMM(totais.atrasosMins)}</td>
+            </tr>
+            <tr className="border-t-2 border-slate-300 bg-white">
+              <td className="px-3 py-2.5 font-bold text-slate-800">Saldo do BH no período</td>
+              <td colSpan={5} className={`px-3 py-2.5 text-right font-mono text-base font-bold ${saldoComposicao < 0 ? "text-red-700" : "text-emerald-700"}`}>
+                {minsToHHMMSigned(saldoComposicao)}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function ExtratoEspelhoPonto({ employeeId, companyId, dataInicio, dataFim }: { employeeId: number; companyId: number; dataInicio: string; dataFim: string }) {
+  const [aberto, setAberto] = useState(true);
+  const q = trpc.horasExtras.getEspelhoPontoRange.useQuery(
+    { companyId, employeeId, dataInicio, dataFim },
+    { enabled: employeeId > 0 && companyId > 0 && !!dataInicio && !!dataFim }
+  );
+  // Rev. 5153 — faltas/atrasos do período via timecard_daily (fonte processada).
+  const faltasQ = (trpc as any).horasExtras.getFaltasDoExtrato.useQuery(
+    { employeeId, companyId, dataInicio, dataFim },
+    { enabled: employeeId > 0 && companyId > 0 && !!dataInicio && !!dataFim, staleTime: 2 * 60 * 1000 }
+  );
+  const faltas: { faltasCompletas: number; faltasCompletasMins: number; faltasParciais: number; faltasParciaisMins: number; atrasos: number; atrasosMins: number; dias?: Array<{ data: string; tipo: "falta" | "falta_parcial" | "atraso"; debitadoMins: number }> } | undefined = faltasQ.data;
+  const faltaDiaMap = useMemo(
+    () => new Map((faltas?.dias || []).map((dia) => [dia.data, dia])),
+    [faltas]
+  );
+  const feriadosQ = trpc.feriados.listarPeriodo.useQuery(
+    { companyId, dataInicio, dataFim },
+    { enabled: companyId > 0 && !!dataInicio && !!dataFim, staleTime: 5 * 60 * 1000 }
+  );
+  const records: Record<string, any> = (q.data?.records as any) || {};
+  const emp: any = q.data?.employee;
+  const feriasSet = useMemo(() => new Set<string>(((q.data as any)?.feriasDates as string[]) || []), [q.data]);
+  const atestadoSet = useMemo(() => new Set<string>([
+    ...((((q.data as any)?.atestadoDates as string[]) || [])),
+    // atestado de horas só abona se não houve batida — tratado abaixo
+  ]), [q.data]);
+  const atestadoHorasSet = useMemo(() => new Set<string>((((q.data as any)?.atestadoHorasDates as string[]) || [])), [q.data]);
+  const feriadosSet = useMemo(() => new Set<string>((feriadosQ.data as string[]) || []), [feriadosQ.data]);
+  const jornadaObj = useMemo(() => {
+    try { return emp?.jornadaTrabalho ? (typeof emp.jornadaTrabalho === "string" ? JSON.parse(emp.jornadaTrabalho) : emp.jornadaTrabalho) : null; } catch { return null; }
+  }, [emp]);
+
+  const dias = useMemo(() => {
+    const out: string[] = [];
+    const end = new Date(dataFim + "T12:00:00Z");
+    const cur = new Date(dataInicio + "T12:00:00Z");
+    let guard = 0;
+    while (cur <= end && guard++ < 400) { out.push(cur.toISOString().slice(0, 10)); cur.setUTCDate(cur.getUTCDate() + 1); }
+    return out;
+  }, [dataInicio, dataFim]);
+
+  if (q.isLoading) return (
+    <div className="flex items-center gap-1.5 text-sm text-muted-foreground py-3">
+      <RefreshCw className="h-4 w-4 animate-spin" /> Carregando espelho de ponto...
+    </div>
+  );
+  if (q.error || !emp) return null;
+
+  const hoje = new Date().toISOString().slice(0, 10);
+  type Linha = { data: string; dow: number; batidas: string[]; trabMin: number; credMin: number; debMin: number; badge: { label: string; cls: string } | null; obra?: string; muted?: boolean };
+  const linhas: Linha[] = dias.map((d) => {
+    const rec = records[d];
+    const dow = new Date(d + "T12:00:00Z").getUTCDay();
+    const batidas = rec ? [rec.entrada1, rec.saida1, rec.entrada2, rec.saida2, rec.entrada3, rec.saida3].filter(Boolean) : [];
+    const trabMin = parseHHMM(rec?.horasTrabalhadas);
+    const noBatidas = trabMin <= 0;
+    const base: Linha = { data: d, dow, batidas, trabMin, credMin: 0, debMin: 0, badge: null, obra: rec?.obraNome || "" };
+    // Rev. 5141b — classificação alinhada ao EspelhoPonto (review): desligado,
+    // tipoDia BH, Art. 62, apontamento justificado e HE de domingo tratados.
+    const desligadoDesde = emp?.status === "Desligado" && emp?.dataDesligamentoEfetiva ? String(emp.dataDesligamentoEfetiva).slice(0, 10) : null;
+    if (desligadoDesde && d > desligadoDesde) return { ...base, badge: { label: "Desligado", cls: "bg-gray-200 text-gray-500" }, muted: true };
+    if (rec?.tipoDia === "bh") return { ...base, badge: { label: "BH", cls: "bg-blue-100 text-blue-700" }, muted: true };
+    if (rec?.tipoDia === "feriado" || (feriadosSet.has(d) && noBatidas)) return { ...base, badge: { label: "Feriado", cls: "bg-orange-100 text-orange-700" }, muted: true };
+    if (rec?.tipoDia === "atestado" || atestadoSet.has(d) || (atestadoHorasSet.has(d) && noBatidas)) return { ...base, badge: { label: "Atestado", cls: "bg-purple-100 text-purple-700" }, muted: true };
+    if (feriasSet.has(d)) return { ...base, badge: { label: "Férias", cls: "bg-teal-100 text-teal-700" }, muted: true };
+    // Rev. 5153 — quando há fechamento processado, ele é a fonte soberana da
+    // ocorrência e do débito exibido na linha, mantendo a tabela igual ao card.
+    const faltaProcessada = faltaDiaMap.get(d);
+    if (faltaProcessada?.tipo === "falta") {
+      return { ...base, debMin: faltaProcessada.debitadoMins, badge: { label: "Falta", cls: "bg-red-100 text-red-700" } };
+    }
+    if (faltaProcessada?.tipo === "falta_parcial") {
+      return { ...base, debMin: faltaProcessada.debitadoMins, badge: { label: "Falta parcial", cls: "bg-red-100 text-red-700" } };
+    }
+    if (faltaProcessada?.tipo === "atraso") {
+      return { ...base, debMin: faltaProcessada.debitadoMins, badge: { label: "Atraso", cls: "bg-amber-100 text-amber-700" } };
+    }
+    const heMin = parseHHMM(rec?.horasExtras);
+    const atrMin = parseHHMM(rec?.atrasos) || Number(rec?.deficitMins || 0);
+    // HE de domingo/sábado ANTES de silenciar o dia (domingo trabalhado é HE 100%).
+    if (heMin > 0) return { ...base, credMin: heMin, badge: { label: "H. Extra", cls: "bg-blue-100 text-blue-700" } };
+    if (dow === 0) return { ...base, badge: null, muted: true };
+    if (dow === 6 && noBatidas) return { ...base, badge: { label: "Sábado", cls: "bg-slate-100 text-slate-500" }, muted: true };
+    if (d > hoje) return { ...base, badge: { label: "Pendente", cls: "bg-indigo-100 text-indigo-600" }, muted: true };
+    // Art. 62 CLT (cargo de confiança) — dia útil sem batida não é falta.
+    const ccDesde = emp?.cargoConfiancaDesde ? String(emp.cargoConfiancaDesde).slice(0, 10) : null;
+    const isCC = !!emp?.cargoConfianca && (!ccDesde || d >= ccDesde);
+    if (noBatidas) {
+      if (isCC) return { ...base, badge: { label: "Art. 62 CLT", cls: "bg-indigo-100 text-indigo-700" }, muted: true };
+      if ((rec?.fonte === "apontamento" || rec?.fonte === "dixi+apontamento") && rec?.justificativa) return { ...base, badge: { label: "Apontamento", cls: "bg-amber-100 text-amber-700" }, muted: true };
+      // Falta de dia cheio → debita a JORNADA REAL do dia (CCT, Rev. 5140).
+      // Sem jornada JSON válida, fallback 8h (jornada legal padrão).
+      const exp = expectedMinsJornada(jornadaObj, d, 8 * 60);
+      if (exp <= 0) return { ...base, badge: null, muted: true };
+      return { ...base, debMin: exp, badge: { label: "Falta", cls: "bg-red-100 text-red-700" } };
+    }
+    if (isCC) return { ...base, badge: { label: "Art. 62 CLT", cls: "bg-indigo-100 text-indigo-700" }, muted: true };
+    if (atrMin > 0) return { ...base, debMin: atrMin, badge: { label: "Atraso", cls: "bg-amber-100 text-amber-700" } };
+    return { ...base, badge: { label: "Normal", cls: "bg-green-100 text-green-700" } };
+  });
+
+  const totCred = linhas.reduce((a, l) => a + l.credMin, 0);
+  const totDeb = linhas.reduce((a, l) => a + l.debMin, 0);
+
+  return (
+    <div className="mb-6">
+      <button type="button" className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2 print:hidden" onClick={() => setAberto(a => !a)}>
+        {aberto ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+        Espelho de Ponto do Período
+        <span className="text-xs font-normal text-muted-foreground">({dataBRSegura(dataInicio)} a {dataBRSegura(dataFim)})</span>
+      </button>
+      {/* Rev. 5153 — mini-resumo de faltas/atrasos do período (fonte: timecard_daily) */}
+      {faltas && (faltas.faltasCompletas + faltas.faltasParciais + faltas.atrasos > 0) && (
+        <div className="flex flex-wrap gap-2 mb-2">
+          {(faltas.faltasCompletas + faltas.faltasParciais) > 0 && (
+            <span className="inline-flex items-center gap-1.5 text-xs bg-red-50 border border-red-200 text-red-700 rounded-full px-2.5 py-1 font-medium">
+              <span className="h-1.5 w-1.5 rounded-full bg-red-500 inline-block shrink-0" />
+              {faltas.faltasCompletas + faltas.faltasParciais} {faltas.faltasCompletas + faltas.faltasParciais === 1 ? "falta" : "faltas"}
+              <span className="font-bold">−{minsToHHMM(faltas.faltasCompletasMins + faltas.faltasParciaisMins)}</span>
+              {faltas.faltasParciais > 0 && faltas.faltasCompletas > 0 && (
+                <span className="opacity-70">({faltas.faltasCompletas}c · {faltas.faltasParciais}p)</span>
+              )}
+            </span>
+          )}
+          {faltas.atrasos > 0 && (
+            <span className="inline-flex items-center gap-1.5 text-xs bg-amber-50 border border-amber-200 text-amber-700 rounded-full px-2.5 py-1 font-medium">
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-500 inline-block shrink-0" />
+              {faltas.atrasos} {faltas.atrasos === 1 ? "atraso" : "atrasos"}
+              <span className="font-bold">−{minsToHHMM(faltas.atrasosMins)}</span>
+            </span>
+          )}
+        </div>
+      )}
+      {aberto && (
+        <div className="rounded-lg border overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs border-collapse">
+              <thead>
+                <tr className="bg-gray-50 text-[10px] text-muted-foreground uppercase tracking-wide">
+                  <th className="px-2 py-1.5 text-left font-semibold">Dia</th>
+                  <th className="px-2 py-1.5 text-left font-semibold">Batidas</th>
+                  <th className="px-2 py-1.5 text-right font-semibold">Trabalhado</th>
+                  <th className="px-2 py-1.5 text-right font-semibold whitespace-nowrap">Crédito / Débito</th>
+                  <th className="px-2 py-1.5 text-left font-semibold">Ocorrência</th>
+                </tr>
+              </thead>
+              <tbody>
+                {linhas.map((l, i) => (
+                  <tr key={l.data} className={`${l.muted ? "text-gray-400" : ""} ${l.debMin > 0 ? "bg-red-50/40" : l.credMin > 0 ? "bg-blue-50/30" : i % 2 === 0 ? "bg-white" : "bg-gray-50/50"}`}>
+                    <td className="px-2 py-1 whitespace-nowrap font-medium">
+                      <span className={`text-[10px] mr-1 ${l.muted ? "" : "text-muted-foreground"}`}>{PT_DOW[l.dow]}</span>
+                      {l.data.slice(8, 10)}/{l.data.slice(5, 7)}
+                    </td>
+                    <td className="px-2 py-1 whitespace-nowrap font-mono">
+                      {l.batidas.length > 0 ? l.batidas.join(" · ") : "—"}
+                      {l.obra ? <span className="ml-2 text-[10px] text-muted-foreground font-sans">{l.obra}</span> : null}
+                    </td>
+                    <td className="px-2 py-1 text-right font-mono">{l.trabMin > 0 ? minsToHHMM(l.trabMin) : "—"}</td>
+                    <td className={`px-2 py-1 text-right font-mono font-bold ${l.credMin > 0 ? "text-blue-700" : l.debMin > 0 ? "text-red-600" : "text-gray-300"}`}>
+                      {l.credMin > 0 ? `+${minsToHHMM(l.credMin)}` : l.debMin > 0 ? `−${minsToHHMM(l.debMin)}` : "—"}
+                    </td>
+                    <td className="px-2 py-1">
+                      {l.badge ? <span className={`text-[10px] font-semibold px-1.5 py-px rounded ${l.badge.cls}`}>{l.badge.label}</span> : null}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="bg-gray-50 border-t font-bold">
+                  <td colSpan={3} className="px-2 py-1.5 text-right text-[11px] uppercase text-muted-foreground">Total do período (ponto)</td>
+                  <td className="px-2 py-1.5 text-right font-mono">
+                    <span className="text-blue-700">+{minsToHHMM(totCred)}</span>
+                    <span className="mx-1 text-gray-300">/</span>
+                    <span className="text-red-600">−{minsToHHMM(totDeb)}</span>
+                  </td>
+                  <td className="px-2 py-1.5" />
+                </tr>
+                {/* Rev. 5153 — faltas e atrasos consolidados no rodapé (fonte: timecard_daily) */}
+                {faltas && (faltas.faltasCompletas + faltas.faltasParciais) > 0 && (
+                  <tr className="bg-red-50/60 border-t border-red-100">
+                    <td colSpan={3} className="px-2 py-1 text-right text-[11px] text-red-600 font-medium">
+                      {faltas.faltasCompletas > 0 && <span>{faltas.faltasCompletas} falta{faltas.faltasCompletas > 1 ? "s" : ""} completa{faltas.faltasCompletas > 1 ? "s" : ""}</span>}
+                      {faltas.faltasCompletas > 0 && faltas.faltasParciais > 0 && <span className="mx-1">·</span>}
+                      {faltas.faltasParciais > 0 && <span>{faltas.faltasParciais} falta{faltas.faltasParciais > 1 ? "s" : ""} parcial{faltas.faltasParciais > 1 ? "is" : ""}</span>}
+                    </td>
+                    <td className="px-2 py-1 text-right font-mono text-sm font-bold text-red-700">
+                      −{minsToHHMM(faltas.faltasCompletasMins + faltas.faltasParciaisMins)}
+                    </td>
+                    <td className="px-2 py-1 text-[10px] text-red-400">timecard</td>
+                  </tr>
+                )}
+                {faltas && faltas.atrasos > 0 && (
+                  <tr className="bg-amber-50/60 border-t border-amber-100">
+                    <td colSpan={3} className="px-2 py-1 text-right text-[11px] text-amber-600 font-medium">
+                      {faltas.atrasos} atraso{faltas.atrasos > 1 ? "s" : ""}
+                    </td>
+                    <td className="px-2 py-1 text-right font-mono text-sm font-bold text-amber-700">
+                      −{minsToHHMM(faltas.atrasosMins)}
+                    </td>
+                    <td className="px-2 py-1 text-[10px] text-amber-400">timecard</td>
+                  </tr>
+                )}
+              </tfoot>
+            </table>
+          </div>
+          <p className="text-[10px] text-muted-foreground px-2 py-1.5 border-t bg-gray-50/50">
+            Fonte: espelho de ponto. Crédito de H. Extra entra no banco quando o período de HE é aprovado; débitos de falta/atraso entram quando a folha da competência é processada — por isso os lançamentos abaixo podem ter datas diferentes dos dias do ponto.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Rev. 5046 — Memória de cálculo do débito de atraso/falta gerado pela folha:
+// mostra dia a dia (falta cheia, falta parcial com déficit real, atraso) como o
+// total do lançamento foi composto. Regra de ouro: valor agregado → memória.
+function DebitoFolhaDiasTable({ employeeId, companyId, competencia }: { employeeId: number; companyId: number; competencia: string }) {
+  const q = trpc.horasExtras.getDebitoFolhaDetalhe.useQuery({ employeeId, companyId, competencia });
+  const dias: any[] = q.data?.dias ?? [];
+  if (q.isLoading) return (
+    <div className="flex items-center gap-1.5 text-xs text-muted-foreground py-2">
+      <RefreshCw className="h-3 w-3 animate-spin" /> Carregando dias...
+    </div>
+  );
+  // Rev. 5141 — erro de query não pode virar "Nenhum dia encontrado" (mascarava
+  // o erro real "date = record" no servidor).
+  if (q.error) return (
+    <p className="text-xs text-red-600 py-1">Erro ao carregar os dias da competência {competencia}. Tente novamente.</p>
+  );
+  if (!dias.length) return (
+    <p className="text-xs text-muted-foreground italic py-1">Nenhum dia de falta/atraso encontrado na competência {competencia}.</p>
+  );
+  const TIPO_LABEL: Record<string, { label: string; cls: string }> = {
+    falta: { label: "Falta (dia cheio)", cls: "bg-red-100 text-red-700" },
+    falta_parcial: { label: "Falta parcial", cls: "bg-amber-100 text-amber-700" },
+    atraso: { label: "Atraso", cls: "bg-orange-100 text-orange-700" },
+  };
+  return (
+    <div className="rounded border border-gray-100 overflow-hidden text-xs mt-1">
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs border-collapse">
+          <thead>
+            <tr className="bg-gray-50 text-[10px] text-muted-foreground uppercase tracking-wide">
+              <th className="px-2 py-1.5 text-left font-semibold">Data</th>
+              <th className="px-2 py-1.5 text-left font-semibold">Ocorrência</th>
+              <th className="px-2 py-1.5 text-left font-semibold">Horários feitos</th>
+              <th className="px-2 py-1.5 text-right font-semibold whitespace-nowrap">Trabalhado</th>
+              <th className="px-2 py-1.5 text-right font-semibold">Jornada</th>
+              <th className="px-2 py-1.5 text-right font-semibold">Debitado</th>
+            </tr>
+          </thead>
+          <tbody>
+            {dias.map((d: any, i: number) => {
+              const dataBR = new Date(d.data + "T12:00:00Z").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", weekday: "short" });
+              const t = TIPO_LABEL[d.tipo] || TIPO_LABEL.atraso;
+              return (
+                <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-gray-50/50"}>
+                  <td className="px-2 py-1.5 whitespace-nowrap font-medium text-gray-700">{dataBR}</td>
+                  <td className="px-2 py-1.5"><span className={`text-[10px] font-semibold px-1.5 py-px rounded ${t.cls}`}>{t.label}</span></td>
+                  <td className="px-2 py-1.5 whitespace-nowrap">
+                    {d.tipo === "falta" ? (
+                      <span className="text-red-600 font-semibold text-[11px]">Sem batidas</span>
+                    ) : (
+                      <span className="font-mono text-[11px] text-gray-700">{d.horarios || "—"}</span>
+                    )}
+                    {d.jornadaPrevista && (
+                      <div className="text-[10px] text-gray-400">prev.: {d.jornadaPrevista}</div>
+                    )}
+                  </td>
+                  <td className="px-2 py-1.5 text-right font-mono">{d.trabalhadoMins > 0 ? minsToHHMM(d.trabalhadoMins) : "—"}</td>
+                  <td className="px-2 py-1.5 text-right font-mono text-gray-500">{d.jornadaMins > 0 ? minsToHHMM(d.jornadaMins) : "—"}</td>
+                  <td className="px-2 py-1.5 text-right font-mono font-bold text-orange-700">−{minsToHHMM(d.debitadoMins)}</td>
+                </tr>
+              );
+            })}
+            <tr className="border-t border-gray-200 bg-orange-50/50">
+              <td colSpan={5} className="px-2 py-1.5 text-right font-semibold text-[10px] uppercase tracking-wide text-muted-foreground">Total debitado</td>
+              <td className="px-2 py-1.5 text-right font-mono font-bold text-orange-700">−{minsToHHMM(q.data?.totalMins || 0)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p className="px-2 py-1 text-[10px] text-muted-foreground bg-gray-50 border-t border-gray-100">
+        Falta (dia cheio) = dia útil sem nenhuma batida. Falta parcial = compareceu e saiu antes: debita só a diferença entre a jornada e o trabalhado. Atraso = minutos além da tolerância.
+      </p>
+    </div>
+  );
+}
 
 function PeriodoDiasTable({ hePeriodId, employeeId }: { hePeriodId: number; employeeId: number }) {
   const q = trpc.horasExtras.memorialCalculo.useQuery({ hePeriodId, employeeId });
@@ -158,11 +656,14 @@ export default function BancoHoras() {
   const [debitDesc, setDebitDesc] = useState("");
 
   const [extratoEmpId, setExtratoEmpId] = useState<number | null>(null);
+  const [extratoBusca, setExtratoBusca] = useState("");
   const [extratoAno, setExtratoAno] = useState(() => new Date().getFullYear());
   const [extratoMesNum, setExtratoMesNum] = useState(() => new Date().getMonth() + 1);
   const extratoMes = `${extratoAno}-${String(extratoMesNum).padStart(2, "0")}`;
   const [extratoPeriodoInicio, setExtratoPeriodoInicio] = useState("");
   const [extratoPeriodoFim, setExtratoPeriodoFim] = useState("");
+  // Rev. 5045 — linhas do extrato expandidas p/ ver o dia a dia do período de HE.
+  const [extratoDiasAbertos, setExtratoDiasAbertos] = useState<Set<number>>(new Set());
   const extratoPeriodoAtivo = !!(extratoPeriodoInicio && extratoPeriodoFim);
 
   // Rev. 3996 — navegador mensal da aba "Saldos" (estilo Folha de Pagamento).
@@ -245,7 +746,9 @@ export default function BancoHoras() {
   // Rev. 3977 — alerta mensal de saldo negativo (débito de atraso/falta) e alerta
   // trimestral de saldo positivo elevado — apenas informativos, SEM auto-payout.
   const alertasSaldoNegativo = trpc.horasExtras.getAlertasSaldoNegativo.useQuery(
-    { companyId },
+    // Rev. 5044 — alerta escopado ao mês visualizado (saldo acumulado até o fim
+    // do mês); admitidos depois do mês não têm lançamentos e ficam fora.
+    { companyId, ano: anoBanco, mes: mesBanco },
     { enabled: canAccess && companyId > 0 }
   );
   const alertasSaldoPositivoTrimestral = trpc.horasExtras.getAlertasSaldoPositivoTrimestral.useQuery(
@@ -260,6 +763,11 @@ export default function BancoHoras() {
   const lancamentosExtrato = trpc.horasExtras.getLancamentos.useQuery(
     { employeeId: extratoEmpId ?? 0, companyId },
     { enabled: !!extratoEmpId && companyId > 0 }
+  );
+  // Rev. 5153 — faltas/atrasos do período (timecard_daily) para o cabeçalho do extrato.
+  const faltasExtrato = (trpc as any).horasExtras.getFaltasDoExtrato.useQuery(
+    { employeeId: extratoEmpId ?? 0, companyId, dataInicio: extratoIni, dataFim: extratoFimPeriodo },
+    { enabled: !!extratoEmpId && companyId > 0 && !!extratoIni && !!extratoFimPeriodo, staleTime: 2 * 60 * 1000 }
   );
 
   const debitarBancoMut = trpc.horasExtras.debitarBanco.useMutation({
@@ -392,15 +900,66 @@ export default function BancoHoras() {
   }, [debitEmpId, saldos]);
 
 
+  // Saldo consistente com o período filtrado do extrato: soma TODOS os lançamentos
+  // com data até o FIM do período/mês selecionado (sinal derivado do tipo, como na
+  // tabela de Saldo Acumulado). Antes o cabeçalho mostrava o saldo ATUAL (vivo),
+  // que não batia com um extrato filtrado no passado.
+  // Rev. 5149 — competência da folha de um lançamento: usa o período HE vinculado,
+  // senão a tag "YYYY-MM" na descrição (débitos do sistema), senão deriva da data
+  // pela janela de fechamento (15 do mês anterior → 14: dia >= 15 pertence ao mês seguinte).
+  const competenciaDoLancamento = (l: any): string => {
+    if (l?.periodoMesRef) return String(l.periodoMesRef).slice(0, 7);
+    const m = String(l?.descricao || "").match(/\b(20\d{2}-(?:0[1-9]|1[0-2]))\b/);
+    if (m) return m[1];
+    const d = isoDataKey(l?.data);
+    const ano = Number(d.slice(0, 4));
+    const mes = Number(d.slice(5, 7));
+    const dia = Number(d.slice(8, 10));
+    if (dia >= 15) {
+      return mes === 12 ? `${ano + 1}-01` : `${ano}-${String(mes + 1).padStart(2, "0")}`;
+    }
+    return `${ano}-${String(mes).padStart(2, "0")}`;
+  };
+
+  const extratoFimJanela = useMemo(() => {
+    // Rev. 5149 — fim da janela = fechamento da folha (dia 14), não fim do mês-calendário.
+    if (extratoPeriodoAtivo) return extratoPeriodoFim;
+    return `${extratoAno}-${String(extratoMesNum).padStart(2, "0")}-14`;
+  }, [extratoPeriodoAtivo, extratoPeriodoFim, extratoAno, extratoMesNum]);
+  // Rev. 5153 — período do espelho para a query de faltas do cabeçalho do extrato.
+  const extratoIni = useMemo(() => {
+    if (extratoPeriodoAtivo) return extratoPeriodoInicio;
+    return `${extratoMesNum === 1 ? extratoAno - 1 : extratoAno}-${String(extratoMesNum === 1 ? 12 : extratoMesNum - 1).padStart(2, "0")}-15`;
+  }, [extratoPeriodoAtivo, extratoPeriodoInicio, extratoAno, extratoMesNum]);
+  const extratoFimPeriodo = useMemo(() => {
+    if (extratoPeriodoAtivo) return extratoPeriodoFim;
+    return `${extratoAno}-${String(extratoMesNum).padStart(2, "0")}-14`;
+  }, [extratoPeriodoAtivo, extratoPeriodoFim, extratoAno, extratoMesNum]);
+  const saldoAteFimPeriodo = useMemo(() => {
+    let saldo = 0;
+    for (const l of lancamentosExtratoList) {
+      // Rev. 5149 — sem período custom, acumula por COMPETÊNCIA (≤ mês selecionado);
+      // com período custom, por data.
+      if (extratoPeriodoAtivo) {
+        if (isoDataKey(l.data) > extratoFimJanela) continue;
+      } else if (extratoMes && competenciaDoLancamento(l) > extratoMes) continue;
+      const total = Number(l.minutos || 0);
+      saldo += l.tipo === "credito" ? total : -total;
+    }
+    return saldo;
+  }, [lancamentosExtratoList, extratoFimJanela, extratoPeriodoAtivo, extratoMes]);
+
   const lancamentosFiltradosMes = useMemo(() => {
     if (extratoPeriodoAtivo) {
       return lancamentosExtratoList.filter((l: any) => {
-        const d = String(l.data).slice(0, 10);
+        const d = isoDataKey(l.data);
         return d >= extratoPeriodoInicio && d <= extratoPeriodoFim;
       });
     }
     if (!extratoMes) return lancamentosExtratoList;
-    return lancamentosExtratoList.filter((l: any) => String(l.data).slice(0, 7) === extratoMes);
+    // Rev. 5149 — agrupa pela COMPETÊNCIA da folha (janela 15 do mês anterior → 14),
+    // não pelo mês-calendário da data do lançamento.
+    return lancamentosExtratoList.filter((l: any) => competenciaDoLancamento(l) === extratoMes);
   }, [lancamentosExtratoList, extratoMes, extratoPeriodoAtivo, extratoPeriodoInicio, extratoPeriodoFim]);
 
   const tabs: { id: TabView; label: string; icon: any; count?: number }[] = [
@@ -791,7 +1350,14 @@ export default function BancoHoras() {
                     </div>
                   ) : (
                     <div className="space-y-2.5 py-1">
-                      {lancamentosSaldosList.map((l: any) => {
+                      {/* Rev. 5149 — o histórico mostra só a competência selecionada na navegação de meses */}
+                      <p className="text-xs text-muted-foreground">
+                        Exibindo lançamentos da competência {String(mesBanco).padStart(2, "0")}/{anoBanco} (fechamento 15/{String(mesBanco === 1 ? 12 : mesBanco - 1).padStart(2, "0")} a 14/{String(mesBanco).padStart(2, "0")})
+                      </p>
+                      {lancamentosSaldosList.filter((l: any) => competenciaDoLancamento(l) === `${anoBanco}-${String(mesBanco).padStart(2, "0")}`).length === 0 && (
+                        <div className="text-center py-8 text-muted-foreground text-sm">Nenhum lançamento nesta competência.</div>
+                      )}
+                      {lancamentosSaldosList.filter((l: any) => competenciaDoLancamento(l) === `${anoBanco}-${String(mesBanco).padStart(2, "0")}`).map((l: any) => {
                         const isCredito = l.tipo === "credito";
                         const isDebito = l.tipo === "debito";
                         const isAjuste = l.tipo === "ajuste_vigencia";
@@ -823,8 +1389,10 @@ export default function BancoHoras() {
                           }
                         }
 
+                        // Rev. 5139 — data DATE ("YYYY-MM-DD") parseada em UTC vira o dia
+                        // ANTERIOR no fuso -03 (30/06 aparecia como 29/06). Ancorar ao meio-dia.
                         const dataLanc = l.data
-                          ? new Date(l.data).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })
+                          ? new Date(String(l.data).slice(0, 10) + "T12:00:00Z").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })
                           : "—";
                         const horaLanc = l.criadoEm
                           ? new Date(l.criadoEm).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
@@ -947,6 +1515,17 @@ export default function BancoHoras() {
                                   <PeriodoDiasTable hePeriodId={l.hePeriodId} employeeId={l.employeeId} />
                                 </div>
                               )}
+
+                              {/* Rev. 5046 — memória de cálculo do débito de atraso/falta da folha */}
+                              {l.tipo === "debito_atraso_falta" && (() => {
+                                const compMatch = String(l.descricao || "").match(/(\d{4}-\d{2})/);
+                                if (!compMatch) return null;
+                                return (
+                                  <div className="pt-1.5 border-t border-black/5">
+                                    <DebitoFolhaDiasTable employeeId={l.employeeId} companyId={l.companyId} competencia={compMatch[1]} />
+                                  </div>
+                                );
+                              })()}
                             </div>
                           </div>
                         );
@@ -1086,18 +1665,53 @@ export default function BancoHoras() {
                 <div className="flex items-center gap-4 flex-wrap">
                   <div className="flex-1 min-w-[250px]">
                     <label className="text-xs text-muted-foreground block mb-1">Funcionário</label>
-                    <Select value={extratoEmpId ? String(extratoEmpId) : ""} onValueChange={v => setExtratoEmpId(v ? Number(v) : null)}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione um funcionário" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {saldos.map((s: any) => (
-                          <SelectItem key={s.employeeId} value={String(s.employeeId)}>
-                            {s.nomeCompleto} — {minsToHHMM(Number(s.saldoMinutos))}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    {/* Rev. 5148 — campo de busca aberto (antes era dropdown; ruim p/ digitar no iPad) */}
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                      <Input
+                        className="pl-9"
+                        placeholder="Digite o nome do funcionário..."
+                        value={extratoBusca}
+                        onChange={e => {
+                          setExtratoBusca(e.target.value);
+                          setExtratoEmpId(null);
+                        }}
+                        onFocus={() => { if (extratoEmpId) { setExtratoBusca(""); setExtratoEmpId(null); } }}
+                      />
+                      {!extratoEmpId && extratoBusca.trim().length >= 2 && (() => {
+                        // Rev. 5150 — fonte = lista completa de funcionários (não só saldo ≠ 0):
+                        // quem zerou o banco ainda precisa consultar/imprimir o extrato.
+                        const termo = extratoBusca.trim().toLowerCase();
+                        const candidatos = ((empListaExcecao.data ?? []) as any[])
+                          .filter((e: any) => String(e.nomeCompleto || "").toLowerCase().includes(termo))
+                          .sort((a: any, b: any) => String(a.nomeCompleto || "").localeCompare(String(b.nomeCompleto || ""), "pt-BR"))
+                          .slice(0, 30);
+                        return (
+                          <div className="absolute z-30 mt-1 w-full max-h-64 overflow-y-auto rounded-md border bg-popover shadow-md">
+                            {candidatos.map((e: any) => {
+                              const saldoMin = Number(saldoMap.get(Number(e.id)) || 0);
+                              return (
+                                <button
+                                  key={e.id}
+                                  type="button"
+                                  className="w-full text-left px-3 py-2 text-sm hover:bg-accent flex justify-between gap-2"
+                                  onClick={() => {
+                                    setExtratoEmpId(Number(e.id));
+                                    setExtratoBusca(String(e.nomeCompleto || ""));
+                                  }}
+                                >
+                                  <span>{e.nomeCompleto}</span>
+                                  <span className={`tabular-nums ${saldoMin < 0 ? "text-red-600" : "text-muted-foreground"}`}>{minsToHHMM(saldoMin)}</span>
+                                </button>
+                              );
+                            })}
+                            {candidatos.length === 0 && (
+                              <div className="px-3 py-2 text-sm text-muted-foreground">Nenhum funcionário encontrado</div>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </div>
                   </div>
                   {extratoEmpId && (
                     <div className="self-end">
@@ -1154,7 +1768,7 @@ export default function BancoHoras() {
                     <p className="text-sm text-muted-foreground mt-1">
                       {extratoPeriodoAtivo
                         ? `Período: ${new Date(extratoPeriodoInicio + "T00:00:00").toLocaleDateString("pt-BR")} a ${new Date(extratoPeriodoFim + "T00:00:00").toLocaleDateString("pt-BR")}`
-                        : `Mês de Referência: ${extratoMes ? new Date(extratoMes + "-01").toLocaleDateString("pt-BR", { month: "long", year: "numeric" }) : "—"}`}
+                        : `Mês de Referência: ${MESES_LONGOS[extratoMesNum - 1].toLowerCase()} de ${extratoAno}`}
                     </p>
                   </div>
 
@@ -1168,14 +1782,79 @@ export default function BancoHoras() {
                       <p className="font-semibold">{saldos.find((s: any) => Number(s.employeeId) === extratoEmpId)?.funcao || "—"}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-muted-foreground">Saldo Atual</p>
-                      <p className="font-bold text-blue-700 text-lg">{minsToHHMM(saldoMap.get(extratoEmpId) || 0)}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Saldo até {new Date(extratoFimJanela + "T00:00:00").toLocaleDateString("pt-BR")}
+                      </p>
+                      <p className={`font-bold text-lg ${saldoAteFimPeriodo < 0 ? "text-red-600" : "text-blue-700"}`}>{minsToHHMM(saldoAteFimPeriodo)}</p>
+                      {saldoAteFimPeriodo !== (saldoMap.get(extratoEmpId) || 0) && (
+                        <p className="text-[11px] text-muted-foreground">Saldo atual (hoje): {minsToHHMM(saldoMap.get(extratoEmpId) || 0)}</p>
+                      )}
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground">Regime</p>
                       <p className="font-semibold">Acordo Individual — 6 meses (CLT Art. 59, §5º)</p>
                     </div>
+                    {/* Rev. 5153 — faltas e atrasos do período (fonte: timecard_daily) */}
+                    {faltasExtrato.data && (() => {
+                      const fd = faltasExtrato.data as { faltasCompletas: number; faltasCompletasMins: number; faltasParciais: number; faltasParciaisMins: number; atrasos: number; atrasosMins: number };
+                      const totalFaltasMins = fd.faltasCompletasMins + fd.faltasParciaisMins;
+                      const totalFaltas = fd.faltasCompletas + fd.faltasParciais;
+                      const temDados = totalFaltas > 0 || fd.atrasos > 0;
+                      if (!temDados) return (
+                        <div className="col-span-2 flex items-center gap-2 pt-1 border-t">
+                          <span className="inline-flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-3 py-1">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 inline-block" />
+                            Sem faltas nem atrasos no período
+                          </span>
+                        </div>
+                      );
+                      return (
+                        <div className="col-span-2 flex flex-wrap gap-2 pt-2 border-t">
+                          {totalFaltas > 0 && (
+                            <div className="flex-1 min-w-[140px] rounded-lg bg-red-50 border border-red-200 px-3 py-2">
+                              <p className="text-[10px] text-red-500 uppercase tracking-wide font-semibold mb-0.5">Faltas no período</p>
+                              <p className="text-sm font-bold text-red-700">
+                                {totalFaltas} {totalFaltas === 1 ? "dia" : "dias"}
+                                <span className="ml-1.5 text-xs font-normal text-red-500">−{minsToHHMM(totalFaltasMins)}</span>
+                              </p>
+                              {fd.faltasParciais > 0 && fd.faltasCompletas > 0 && (
+                                <p className="text-[10px] text-red-400 mt-0.5">
+                                  {fd.faltasCompletas} completa{fd.faltasCompletas > 1 ? "s" : ""} · {fd.faltasParciais} parcial{fd.faltasParciais > 1 ? "is" : ""}
+                                </p>
+                              )}
+                            </div>
+                          )}
+                          {fd.atrasos > 0 && (
+                            <div className="flex-1 min-w-[140px] rounded-lg bg-amber-50 border border-amber-200 px-3 py-2">
+                              <p className="text-[10px] text-amber-600 uppercase tracking-wide font-semibold mb-0.5">Atrasos no período</p>
+                              <p className="text-sm font-bold text-amber-700">
+                                {fd.atrasos} {fd.atrasos === 1 ? "ocorrência" : "ocorrências"}
+                                <span className="ml-1.5 text-xs font-normal text-amber-500">−{minsToHHMM(fd.atrasosMins)}</span>
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
+
+                  {/* Rev. 5141 — dia a dia do ponto (quais dias geraram crédito/débito) */}
+                  {(() => {
+                    // Período do ponto: data-a-data quando ativo; senão a janela da
+                    // competência do mês selecionado (15 do mês anterior → 14).
+                    const ini = extratoPeriodoAtivo
+                      ? extratoPeriodoInicio
+                      : `${extratoMesNum === 1 ? extratoAno - 1 : extratoAno}-${String(extratoMesNum === 1 ? 12 : extratoMesNum - 1).padStart(2, "0")}-15`;
+                    const fim = extratoPeriodoAtivo
+                      ? extratoPeriodoFim
+                      : `${extratoAno}-${String(extratoMesNum).padStart(2, "0")}-14`;
+                    return <ExtratoEspelhoPonto employeeId={extratoEmpId} companyId={companyId} dataInicio={ini} dataFim={fim} />;
+                  })()}
+
+                  <ComposicaoBancoHoras
+                    lancamentos={lancamentosFiltradosMes}
+                    faltas={faltasExtrato.data as FaltasExtratoResumo | undefined}
+                  />
 
                   {lancamentosExtrato.isLoading ? (
                     <div className="text-center py-6 text-muted-foreground">Carregando lançamentos...</div>
@@ -1225,9 +1904,28 @@ export default function BancoHoras() {
                                     ? "DÉBITO ATRASO/FALTA"
                                     : "DÉBITO";
                               const totalColorClass = l.tipo === "credito" ? "text-green-700" : isDsr ? "text-purple-700" : "text-orange-700";
+                              const temDias = !!l.hePeriodId && l.tipo === "credito";
+                              const aberto = temDias && extratoDiasAbertos.has(Number(l.id));
                               return (
-                                <tr key={l.id} className="border-b">
-                                  <td className="py-2 px-3">{new Date(l.data).toLocaleDateString("pt-BR")}</td>
+                                <Fragment key={l.id}>
+                                <tr className="border-b">
+                                  <td className="py-2 px-3 whitespace-nowrap">
+                                    {temDias ? (
+                                      <button
+                                        type="button"
+                                        className="inline-flex items-center gap-1 text-blue-700 hover:underline print:no-underline"
+                                        onClick={() => setExtratoDiasAbertos(prev => {
+                                          const next = new Set(prev);
+                                          if (next.has(Number(l.id))) next.delete(Number(l.id)); else next.add(Number(l.id));
+                                          return next;
+                                        })}
+                                        title={aberto ? "Ocultar dia a dia do período" : "Ver dia a dia do período"}
+                                      >
+                                        {dataBRSegura(l.data)}
+                                        <span className="text-[10px]">{aberto ? "▲" : "▼"}</span>
+                                      </button>
+                                    ) : dataBRSegura(l.data)}
+                                  </td>
                                   <td className="py-2 px-3">
                                     <span className={`font-semibold text-xs px-2 py-0.5 rounded whitespace-nowrap ${badgeClass}`}>
                                       {badgeLabel}
@@ -1249,6 +1947,14 @@ export default function BancoHoras() {
                                   </td>
                                   <td className="py-2 px-3 text-xs text-muted-foreground">{l.descricao || "—"}</td>
                                 </tr>
+                                {aberto && (
+                                  <tr className="border-b bg-gray-50/60">
+                                    <td colSpan={7} className="py-2 px-3">
+                                      <PeriodoDiasTable hePeriodId={Number(l.hePeriodId)} employeeId={extratoEmpId!} />
+                                    </td>
+                                  </tr>
+                                )}
+                                </Fragment>
                               );
                             });
                           })()}

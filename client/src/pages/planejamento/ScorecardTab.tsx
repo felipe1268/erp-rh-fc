@@ -8,6 +8,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+
+// Fotos de cadastro em /uploads são originais de câmera (até ~5.7MB) e quebram
+// no Safari/iPad ("?" azul). Avatares usam a miniatura ?w=128; lightbox usa o original.
+const fotoThumb = (u?: string | null) =>
+  u && u.startsWith("/uploads/") && !u.includes("?") ? `${u}?w=128` : (u ?? undefined);
 import {
   Trophy, ShieldCheck, BarChart3, BarChart2, ShoppingCart, Package, Star,
   Settings, Plus, Trash2, TrendingUp, TrendingDown, AlertTriangle,
@@ -317,6 +322,8 @@ export default function ScorecardTab({ proj }: { proj: any }) {
     { companyId, obraId: obraId!, mesInicio: rhMesInicio, mesFim: rhMesFim },
     { enabled: enabled && tabScore === "rh", staleTime: 120_000 }
   );
+  // Rev. 4867 — LGPD: modo "só total" (servidor não envia componentes salariais)
+  const rhModoTotal = !isAdminMaster && (analiseRH.data as any)?.modo === 'total';
   // Filtro de cargo para a tabela "Custo por Funcionário"
   const rhCargoOptions = useMemo(() => {
     const cargos = (analiseRH.data?.funcionarios ?? [])
@@ -1190,7 +1197,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
               <div className="flex items-center justify-center py-12 gap-2 text-gray-400">
                 <Loader2 className="w-5 h-5 animate-spin" />Calculando custos da folha…
               </div>
-            ) : !analiseRH.data || analiseRH.data.funcionarios.length === 0 ? (
+            ) : !analiseRH.data || (analiseRH.data.funcionarios.length === 0 && !analiseRH.data.resumo?.totalFuncionarios) ? (
               <p className="text-xs text-gray-400 py-8 text-center">Sem dados de folha para esta obra no período selecionado.</p>
             ) : (
               <div className="space-y-4">
@@ -1278,8 +1285,8 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                         </p>
                       </div>
 
-                      {/* Barra de decomposição */}
-                      <div className="px-4 pb-3 mt-2">
+                      {/* Barra de decomposição (oculta no modo "só total" — LGPD) */}
+                      {!rhModoTotal && <div className="px-4 pb-3 mt-2">
                         <div className="flex h-2 rounded-full overflow-hidden gap-0.5">
                           {[
                             { label: "Salário", v: analiseRH.data!.resumo.salarioBrutoTotal, color: "bg-yellow-400" },
@@ -1311,14 +1318,17 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                             );
                           })}
                         </div>
-                      </div>
+                      </div>}
                     </div>
                   );
                 })()}
 
                 {/* KPI resumo */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {[
+                  {(rhModoTotal ? [
+                    { label: "Funcionários",      v: String(analiseRH.data.resumo.totalFuncionarios),                                            color: "text-indigo-700" },
+                    { label: "Custo Total",        v: fmt(analiseRH.data.resumo.custoTotalEmpresa),                                               color: "text-violet-700 font-bold" },
+                  ] : [
                     { label: "Funcionários",      v: String(analiseRH.data.resumo.totalFuncionarios),                                            color: "text-indigo-700" },
                     { label: "Custo Total",        v: fmt(analiseRH.data.resumo.custoTotalEmpresa),                                               color: "text-violet-700 font-bold" },
                     { label: "Salário Bruto",      v: fmt(analiseRH.data.resumo.salarioBrutoTotal),                                               color: "text-gray-800" },
@@ -1327,7 +1337,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                     { label: "Seg. de Vida",       v: fmt(analiseRH.data.resumo.seguroVidaTotal ?? 0),                                            color: (analiseRH.data.resumo.seguroVidaTotal ?? 0) > 0 ? "text-rose-700" : "text-gray-300" },
                     { label: "HE",                 v: fmt(analiseRH.data.resumo.heTotal),                                                         color: analiseRH.data.resumo.heTotal > 0 ? "text-amber-700" : "text-gray-300" },
                     { label: "FGTS",               v: fmt(analiseRH.data.resumo.fgtsTotal),                                                       color: "text-blue-700" },
-                  ].map((k, i) => (
+                  ]).map((k, i) => (
                     <div key={i} className="rounded-lg border border-gray-100 bg-gray-50 px-2.5 py-2 text-center">
                       <p className={`text-sm font-bold ${k.color}`}>{k.v}</p>
                       <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">{k.label}</p>
@@ -1335,8 +1345,8 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                   ))}
                 </div>
 
-                {/* Tabela mensal */}
-                {analiseRH.data.mensal.length > 0 && (
+                {/* Tabela mensal (oculta no modo "só total" — LGPD) */}
+                {!rhModoTotal && analiseRH.data.mensal.length > 0 && (
                   <div>
                     {/* Rev. 4450 — banner de aviso para meses estimados */}
                     {(analiseRH.data.mensal as any[]).some((m: any) => !m.statusMes || m.statusMes === 'estimado') && (
@@ -1417,8 +1427,29 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                   VR/VA: meses com "Previsão" usam valor diário × dias úteis na obra (estimativa); substituído pelo valor real da folha ao ser processada. VT não incluso.
                 </p>
 
-                {/* Tabela: individual (admin_master) ou por função (demais — LGPD) */}
-                {isAdminMaster ? (
+                {/* Tabela: individual (admin_master), só total (toggle LGPD) ou por função (demais) */}
+                {!isAdminMaster && (analiseRH.data as any)?.modo === 'total' ? (
+                  /* ── Rev. 4867 — Visão restrita: apenas efetivo total + custo total ── */
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">
+                      Resumo da Equipe{rhMes !== 'all' ? ` — ${MES_LABELS[parseInt(rhMes)-1]}/${String(rhAno).slice(2)}` : ''}
+                    </p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                        <p className="text-[10px] uppercase tracking-wide text-gray-500 font-semibold">Efetivo Total</p>
+                        <p className="text-2xl font-bold text-indigo-700 mt-0.5">{analiseRH.data.resumo.totalFuncionarios}</p>
+                      </div>
+                      <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                        <p className="text-[10px] uppercase tracking-wide text-gray-500 font-semibold">Custo Total</p>
+                        <p className="text-2xl font-bold text-violet-700 mt-0.5">{fmt(analiseRH.data.resumo.custoTotalEmpresa)}</p>
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-gray-400 italic mt-1.5 flex items-center gap-1">
+                      <span>🔒</span>
+                      Detalhamento de custos restrito conforme política de privacidade da empresa (LGPD).
+                    </p>
+                  </div>
+                ) : isAdminMaster ? (
                   /* ── Visão Admin Master: detalhamento individual ── */
                   <div>
                     <div className="flex items-center justify-between mb-1.5 gap-2 flex-wrap">
@@ -1505,8 +1536,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                                       {(() => {
                                         const initials = (f.nome ?? "?").split(" ").slice(0, 2).map((w: string) => w[0]).join("");
                                         return f.foto_url ? (
-                                          <img
-                                            src={f.foto_url} alt={f.nome}
+                                          <img src={fotoThumb(f.foto_url)} loading="lazy" alt={f.nome}
                                             className="w-7 h-7 rounded-full object-cover flex-shrink-0 border border-gray-200 cursor-zoom-in hover:ring-2 hover:ring-indigo-400 transition-all"
                                             onClick={(ev) => { ev.stopPropagation(); setSstPhotoLightbox({ url: f.foto_url, nome: f.nome ?? "—", initials }); }}
                                           />
@@ -1828,7 +1858,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                                       title="Clique para expandir"
                                     >
                                       {f.fotoUrl ? (
-                                        <img src={f.fotoUrl} alt={f.nome} className="w-full h-full object-cover" />
+                                        <img src={fotoThumb(f.fotoUrl)} loading="lazy" alt={f.nome} className="w-full h-full object-cover" />
                                       ) : (
                                         <span className="text-[10px] font-bold text-indigo-600">{initials}</span>
                                       )}
@@ -1865,7 +1895,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                                       {/* Foto maior */}
                                       <div className="flex-shrink-0 w-16 h-16 rounded-full overflow-hidden bg-indigo-200 flex items-center justify-center shadow-md">
                                         {f.fotoUrl ? (
-                                          <img src={f.fotoUrl} alt={f.nome} className="w-full h-full object-cover" />
+                                          <img src={fotoThumb(f.fotoUrl)} loading="lazy" alt={f.nome} className="w-full h-full object-cover" />
                                         ) : (
                                           <span className="text-xl font-bold text-indigo-600">{initials}</span>
                                         )}
@@ -2372,7 +2402,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                                     const pct=maxEpiCusto>0?(custo/maxEpiCusto)*100:0;
                                     return (
                                       <div key={i} className="flex items-center gap-2">
-                                        {e.foto_url?(<img src={e.foto_url} alt={nome} className="w-6 h-6 rounded-full object-cover shrink-0 ring-1 ring-indigo-200"/>)
+                                        {e.foto_url?(<img src={fotoThumb(e.foto_url)} loading="lazy" alt={nome} className="w-6 h-6 rounded-full object-cover shrink-0 ring-1 ring-indigo-200"/>)
                                           :(<div className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-[7px] font-bold flex items-center justify-center shrink-0">{initials}</div>)}
                                         <div className="flex-1 min-w-0">
                                           <p className="text-[9px] font-semibold text-gray-700 truncate">{nome.split(" ").slice(0,2).join(" ")}</p>
@@ -2436,7 +2466,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                                   <div className="flex items-start justify-between gap-2">
                                     <div className="flex items-start gap-2.5 flex-1 min-w-0">
                                       {a.foto_url
-                                        ?<img src={a.foto_url} alt={acNome} className="w-8 h-8 rounded-full object-cover shrink-0 ring-2 ring-white shadow-sm mt-0.5"/>
+                                        ?<img src={fotoThumb(a.foto_url)} loading="lazy" alt={acNome} className="w-8 h-8 rounded-full object-cover shrink-0 ring-2 ring-white shadow-sm mt-0.5"/>
                                         :<div className={`w-8 h-8 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0 mt-0.5 ${grave?"bg-red-200 text-red-700":"bg-orange-200 text-orange-700"}`}>{acInitials}</div>}
                                       <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2 flex-wrap">
@@ -2493,7 +2523,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                                             className="shrink-0 focus:outline-none hover:ring-2 hover:ring-amber-400 rounded-full transition-all"
                                           >
                                             {p.foto
-                                              ?<img src={p.foto} alt={p.nome} className="w-7 h-7 rounded-full object-cover ring-2 ring-amber-200"/>
+                                              ?<img src={fotoThumb(p.foto)} loading="lazy" alt={p.nome} className="w-7 h-7 rounded-full object-cover ring-2 ring-amber-200"/>
                                               :<div className="w-7 h-7 rounded-full bg-amber-200 text-amber-700 text-[9px] font-bold flex items-center justify-center">{initials}</div>}
                                           </button>
                                           <div className="flex-1 min-w-0">
@@ -2571,7 +2601,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                                               className="shrink-0 focus:outline-none hover:ring-2 hover:ring-amber-300 rounded-full transition-all"
                                             >
                                               {a.foto_url
-                                                ?<img src={a.foto_url} alt={nome} className="w-6 h-6 rounded-full object-cover"/>
+                                                ?<img src={fotoThumb(a.foto_url)} loading="lazy" alt={nome} className="w-6 h-6 rounded-full object-cover"/>
                                                 :<div className="w-6 h-6 rounded-full bg-amber-200 text-amber-700 text-[8px] font-bold flex items-center justify-center">{initials}</div>}
                                             </button>
                                             <div className="flex items-center gap-1 min-w-0">
@@ -2655,7 +2685,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                                     const wNome=String(w.funcionario_nome??"?");
                                     const wInit=wNome.split(" ").filter(Boolean).slice(0,2).map((n:string)=>n[0]).join("");
                                     return w.foto_url
-                                      ?<img src={w.foto_url} alt={wNome} className="w-7 h-7 rounded-full object-cover shrink-0 ring-1 ring-red-200 mt-0.5"/>
+                                      ?<img src={fotoThumb(w.foto_url)} loading="lazy" alt={wNome} className="w-7 h-7 rounded-full object-cover shrink-0 ring-1 ring-red-200 mt-0.5"/>
                                       :<div className="w-7 h-7 rounded-full bg-red-200 text-red-700 text-[8px] font-bold flex items-center justify-center shrink-0 mt-0.5">{wInit}</div>;
                                   })()}
                                   <div className="flex-1 min-w-0">
@@ -2829,7 +2859,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                                 return (
                                   <div key={i} className={`flex items-start gap-2 rounded-xl border px-2 py-2 ${st.cardBg} ${st.opacity}`}>
                                     <div className="shrink-0">
-                                      {e.foto_url?(<img src={e.foto_url} alt={prNome} className={`w-8 h-8 rounded-full object-cover ring-2 ${isDes?"ring-red-300 grayscale":asoOk2?"ring-green-300":asoVenc2?"ring-amber-300":"ring-gray-200"}`}/>)
+                                      {e.foto_url?(<img src={fotoThumb(e.foto_url)} loading="lazy" alt={prNome} className={`w-8 h-8 rounded-full object-cover ring-2 ${isDes?"ring-red-300 grayscale":asoOk2?"ring-green-300":asoVenc2?"ring-amber-300":"ring-gray-200"}`}/>)
                                         :(<div className={`w-8 h-8 rounded-full flex items-center justify-center text-[9px] font-bold ring-2 ${isDes?"bg-gray-300 text-gray-500 ring-red-200 grayscale":adv2>0?"bg-red-200 text-red-700 ring-red-300":!asoOk2?"bg-amber-200 text-amber-700 ring-amber-300":"bg-indigo-100 text-indigo-700 ring-indigo-200"}`}>{initials}</div>)}
                                     </div>
                                     <div className="flex-1 min-w-0">
@@ -3059,7 +3089,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                                 {/* Foto / placeholder */}
                                 <div className="flex-shrink-0 w-14 h-14 rounded-lg overflow-hidden bg-gray-100 border border-gray-200 flex items-center justify-center">
                                   {f.foto_url
-                                    ? <img src={f.foto_url} alt={f.nome} className="w-full h-full object-cover" />
+                                    ? <img src={fotoThumb(f.foto_url)} loading="lazy" alt={f.nome} className="w-full h-full object-cover" />
                                     : <Wrench className="w-6 h-6 text-gray-300" />}
                                 </div>
                                 {/* Dados */}
@@ -3138,7 +3168,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                                 {/* Foto / placeholder */}
                                 <div className="flex-shrink-0 w-14 h-14 rounded-lg overflow-hidden bg-gray-100 border border-gray-200 flex items-center justify-center">
                                   {l.foto_url
-                                    ? <img src={l.foto_url} alt={l.descricao} className="w-full h-full object-cover" />
+                                    ? <img src={fotoThumb(l.foto_url)} loading="lazy" alt={l.descricao} className="w-full h-full object-cover" />
                                     : <Wrench className="w-6 h-6 text-amber-300" />}
                                 </div>
                                 {/* Dados */}

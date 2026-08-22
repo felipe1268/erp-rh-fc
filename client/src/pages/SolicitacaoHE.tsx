@@ -1015,6 +1015,9 @@ export default function SolicitacaoHE() {
                                   onClick={e => { e.stopPropagation(); openHEHistory(emp.id, emp.nomeCompleto); }}
                                   title="Ver histórico de horas extras"
                                 >
+                                  {emp.fotoUrl
+                                    ? <img src={`${emp.fotoUrl}${String(emp.fotoUrl).includes("?") ? "&" : "?"}w=128`} alt="" loading="lazy" className="h-7 w-7 rounded-full object-cover border border-gray-200 shrink-0" />
+                                    : <div className="h-7 w-7 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center shrink-0 text-[10px] font-bold text-gray-400">{String(emp.nomeCompleto || "?").trim().charAt(0)}</div>}
                                   <History className="h-3.5 w-3.5 opacity-60 shrink-0" />
                                   {emp.nomeCompleto}
                                   {isAviso && (

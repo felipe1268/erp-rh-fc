@@ -368,10 +368,15 @@ function DisciplinasModal({ open, onClose, orcamentoId, companyId, disciplinasQ,
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
       <DialogContent resizable={false} className="!max-w-none !w-[100vw] !h-[100vh] !max-h-[100vh] overflow-y-auto !rounded-none !m-0 !p-6 !top-0 !left-0 !translate-x-0 !translate-y-0">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-lg">
-            <Layers className="h-5 w-5 text-violet-600" />
-            Visão por Disciplina
+        <DialogHeader className="-mx-6 -mt-6 px-6 pt-5 pb-4 mb-2 bg-gradient-to-r from-violet-600 via-purple-600 to-fuchsia-600 rounded-none">
+          <DialogTitle className="flex items-center gap-2.5 text-lg text-white">
+            <span className="h-9 w-9 rounded-xl bg-white/20 backdrop-blur flex items-center justify-center shrink-0">
+              <Layers className="h-5 w-5 text-white" />
+            </span>
+            <span className="flex flex-col">
+              <span className="font-bold">Visão por Disciplina</span>
+              <span className="text-[11px] font-normal text-violet-100">Acompanhe a contratação de cada disciplina — verde = contratado, âmbar = parcial, vermelho = sem contrato</span>
+            </span>
           </DialogTitle>
         </DialogHeader>
 
@@ -455,8 +460,9 @@ function DisciplinasModal({ open, onClose, orcamentoId, companyId, disciplinasQ,
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <p className="text-xs text-gray-500">
-                  {disciplinas.length} disciplina{disciplinas.length > 1 ? "s" : ""} · {disciplinas.reduce((s: number, d: any) => s + d.totalItens, 0)} serviços classificados
+                <p className="text-xs text-gray-600 flex items-center gap-1.5">
+                  <span className="px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 font-bold">{disciplinas.length} disciplina{disciplinas.length > 1 ? "s" : ""}</span>
+                  <span className="px-2 py-0.5 rounded-full bg-fuchsia-100 text-fuchsia-700 font-bold">{disciplinas.reduce((s: number, d: any) => s + d.totalItens, 0)} serviços</span>
                 </p>
                 {(() => {
                   const totalItens = disciplinas.reduce((s: number, d: any) => s + d.itens.length, 0);
@@ -469,7 +475,7 @@ function DisciplinasModal({ open, onClose, orcamentoId, companyId, disciplinasQ,
                         if (allSel) { setSelecionados(new Set()); }
                         else { setSelecionados(new Set(allKeys)); }
                       }}
-                      className="text-xs text-violet-600 hover:text-violet-800 font-medium hover:underline"
+                      className="text-xs px-2.5 py-1 rounded-lg border border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100 hover:border-violet-300 font-semibold transition"
                     >
                       {allSel ? "Desmarcar todos" : "Selecionar todos"}
                     </button>
@@ -481,21 +487,34 @@ function DisciplinasModal({ open, onClose, orcamentoId, companyId, disciplinasQ,
                 size="sm"
                 onClick={() => orcamentoId && classificarMut.mutate({ orcamentoId, companyId, force: true })}
                 disabled={classificarMut.isPending}
-                className="text-xs gap-1.5"
+                className="text-xs gap-1.5 border-violet-200 text-violet-700 hover:bg-violet-50 hover:text-violet-800"
               >
                 <RotateCw className="h-3 w-3" /> Reclassificar
               </Button>
             </div>
 
-            {disciplinas.map((disc: any) => {
+            {disciplinas.map((disc: any, discIdx: number) => {
               const isOpen = expandido === disc.nome;
               const discAllSel = isDisciplinaAllSelected(disc);
               const discPartial = isDisciplinaPartial(disc);
               const discNaSC = disc.itens.filter((i: any) => scSet.has(i.eapCodigo)).length;
               const discTodosNaSC = discNaSC > 0 && discNaSC === disc.itens.length;
+              // Rev. 5029 — paleta cíclica por disciplina (moderno/colorido)
+              const PALETA = [
+                { accent: "border-l-violet-500", dot: "bg-violet-500", chip: "bg-violet-100 text-violet-700" },
+                { accent: "border-l-sky-500", dot: "bg-sky-500", chip: "bg-sky-100 text-sky-700" },
+                { accent: "border-l-rose-500", dot: "bg-rose-500", chip: "bg-rose-100 text-rose-700" },
+                { accent: "border-l-amber-500", dot: "bg-amber-500", chip: "bg-amber-100 text-amber-700" },
+                { accent: "border-l-teal-500", dot: "bg-teal-500", chip: "bg-teal-100 text-teal-700" },
+                { accent: "border-l-indigo-500", dot: "bg-indigo-500", chip: "bg-indigo-100 text-indigo-700" },
+                { accent: "border-l-fuchsia-500", dot: "bg-fuchsia-500", chip: "bg-fuchsia-100 text-fuchsia-700" },
+                { accent: "border-l-cyan-500", dot: "bg-cyan-500", chip: "bg-cyan-100 text-cyan-700" },
+              ];
+              const cor = PALETA[discIdx % PALETA.length];
+              const pctBar = disc.pctContratado >= 100 ? "bg-gradient-to-r from-emerald-400 to-emerald-600" : disc.pctContratado >= 50 ? "bg-gradient-to-r from-amber-400 to-amber-500" : disc.pctContratado > 0 ? "bg-gradient-to-r from-orange-400 to-red-500" : "bg-gray-300";
               return (
-                <div key={disc.nome} className={`border rounded-lg overflow-hidden ${discTodosNaSC ? "border-emerald-300 bg-emerald-50/40" : ""}`}>
-                  <div className={`w-full flex items-center justify-between px-4 py-3 transition-colors ${discTodosNaSC ? "bg-emerald-50 hover:bg-emerald-100" : "bg-gray-50 hover:bg-gray-100"}`}>
+                <div key={disc.nome} className={`border rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow border-l-4 ${cor.accent} ${discTodosNaSC ? "border-emerald-300 !border-l-emerald-500 bg-emerald-50/40" : "border-gray-200"}`}>
+                  <div className={`w-full flex items-center justify-between px-4 py-3 transition-colors ${discTodosNaSC ? "bg-emerald-50 hover:bg-emerald-100" : "bg-white hover:bg-violet-50/40"}`}>
                     <div className="flex items-center gap-3">
                       <input
                         type="checkbox"
@@ -533,7 +552,8 @@ function DisciplinasModal({ open, onClose, orcamentoId, companyId, disciplinasQ,
                         </div>
                       ) : (
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-gray-800">{disc.nome}</span>
+                          <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${discTodosNaSC ? "bg-emerald-500" : cor.dot}`} />
+                          <span className="text-sm font-semibold text-gray-800">{disc.nome}</span>
                           <button type="button" onClick={e => { e.stopPropagation(); setEditandoNome(disc.nome); setNovoNome(disc.nome); }} className="text-gray-400 hover:text-gray-600">
                             <Pencil className="h-3 w-3" />
                           </button>
@@ -550,16 +570,16 @@ function DisciplinasModal({ open, onClose, orcamentoId, companyId, disciplinasQ,
                       )}
                     </div>
                     <div className="flex items-center gap-3">
-                      <span className="text-xs text-gray-500">{disc.totalItens} ite{disc.totalItens > 1 ? "ns" : "m"}</span>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${cor.chip}`}>{disc.totalItens} ite{disc.totalItens > 1 ? "ns" : "m"}</span>
                       <div className="flex items-center gap-1.5">
-                        {disc.contratados > 0 && <span className="text-xs px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">{disc.contratados} contratado{disc.contratados > 1 ? "s" : ""}</span>}
-                        {disc.comSaldo > 0 && <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">{disc.comSaldo} parcial</span>}
-                        {disc.semContrato > 0 && <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-700">{disc.semContrato} s/ contrato</span>}
+                        {disc.contratados > 0 && <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold border border-emerald-200">✓ {disc.contratados} contratado{disc.contratados > 1 ? "s" : ""}</span>}
+                        {disc.comSaldo > 0 && <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-semibold border border-amber-200">{disc.comSaldo} parcial</span>}
+                        {disc.semContrato > 0 && <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-semibold border border-red-200">{disc.semContrato} s/ contrato</span>}
                       </div>
-                      <div className="w-16 bg-gray-200 rounded-full h-2">
-                        <div className="bg-violet-500 h-2 rounded-full transition-all" style={{ width: `${disc.pctContratado}%` }} />
+                      <div className="w-24 bg-gray-200 rounded-full h-2.5 overflow-hidden">
+                        <div className={`${pctBar} h-2.5 rounded-full transition-all`} style={{ width: `${Math.max(disc.pctContratado, disc.pctContratado > 0 ? 4 : 0)}%` }} />
                       </div>
-                      <span className="text-xs font-medium text-gray-600 w-8 text-right">{disc.pctContratado}%</span>
+                      <span className={`text-xs font-bold w-10 text-right ${disc.pctContratado >= 100 ? "text-emerald-600" : disc.pctContratado >= 50 ? "text-amber-600" : disc.pctContratado > 0 ? "text-orange-600" : "text-gray-400"}`}>{disc.pctContratado}%</span>
                     </div>
                   </div>
 
@@ -599,9 +619,9 @@ function DisciplinasModal({ open, onClose, orcamentoId, companyId, disciplinasQ,
                                   type="number"
                                   min={0}
                                   max={item.saldo}
-                                  step="any"
+                                  step="1"
                                   value={qtdCustom[selKey(disc.nome, item.eapCodigo)] ?? String(item.saldo)}
-                                  onChange={e => setQtdCustom(prev => ({ ...prev, [selKey(disc.nome, item.eapCodigo)]: e.target.value }))}
+                                  onChange={e => setQtdCustom(prev => ({ ...prev, [selKey(disc.nome, item.eapCodigo)]: e.target.value === "" ? "" : String(Math.max(0, Math.floor(Number(e.target.value) || 0))) }))}
                                   className="w-16 h-6 px-1.5 text-xs text-right border border-violet-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-violet-500"
                                 />
                               </div>
@@ -1338,7 +1358,7 @@ export default function Solicitacoes() {
       .map(it => ({
         descricao: it.descricao.trim(),
         unidade: it.unidade || "un",
-        quantidade: parseFloat(it.quantidade) || 1,
+        quantidade: Math.max(1, Math.ceil(parseFloat(it.quantidade) || 1)),
       }));
   }, [itens]);
 
@@ -1571,7 +1591,7 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
       solicitacaoItemId: it.id,
       descricao: it.descricao,
       unidade: it.unidade || "un",
-      quantidade: parseFloat(it.quantidade) || 1,
+      quantidade: Math.max(1, Math.ceil(parseFloat(it.quantidade) || 1)),
       precoUnitario: 0,
     }));
     criarCotacao.mutate({
@@ -2015,7 +2035,8 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
     const prefix = clickedItem.eapCodigo + ".";
     const childItems = allVisible
       .filter((it: any) => {
-        if (form.tipo === "servico") return !!it.servicoCodigo && (it as any).temMdo;
+        {/* Rev. 5027 — mesma regra do filtro principal: MO do orçamento é soberana */}
+        if (form.tipo === "servico") return (it as any).temMdo;
         if (form.tipo === "equipamento") return !!it.servicoCodigo && (it as any).temEquip;
         if (form.tipo === "pecas_veiculo") return (it as any).temMat !== false;
         if (!it.servicoCodigo) return true;
@@ -2254,7 +2275,7 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
       id: i.id ?? undefined, // Rev. 4458 — necessário p/ edição de SC com cotação vinculada
       descricao: i.descricao,
       unidade: i.unidade,
-      quantidade: parseFloat(i.quantidade) || 1,
+      quantidade: Math.max(1, Math.ceil(parseFloat(i.quantidade) || 1)),
       observacoes: i.observacoes || undefined,
       orcamentoItemId: i.orcamentoItemId,
       eapCodigo: i.eapCodigo,
@@ -3021,9 +3042,17 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
           onInteractOutside={(e) => { if (isFormDirty()) e.preventDefault(); }}
           onEscapeKeyDown={(e) => { if (isFormDirty()) { e.preventDefault(); setConfirmFecharNova(true); } }}
         >
-          {/* Header fixo */}
-          <DialogHeader className="px-5 pt-5 pb-3 border-b border-gray-100 shrink-0">
-            <DialogTitle style={{ color: '#111827' }} className="text-base font-semibold">{editingSc ? "Editar Solicitação de Compra" : "Nova Solicitação de Compra"}</DialogTitle>
+          {/* Header fixo — Rev. 5029: banner colorido */}
+          <DialogHeader className="px-5 pt-4 pb-3 border-b border-amber-100 shrink-0 bg-gradient-to-r from-amber-50 via-orange-50 to-white">
+            <DialogTitle style={{ color: '#111827' }} className="text-base font-bold flex items-center gap-2.5">
+              <span className="h-9 w-9 rounded-xl bg-gradient-to-br from-amber-400 to-orange-600 text-white flex items-center justify-center shadow-md shrink-0">
+                <ShoppingCart className="h-5 w-5" />
+              </span>
+              <span className="flex flex-col">
+                <span>{editingSc ? "Editar Solicitação de Compra" : "Nova Solicitação de Compra"}</span>
+                <span className="text-[11px] font-normal text-gray-500">Preencha os campos destacados — os obrigatórios ficam verdes quando completos ✓</span>
+              </span>
+            </DialogTitle>
           </DialogHeader>
 
           {/* Corpo rolável */}
@@ -3031,9 +3060,13 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
           <div className="space-y-3">
             {/* Título */}
             <div className="space-y-1">
-              <label className="text-xs font-medium text-gray-700">Título da Solicitação *</label>
+              <label className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
+                <span className={`h-2 w-2 rounded-full ${form.titulo.trim() ? "bg-emerald-500" : "bg-amber-400 animate-pulse"}`} />
+                Título da Solicitação *
+                {form.titulo.trim() && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />}
+              </label>
               <input
-                className="w-full h-8 px-3 text-sm rounded-md border border-gray-300 bg-white text-gray-900 placeholder-gray-400 outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-300"
+                className={`w-full h-9 px-3 text-sm rounded-lg border-2 bg-white text-gray-900 placeholder-gray-400 outline-none transition-colors focus:ring-2 ${form.titulo.trim() ? "border-emerald-300 focus:border-emerald-400 focus:ring-emerald-100" : "border-amber-300 bg-amber-50/40 focus:border-amber-500 focus:ring-amber-100"}`}
                 placeholder="Ex: Materiais de alvenaria - Bloco A"
                 value={form.titulo}
                 onChange={e => setForm(p => ({ ...p, titulo: e.target.value.toUpperCase() }))}
@@ -3052,22 +3085,25 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
 
             {/* Tipo de Solicitação */}
             <div className="space-y-1">
-              <label className="text-xs font-medium text-gray-700">Tipo de Solicitação</label>
+              <label className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                Tipo de Solicitação
+              </label>
               <div className="flex gap-2">
                 {[
-                  { value: "material" as const, label: "Material", icon: "📦" },
-                  { value: "servico" as const, label: "Serviço / MDO", icon: "🔧" },
-                  { value: "equipamento" as const, label: "Equipamento", icon: "⚙️" },
-                  { value: "pacote" as const, label: "Pacote (MAT + MO)", icon: "📋" },
-                  { value: "pecas_veiculo" as const, label: "Manutenção de Veículos", icon: "🚗" },
+                  { value: "material" as const, label: "Material", icon: "📦", sel: "border-amber-500 bg-gradient-to-b from-amber-50 to-orange-100 text-amber-800 ring-2 ring-amber-200", hov: "hover:border-amber-300 hover:bg-amber-50/50" },
+                  { value: "servico" as const, label: "Serviço / MDO", icon: "🔧", sel: "border-blue-500 bg-gradient-to-b from-blue-50 to-blue-100 text-blue-800 ring-2 ring-blue-200", hov: "hover:border-blue-300 hover:bg-blue-50/50" },
+                  { value: "equipamento" as const, label: "Equipamento", icon: "⚙️", sel: "border-violet-500 bg-gradient-to-b from-violet-50 to-violet-100 text-violet-800 ring-2 ring-violet-200", hov: "hover:border-violet-300 hover:bg-violet-50/50" },
+                  { value: "pacote" as const, label: "Pacote (MAT + MO)", icon: "📋", sel: "border-emerald-500 bg-gradient-to-b from-emerald-50 to-emerald-100 text-emerald-800 ring-2 ring-emerald-200", hov: "hover:border-emerald-300 hover:bg-emerald-50/50" },
+                  { value: "pecas_veiculo" as const, label: "Manutenção de Veículos", icon: "🚗", sel: "border-cyan-500 bg-gradient-to-b from-cyan-50 to-cyan-100 text-cyan-800 ring-2 ring-cyan-200", hov: "hover:border-cyan-300 hover:bg-cyan-50/50" },
                 ].map(opt => (
                   <button
                     key={opt.value}
                     type="button"
-                    className={`flex-1 px-3 py-2 text-xs rounded-md border transition-all ${
+                    className={`flex-1 px-3 py-2.5 text-xs rounded-xl border-2 transition-all ${
                       form.tipo === opt.value
-                        ? "border-amber-500 bg-amber-50 text-amber-700 font-semibold shadow-sm"
-                        : "border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+                        ? `${opt.sel} font-bold shadow-sm scale-[1.03]`
+                        : `border-gray-200 bg-white text-gray-600 ${opt.hov}`
                     }`}
                     onClick={() => {
                       if (form.tipo === opt.value) return;
@@ -3084,7 +3120,8 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                       if ((opt.value === "servico" || opt.value === "equipamento") && modoSC === "insumo") setModoSC("eap");
                     }}
                   >
-                    <span className="mr-1">{opt.icon}</span> {opt.label}
+                    <span className="mr-1 text-base align-middle">{opt.icon}</span> {opt.label}
+                    {form.tipo === opt.value && <CheckCircle2 className="inline-block ml-1.5 h-3.5 w-3.5 align-text-bottom" />}
                   </button>
                 ))}
                 {form.tipo === "pacote" && (
@@ -3159,12 +3196,14 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
 
             {/* Obra — combobox com busca */}
             <div className="space-y-1">
-              <label className="text-xs font-medium text-gray-700 flex items-center gap-1">
-                <Building2 className="h-3 w-3 text-amber-600" /> Obra / Centro de Custo
+              <label className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
+                <span className={`h-2 w-2 rounded-full ${form.obraId ? "bg-emerald-500" : "bg-amber-400 animate-pulse"}`} />
+                <Building2 className="h-3.5 w-3.5 text-amber-600" /> Obra / Centro de Custo
+                {form.obraId && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />}
               </label>
               <div className="relative" ref={obraRef}>
                 <input
-                  className={`w-full h-8 ${form.obraId && !obraOpen ? "pr-16" : "pr-3"} pl-3 text-sm border border-gray-300 rounded-md bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent cursor-pointer`}
+                  className={`w-full h-9 ${form.obraId && !obraOpen ? "pr-16" : "pr-3"} pl-3 text-sm border-2 rounded-lg bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 cursor-pointer transition-colors ${form.obraId ? "border-emerald-300 focus:border-emerald-400 focus:ring-emerald-100" : "border-amber-300 bg-amber-50/40 focus:border-amber-500 focus:ring-amber-100"}`}
                   placeholder={obrasQ.isLoading ? "Carregando obras..." : "Digite para buscar a obra..."}
                   value={obraOpen
                     ? obraSearch
@@ -3521,8 +3560,9 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                               .filter((it: any) => it.nivel >= 2 && it.tipo !== "grupo")
                               .filter((it: any) => {
                                 if (it.isComposto || it.tipo === "Composto" || it.servicoCodigo === "composto") return true;
+                                {/* Rev. 5026 — MO: basta ter valor de M.O. (temMdo agora considera a coluna de MO do orçamento), com ou sem composição vinculada. Rev. 5027: a regra vale TAMBÉM durante a busca (antes a busca exigia servicoCodigo e escondia itens de MO sem composição) */}
+                                if (form.tipo === "servico") return it.temMdo;
                                 if (eapSearch) return !!it.servicoCodigo;
-                                if (form.tipo === "servico") return !!it.servicoCodigo && it.temMdo;
                                 if (form.tipo === "equipamento") return !!it.servicoCodigo && it.temEquip;
                                 if (!it.servicoCodigo) return true;
                                 if (form.tipo === "material") return it.temMat !== false;
@@ -3573,8 +3613,8 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                             const allItems = eapQ.data.items;
                             const isLeaf = (it: any) => {
                               if (it.isComposto || it.tipo === "Composto" || it.servicoCodigo === "composto") return true;
+                              if (form.tipo === "servico") return it.servicoCodigo !== "composto" && (it as any).temMdo;
                               if (eapSearch) return !!it.servicoCodigo && it.servicoCodigo !== "composto";
-                              if (form.tipo === "servico") return !!it.servicoCodigo && it.servicoCodigo !== "composto" && (it as any).temMdo;
                               if (form.tipo === "equipamento") return !!it.servicoCodigo && it.servicoCodigo !== "composto" && (it as any).temEquip;
                               if (it.tipo === "grupo" || it.tipo === "Etapa/Subetapa") return false;
                               if (!it.servicoCodigo && allItems.some((c: any) => c.eapCodigo !== it.eapCodigo && c.eapCodigo?.startsWith(it.eapCodigo + "."))) return false;
@@ -4517,22 +4557,39 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
             <div className={form.isLocacao ? "" : "grid grid-cols-2 gap-2"}>
               {!form.isLocacao && (
                 <div className="space-y-1">
-                  <label className="text-xs font-medium text-gray-700">Data de Necessidade</label>
+                  <label className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
+                    <CalendarDays className="h-3.5 w-3.5 text-sky-500" /> Data de Necessidade
+                    {form.dataNecessidade && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />}
+                  </label>
                   <input
                     type="date"
                     min={new Date().toISOString().slice(0, 10)}
-                    className="w-full h-8 px-3 text-sm rounded-md border border-gray-300 bg-white text-gray-900 outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-300"
+                    className={`w-full h-9 px-3 text-sm rounded-lg border-2 bg-white text-gray-900 outline-none transition-colors focus:ring-2 ${form.dataNecessidade ? "border-emerald-300 focus:border-emerald-400 focus:ring-emerald-100" : "border-gray-200 focus:border-sky-400 focus:ring-sky-100"}`}
                     value={form.dataNecessidade}
                     onChange={e => setForm(p => ({ ...p, dataNecessidade: e.target.value }))}
                   />
                 </div>
               )}
               <div className="space-y-1">
-                <label className="text-xs font-medium text-gray-700">Prioridade</label>
+                <label className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
+                  <Zap className={`h-3.5 w-3.5 ${form.prioridade === "urgente" ? "text-red-500" : form.prioridade === "alta" ? "text-orange-500" : form.prioridade === "baixa" ? "text-gray-400" : "text-blue-500"}`} /> Prioridade
+                </label>
                 <Select value={form.prioridade} onValueChange={v => setForm(p => ({ ...p, prioridade: v }))}>
-                  <SelectTrigger className="h-8 text-sm border-gray-300 bg-white text-gray-900"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className={`h-9 text-sm rounded-lg border-2 font-semibold ${
+                    form.prioridade === "urgente" ? "border-red-300 bg-red-50 text-red-700" :
+                    form.prioridade === "alta" ? "border-orange-300 bg-orange-50 text-orange-700" :
+                    form.prioridade === "baixa" ? "border-gray-200 bg-gray-50 text-gray-600" :
+                    "border-blue-200 bg-blue-50 text-blue-700"
+                  }`}><SelectValue /></SelectTrigger>
                   <SelectContent className="bg-white border-gray-200">
-                    {PRIORIDADES.map(p => <SelectItem key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</SelectItem>)}
+                    {PRIORIDADES.map(p => (
+                      <SelectItem key={p} value={p}>
+                        <span className="flex items-center gap-1.5">
+                          <span className={`h-2 w-2 rounded-full ${p === "urgente" ? "bg-red-500" : p === "alta" ? "bg-orange-500" : p === "baixa" ? "bg-gray-400" : "bg-blue-500"}`} />
+                          {p.charAt(0).toUpperCase() + p.slice(1)}
+                        </span>
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -4540,9 +4597,11 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
 
             {/* Observações */}
             <div className="space-y-1">
-              <label className="text-xs font-medium text-gray-700">Observações</label>
+              <label className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
+                <FileText className="h-3.5 w-3.5 text-indigo-400" /> Observações
+              </label>
               <textarea
-                className="w-full px-3 py-2 text-sm rounded-md border border-gray-300 bg-white text-gray-900 placeholder-gray-400 outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-300 resize-none"
+                className="w-full px-3 py-2 text-sm rounded-lg border-2 border-gray-200 bg-white text-gray-900 placeholder-gray-400 outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 resize-none transition-colors"
                 rows={2}
                 value={form.observacoes}
                 onChange={e => setForm(p => ({ ...p, observacoes: e.target.value }))}
@@ -4551,11 +4610,14 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
 
             {/* Anexos (imagens, PDFs, vídeos) */}
             <div className="space-y-1">
-              <label className="text-xs font-medium text-gray-700">Anexos (opcional)</label>
+              <label className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
+                <Paperclip className="h-3.5 w-3.5 text-teal-500" /> Anexos (opcional)
+                {pendingAnexos.length > 0 && <span className="px-1.5 py-0.5 rounded-full bg-teal-100 text-teal-700 text-[10px] font-bold">{pendingAnexos.length}</span>}
+              </label>
               <input ref={fileInputRef} type="file" accept="image/*,application/pdf,video/mp4,video/quicktime,video/avi,video/x-matroska" multiple className="hidden" onChange={e => { if (e.target.files) handleMultipleFiles(e.target.files); e.target.value = ""; }} />
               <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleImagemFile(f); e.target.value = ""; }} />
               <div
-                className={`rounded-lg border-2 border-dashed p-3 transition-colors ${anexoDragOver ? "border-blue-400 bg-blue-50" : "border-gray-200 bg-gray-50 hover:border-gray-300"}`}
+                className={`rounded-xl border-2 border-dashed p-3 transition-colors ${anexoDragOver ? "border-teal-400 bg-teal-50" : "border-teal-200/70 bg-teal-50/30 hover:border-teal-300"}`}
                 onDragOver={e => { e.preventDefault(); setAnexoDragOver(true); }}
                 onDragLeave={() => setAnexoDragOver(false)}
                 onDrop={e => { e.preventDefault(); setAnexoDragOver(false); if (e.dataTransfer.files?.length) handleMultipleFiles(e.dataTransfer.files); }}
@@ -4601,15 +4663,16 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
             {/* Itens Solicitados */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <label className="text-xs font-semibold text-gray-700">
+                <label className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
+                  <span className={`h-2 w-2 rounded-full ${itens.filter(i => i.descricao.trim()).length > 0 ? "bg-emerald-500" : "bg-amber-400 animate-pulse"}`} />
                   Itens Solicitados * {itens.filter(i => i.descricao.trim()).length > 0 && (
-                    <span className="text-gray-400 font-normal ml-1">({itens.filter(i => i.descricao.trim()).length} ite{itens.filter(i => i.descricao.trim()).length === 1 ? "m" : "ns"})</span>
+                    <span className="px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-bold">{itens.filter(i => i.descricao.trim()).length} ite{itens.filter(i => i.descricao.trim()).length === 1 ? "m" : "ns"}</span>
                   )}
                 </label>
                 <button
                   type="button"
                   onClick={() => setItens(p => [...p, newItem()])}
-                  className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold border border-amber-300 rounded-md bg-amber-50 text-amber-700 hover:bg-amber-100 hover:border-amber-400 transition shadow-sm"
+                  className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold border-2 border-amber-300 rounded-lg bg-gradient-to-b from-amber-50 to-amber-100 text-amber-700 hover:from-amber-100 hover:to-amber-200 hover:border-amber-400 transition shadow-sm"
                   title="Adicionar outro item à esta Solicitação"
                 >
                   <Plus className="h-3.5 w-3.5" /> Adicionar Item
@@ -4986,19 +5049,19 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
           </div>{/* fim corpo rolável */}
 
           {/* Rodapé fixo com botões */}
-          <div className="px-5 py-3 border-t border-gray-100 bg-white shrink-0 flex gap-2">
+          <div className="px-5 py-3 border-t border-amber-100 bg-gradient-to-r from-white via-amber-50/40 to-white shrink-0 flex gap-2">
               <button
                 onClick={tentarFecharNova}
-                className="flex-1 h-9 text-sm border border-gray-300 rounded-md bg-white text-gray-600 hover:bg-gray-50 font-medium transition"
+                className="flex-1 h-10 text-sm border-2 border-gray-200 rounded-xl bg-white text-gray-600 hover:bg-gray-50 hover:border-gray-300 font-semibold transition"
               >
                 Cancelar
               </button>
               <button
                 onClick={handleSalvar}
                 disabled={criar.isPending || editar.isPending || uploadingImagem}
-                className="flex-1 h-9 text-sm rounded-md bg-amber-600 hover:bg-amber-500 text-white font-semibold transition disabled:opacity-60 flex items-center justify-center gap-2"
+                className="flex-1 h-10 text-sm rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white font-bold shadow-md transition disabled:opacity-60 flex items-center justify-center gap-2"
               >
-                {(criar.isPending || editar.isPending || uploadingImagem) ? <Loader2 className="h-4 w-4 animate-spin" /> : editingSc ? "Salvar Alterações" : "Criar Solicitação"}
+                {(criar.isPending || editar.isPending || uploadingImagem) ? <Loader2 className="h-4 w-4 animate-spin" /> : (<><CheckCircle2 className="h-4 w-4" /> {editingSc ? "Salvar Alterações" : "Criar Solicitação"}</>)}
               </button>
           </div>
         </DialogContent>

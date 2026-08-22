@@ -976,53 +976,6 @@ export const pjContractsRouter = router({
         return { success: true, url };
       }),
 
-    /** Renovar contrato */
-    renovar: protectedProcedure
-      .input(z.object({
-        id: z.number(),
-        novaDataInicio: z.string(),
-        novaDataFim: z.string(),
-        novoValorMensal: z.string().optional(),
-      }))
-      .mutation(async ({ input, ctx }) => {
-        const db = (await getDb())!;
-        const [contratoAnterior] = await db.select().from(pjContracts).where(eq(pjContracts.id, input.id));
-        if (!contratoAnterior) throw new TRPCError({ code: "NOT_FOUND" });
-        
-        // Marcar contrato anterior como renovado
-        await db.update(pjContracts).set({ status: 'renovado' as any }).where(eq(pjContracts.id, input.id));
-        
-        // Criar novo contrato
-        const ano = new Date().getFullYear();
-        const [countResult] = await db.select({ total: sql<number>`COUNT(*)` })
-          .from(pjContracts)
-          .where(eq(pjContracts.companyId, contratoAnterior.companyId));
-        const numero = `PJ-${ano}-${String((countResult?.total || 0) + 1).padStart(4, '0')}`;
-        
-        const [result] = await db.insert(pjContracts).values({
-          companyId: contratoAnterior.companyId,
-          employeeId: contratoAnterior.employeeId,
-          numeroContrato: numero,
-          cnpjPrestador: contratoAnterior.cnpjPrestador,
-          razaoSocialPrestador: contratoAnterior.razaoSocialPrestador,
-          objetoContrato: contratoAnterior.objetoContrato,
-          dataInicio: input.novaDataInicio,
-          dataFim: input.novaDataFim,
-          renovacaoAutomatica: contratoAnterior.renovacaoAutomatica,
-          valorMensal: input.novoValorMensal || contratoAnterior.valorMensal,
-          percentualAdiantamento: contratoAnterior.percentualAdiantamento,
-          percentualFechamento: contratoAnterior.percentualFechamento,
-          diaAdiantamento: contratoAnterior.diaAdiantamento,
-          diaFechamento: contratoAnterior.diaFechamento,
-          status: 'pendente_assinatura',
-          contratoAnteriorId: input.id,
-          criadoPor: ctx.user.name ?? 'Sistema',
-          criadoPorUserId: ctx.user.id,
-        });
-        
-        return { success: true, novoContratoId: result[0].id, numero };
-      }),
-
     cancelar: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input, ctx }) => {

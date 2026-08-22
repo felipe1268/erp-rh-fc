@@ -8,6 +8,9 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CheckCircle, XCircle, ClipboardCheck, Zap, ChevronLeft, ChevronRight, ChevronDown, AlertTriangle, ShieldCheck, UserCheck, Crown, FileSignature, Building2, Ruler, ShoppingCart, FileText, Banknote, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
+// Rev. 5160 — Folha PJ embutida aqui (Prestadores de Serviço ficou só com contratos)
+import ModuloPJ from "@/pages/ModuloPJ";
+import { usePermissions } from "@/contexts/PermissionsContext";
 
 const BRL = (v: any) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(v) || 0);
 const fmtDate = (d: string | null | undefined) => {
@@ -61,6 +64,12 @@ export default function Medicoes() {
   const [ano, setAno] = useState(hoje.getFullYear());
   const [mesSel, setMesSel] = useState(hoje.getMonth() + 1);
   const [filtroStatus, setFiltroStatus] = useState("todos");
+  // Rev. 5160 — aba "Folha PJ (Prestadores)" dentro de Medições de Terceiros.
+  // Só aparece para quem tem acesso ao módulo Prestadores de Serviço (/modulo-pj),
+  // preservando a permissão que a tela tinha antes da mudança.
+  const { canAccessRoute } = usePermissions();
+  const podeVerFolhaPJ = canAccessRoute("/modulo-pj");
+  const [abaPJ, setAbaPJ] = useState(false);
   const [acompanhamentoAberto, setAcompanhamentoAberto] = useState(false);
   const [motivoRejeicao, setMotivoRejeicao] = useState("");
   const [rejeitandoId, setRejeitandoId] = useState<number | null>(null);
@@ -162,7 +171,7 @@ export default function Medicoes() {
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div>
             <h1 className="text-xl font-bold text-gray-900">Medições de Terceiros</h1>
-            <p className="text-sm text-gray-500">Controle e aprovação (a pagar) — levantamento de campo, FD do período e {tresNiveis ? "aprovação em 3 níveis" : "aprovação direta"}</p>
+            <p className="text-sm text-gray-500">{abaPJ ? "Folha de Prestadores — medições mensais (1ª/2ª) dos prestadores de serviço, conectadas ao Contas a Pagar" : <>Controle e aprovação (a pagar) — levantamento de campo, FD do período e {tresNiveis ? "aprovação em 3 níveis" : "aprovação direta"}</>}</p>
           </div>
           <div className="flex items-center gap-2">
             {comDivergencia > 0 && (
@@ -178,6 +187,28 @@ export default function Medicoes() {
           </div>
         </div>
 
+        {/* Rev. 5160 — a Folha PJ (medições dos prestadores) mudou para cá, a pedido do user.
+            Em Prestadores de Serviço ficou só cadastro + contratos. */}
+        {podeVerFolhaPJ && (
+        <div className="flex items-center gap-1 rounded-xl border border-gray-200 bg-white p-1 shadow-sm w-fit">
+          <button
+            onClick={() => setAbaPJ(false)}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${!abaPJ ? "bg-blue-600 text-white shadow" : "text-gray-600 hover:bg-gray-100"}`}
+          >
+            <span className="inline-flex items-center gap-1.5"><Building2 className="w-4 h-4" /> Empresas Terceiras</span>
+          </button>
+          <button
+            onClick={() => setAbaPJ(true)}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${abaPJ ? "bg-purple-600 text-white shadow" : "text-gray-600 hover:bg-gray-100"}`}
+          >
+            <span className="inline-flex items-center gap-1.5"><Banknote className="w-4 h-4" /> Folha de Prestadores</span>
+          </button>
+        </div>
+        )}
+
+        {abaPJ && podeVerFolhaPJ ? (
+          <ModuloPJ modo="folha" embedded />
+        ) : (<>
         <div className="flex items-center gap-2 pt-1">
           <ClipboardCheck className="w-4 h-4 text-gray-500" />
           <h2 className="text-sm font-semibold text-gray-800">Medições registradas</h2>
@@ -547,6 +578,7 @@ export default function Medicoes() {
             </div>
           )}
         </div>
+        </>)}
 
       </div>
     </DashboardLayout>

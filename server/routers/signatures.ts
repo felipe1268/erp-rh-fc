@@ -7,6 +7,28 @@ import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
 import { storagePut } from "../storage";
 import { randomBytes, createHash } from "crypto";
+import { aplicarAssinaturaEmpregadorAutomatica } from "./rhDocumentos";
+import { assertRaioXAccess } from "../raioXGuard";
+
+// Rev. 5047 — resolve o(s) CPF(s) do usuário logado para o match de signatário interno.
+// Fontes: users.cpf (coluna nova) + colaborador(es) com o MESMO e-mail do usuário.
+// CPF é normalizado dos dois lados (formatos mistos no banco — só dígitos).
+const normCpfDigits = (c: string | null | undefined) => (c || "").replace(/[^0-9]/g, "");
+async function userCpfMatchesSigner(db: any, user: any, signerCpf: string | null): Promise<boolean> {
+  const alvo = normCpfDigits(signerCpf);
+  if (!alvo) return true; // signatário sem CPF cadastrado: não há o que comparar (comport. antigo)
+  if (normCpfDigits(user?.cpf) === alvo) return true;
+  // Fallback: colaborador VINCULADO ao usuário (employees.user_id) ou com o mesmo e-mail
+  const email = (user?.email || "").trim().toLowerCase();
+  const userId = Number(user?.id) || 0;
+  const rows = await db.execute(sql`
+    SELECT 1 FROM employees
+    WHERE (user_id = ${userId} OR (${email} <> '' AND lower(trim(coalesce(email,''))) = ${email}))
+      AND regexp_replace(coalesce(cpf,''), '[^0-9]', '', 'g') = ${alvo}
+    LIMIT 1`);
+  const r: any[] = (rows as any).rows ?? rows;
+  return r.length > 0;
+}
 
 function sha256(s: string) {
   return createHash("sha256").update(s, "utf8").digest("hex");
@@ -456,11 +478,13 @@ export const signaturesRouter = router({
       // e se o usuário atual já está autenticado (ctx.user é preenchido pelo createContext
       // mesmo em publicProcedure — null se não autenticado).
       const requiresLogin = signer.role !== "contratado";
-      const normCpf = (c: string | null) => (c || "").replace(/[^0-9]/g, "");
       const loggedIn = !!ctx.user;
-      const loggedInUserCpf = ctx.user?.cpf ?? null;
+      // Rev. 5047 — users não tinha coluna cpf (ctx.user.cpf era sempre undefined),
+      // então TODO signatário interno com CPF preenchido caía em "Usuário incorreto".
+      // Agora: users.cpf (novo) + fallback pelo colaborador com o mesmo e-mail.
+      const loggedInUserCpf = loggedIn ? ((ctx.user as any).cpf ?? null) : null;
       const cpfMatches = requiresLogin && loggedIn
-        ? normCpf(loggedInUserCpf) === normCpf(signer.cpf)
+        ? await userCpfMatchesSigner(db, ctx.user!, signer.cpf)
         : true;
 
       return {
@@ -515,8 +539,8 @@ export const signaturesRouter = router({
         if (!ctx.user) {
           throw new TRPCError({ code: "UNAUTHORIZED", message: "Você precisa estar logado no sistema FC Engenharia para assinar este documento." });
         }
-        const normCpf = (c: string | null) => (c || "").replace(/[^0-9]/g, "");
-        if (normCpf(ctx.user.cpf) !== normCpf(signer.cpf)) {
+        // Rev. 5047 — mesma resolução de CPF da query getByToken (users.cpf + fallback e-mail)
+        if (!(await userCpfMatchesSigner(db, ctx.user, signer.cpf))) {
           throw new TRPCError({ code: "FORBIDDEN", message: "O usuário logado não corresponde ao signatário esperado para este documento." });
         }
       }
@@ -648,7 +672,7 @@ export const signaturesRouter = router({
                   const put = await storagePut(sigKey, Buffer.from(b64, "base64"), "image/png");
                   sigUrl = put.url;
                 }
-                await db.update(rhDocumentos).set({
+                const updResult = await db.update(rhDocumentos).set({
                   status: "assinado",
                   assinadoEm: nowIso,
                   assinaturaHash: session.documentHash,
@@ -656,7 +680,17 @@ export const signaturesRouter = router({
                   ...(sigUrl ? { assinaturaUrl: sigUrl, assinaturaKey: sigKey } : {}),
                   termoAceito: 1,
                   updatedAt: nowIso,
-                }).where(and(eq(rhDocumentos.id, rhDocId), sql`${rhDocumentos.status} <> 'assinado'`));
+                }).where(and(eq(rhDocumentos.id, rhDocId), sql`${rhDocumentos.status} <> 'assinado'`))
+                  .returning({ id: rhDocumentos.id, companyId: rhDocumentos.companyId, tipo: rhDocumentos.tipo });
+
+                // Rev. 5101 — assinatura automática do empregador (FCSign path).
+                // Identidade registrada = sócio administrador (não o operador FCSign).
+                if (updResult?.length > 0) {
+                  const updDoc = updResult[0];
+                  setImmediate(() => {
+                    aplicarAssinaturaEmpregadorAutomatica(db, updDoc.id, updDoc.companyId, updDoc.tipo).catch(() => {});
+                  });
+                }
               }
             } catch (e) {
               console.error("[FCSign.complete] falha ao marcar rh_documento assinado:", e);
@@ -1028,6 +1062,11 @@ export const signaturesRouter = router({
           eq(signatureSessions.id, input.id),
         )).limit(1);
       if (!sess) throw new TRPCError({ code: "NOT_FOUND", message: "Sessão não encontrada." });
+      // Rev. 5193 — Raio-X guard (additional layer for employee-linked sessions).
+      // admin_master already checked above; this is forward-compatibility.
+      if (sess.employeeId) {
+        await assertRaioXAccess(ctx as any, sess.employeeId);
+      }
       const nowIso = new Date().toISOString();
       const actor = ctx.user.name || ctx.user.email || `user#${ctx.user.id}`;
       // Soft-cancel sessão

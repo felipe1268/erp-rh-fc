@@ -6,6 +6,7 @@ import { eq, and, desc, inArray, sql, isNull } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut } from "../storage";
 import { TRPCError } from "@trpc/server";
+import { assertRaioXAccess, assertFullRaioXAccess, assertEmployeeInCompany, RAIO_X_FORBIDDEN_MSG } from "../raioXGuard";
 
 // ==========================================
 // Valor por extenso em pt-BR
@@ -312,6 +313,139 @@ const TEMPLATE_INDETERMINADO = `<div style="font-family: 'Times New Roman', seri
 // ==========================================
 // Router
 // ==========================================
+// Rev. 4980 — motor COMPARTILHADO: usado pelo preview do cadastro (gerarContrato)
+// e pela Ficha do dossiê (rhDocumentos) — contrato de experiência unificado.
+export async function montarContratoPreenchido(db: any, input: {
+  companyId: number; employeeId: number; tipo: "experiencia" | "indeterminado";
+  templateId?: number; prazoExperienciaDias?: number; prazoProrrogacaoDias?: number;
+  dataInicio?: string; valorHoraOverride?: string; funcaoOverride?: string;
+  localTrabalhoOverride?: string; horarioTrabalhoOverride?: string;
+  /** true = omite o cabeçalho interno (quando embrulhado na moldura ISO do dossiê) */
+  semCabecalho?: boolean;
+}) {
+      const [emp] = await db.select().from(employees).where(eq(employees.id, input.employeeId));
+      if (!emp) throw new Error("Funcionário não encontrado");
+
+      // Buscar empresa
+      let [company] = await db.select().from(companies).where(eq(companies.id, input.companyId));
+      if (!company) throw new Error("Empresa não encontrada");
+      // Rev. 4984 — colaborador marcado como JF: contrato sai com os dados do
+      // empregador Julio Ferraz (logo, razão social, CNPJ, endereço).
+      if ((emp as any).empregadorDocumentos === "JF") {
+        const [jf] = await db.select().from(companies)
+          .where(sql`${companies.cnpj} LIKE '03.426.403%' AND (${companies.grupoEmpresarial} IS NOT DISTINCT FROM ${(company as any)?.grupoEmpresarial ?? null})`)
+          .orderBy(sql`(${companies.deletedAt} IS NULL) DESC, ${companies.id} ASC`)
+          .limit(1);
+        if (jf) company = jf;
+      }
+
+      // Buscar template
+      let templateHtml: string;
+      if (input.templateId) {
+        const [tmpl] = await db.select().from(contractTemplates).where(eq(contractTemplates.id, input.templateId));
+        if (!tmpl) throw new Error("Template não encontrado");
+        templateHtml = tmpl.conteudoHtml;
+      } else {
+        templateHtml = input.tipo === "experiencia" ? TEMPLATE_EXPERIENCIA : TEMPLATE_INDETERMINADO;
+      }
+
+      const dataInicio = input.dataInicio || emp.dataAdmissao || new Date().toISOString().split("T")[0];
+      const prazo = input.prazoExperienciaDias || 45;
+      const prazoProrr = input.prazoProrrogacaoDias || prazo;
+      const dataFimObj = new Date(dataInicio + "T12:00:00");
+      dataFimObj.setDate(dataFimObj.getDate() + prazo);
+      const dataFim = dataFimObj.toISOString().split("T")[0];
+      const dataFimProrr = new Date(dataFim + "T12:00:00");
+      dataFimProrr.setDate(dataFimProrr.getDate() + prazoProrr);
+
+      const valorHora = input.valorHoraOverride || emp.valorHora || emp.salarioBase || "0";
+      const valorHoraNum = parseFloat(valorHora.replace(",", ".")) || 0;
+
+      const horario = input.horarioTrabalhoOverride || emp.jornadaTrabalho || "de 2ª feira à 5ª feira: 07h00 às 12h00 e das 13h00 às 17h00<br>na 6ª feira: 07h00 às 12h00 e das 13h00 às 16h00";
+
+      // Gerar cabeçalho com logo da empresa
+      const logoUrl = company.logoUrl || "";
+      const telefoneEmpresa = (company as any).telefone || "";
+      const emailEmpresa = (company as any).email || "";
+      const siteEmpresa = (company as any).site || "";
+      const cabecalhoEmpresa = logoUrl
+        ? `<div style="text-align: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #1B2A4A;">
+<img src="${logoUrl}" alt="Logo" style="max-height: 70px; max-width: 280px; object-fit: contain; margin-bottom: 8px;" />
+<div style="font-size: 11pt; font-weight: bold; color: #1B2A4A;">${company.razaoSocial}</div>
+<div style="font-size: 9pt; color: #555;">CNPJ: ${company.cnpj}${company.endereco ? ` | ${company.endereco}` : ""}${company.cidade ? ` — ${company.cidade}/${company.estado || "SP"}` : ""}</div>
+</div>`
+        : `<div style="text-align: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #1B2A4A;">
+<div style="font-size: 14pt; font-weight: bold; color: #1B2A4A; letter-spacing: 1px;">${company.razaoSocial}</div>
+<div style="font-size: 9pt; color: #555;">CNPJ: ${company.cnpj}${company.endereco ? ` | ${company.endereco}` : ""}${company.cidade ? ` — ${company.cidade}/${company.estado || "SP"}` : ""}</div>
+</div>`;
+
+      // Gerar rodapé com dados de contato da empresa
+      const rodapeItems: string[] = [];
+      if (telefoneEmpresa) rodapeItems.push(`Tel: ${telefoneEmpresa}`);
+      if (emailEmpresa) rodapeItems.push(`E-mail: ${emailEmpresa}`);
+      if (siteEmpresa) rodapeItems.push(`Site: ${siteEmpresa}`);
+      const rodapeEmpresa = rodapeItems.length > 0
+        ? `<div style="margin-top: 50px; padding-top: 15px; border-top: 1px solid #ccc; text-align: center; font-size: 8pt; color: #777;">
+<div style="font-weight: bold; color: #1B2A4A; font-size: 9pt; margin-bottom: 4px;">${company.razaoSocial}</div>
+<div>${rodapeItems.join(" | ")}</div>
+${company.endereco ? `<div>${company.endereco}${company.cidade ? ` — ${company.cidade}/${company.estado || "SP"}` : ""}</div>` : ""}
+</div>`
+        : "";
+
+      // Rev. 4980 — campos de texto escapados (anti-XSS no HTML persistido);
+      // CABECALHO/RODAPE/HORARIO são HTML gerado pelo próprio servidor.
+      const escT = (s: any) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+      const placeholders: Record<string, string> = {
+        CABECALHO_EMPRESA: input.semCabecalho ? "" : cabecalhoEmpresa,
+        RODAPE_EMPRESA: rodapeEmpresa,
+        EMPRESA_RAZAO_SOCIAL: escT(company.razaoSocial),
+        EMPRESA_CNPJ: escT(company.cnpj),
+        EMPRESA_ENDERECO: escT(company.endereco || ""),
+        EMPRESA_CIDADE: escT(company.cidade || "Guaratinguetá"),
+        EMPRESA_ESTADO: escT(company.estado || "SP"),
+        NOME_FUNCIONARIO: escT(emp.nomeCompleto),
+        CPF: escT(emp.cpf),
+        CTPS: escT(emp.ctps || ""),
+        SERIE_CTPS: escT(emp.serieCtps || ""),
+        PIS: escT(emp.pis || ""),
+        ENDERECO_FUNCIONARIO: escT(emp.logradouro || ""),
+        NUMERO_FUNCIONARIO: escT(emp.numero || ""),
+        BAIRRO_FUNCIONARIO: escT(emp.bairro || ""),
+        CIDADE_FUNCIONARIO: escT(emp.cidade || ""),
+        ESTADO_FUNCIONARIO: escT(emp.estado || ""),
+        FUNCAO: escT(input.funcaoOverride || emp.funcao || emp.cargo || ""),
+        LOCAL_TRABALHO: escT(input.localTrabalhoOverride || `${company.endereco || ""}, ${company.cidade || ""}, estado de ${company.estado || ""}`),
+        HORARIO_TRABALHO: jornadaParaTabela(horario),
+        VALOR_HORA: escT(valorHora),
+        VALOR_HORA_EXTENSO: valorPorExtenso(valorHoraNum),
+        DATA_INICIO: formatarDataCurta(dataInicio),
+        DATA_FIM: formatarDataCurta(dataFim),
+        DATA_FIM_PRORROGACAO: formatarDataCurta(dataFimProrr.toISOString().split("T")[0]),
+        PRAZO_EXPERIENCIA: String(prazo),
+        PRAZO_PRORROGACAO: String(prazoProrr),
+        DATA_EXTENSO: formatarData(dataInicio),
+        DATA_ADMISSAO: formatarDataCurta(emp.dataAdmissao),
+      };
+
+      const conteudoGerado = substituirPlaceholders(templateHtml, placeholders);
+
+      return {
+        conteudoHtml: conteudoGerado,
+        dados: {
+          tipo: input.tipo,
+          dataInicio,
+          dataFim: input.tipo === "experiencia" ? dataFim : null,
+          prazoExperienciaDias: input.tipo === "experiencia" ? prazo : null,
+          prazoProrrogacaoDias: input.tipo === "experiencia" ? prazoProrr : null,
+          salarioBase: emp.salarioBase,
+          valorHora,
+          funcao: input.funcaoOverride || emp.funcao || emp.cargo || "",
+          jornadaTrabalho: horario,
+          localTrabalho: placeholders.LOCAL_TRABALHO,
+        },
+      };
+}
+
 export const contractsRouter = router({
   // Listar templates
   listTemplates: protectedProcedure
@@ -412,120 +546,15 @@ export const contractsRouter = router({
       localTrabalhoOverride: z.string().optional(),
       horarioTrabalhoOverride: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      // Rev. 5195 — management mutation (generate contract): full access only,
+      // scoped to the target company, plus target-employee scope.
+      await assertFullRaioXAccess(ctx as any, input.companyId);
+      await assertRaioXAccess(ctx as any, input.employeeId);
       const db = await getDb();
-
-      // Buscar funcionário
-      const [emp] = await db.select().from(employees).where(eq(employees.id, input.employeeId));
-      if (!emp) throw new Error("Funcionário não encontrado");
-
-      // Buscar empresa
-      const [company] = await db.select().from(companies).where(eq(companies.id, input.companyId));
-      if (!company) throw new Error("Empresa não encontrada");
-
-      // Buscar template
-      let templateHtml: string;
-      if (input.templateId) {
-        const [tmpl] = await db.select().from(contractTemplates).where(eq(contractTemplates.id, input.templateId));
-        if (!tmpl) throw new Error("Template não encontrado");
-        templateHtml = tmpl.conteudoHtml;
-      } else {
-        templateHtml = input.tipo === "experiencia" ? TEMPLATE_EXPERIENCIA : TEMPLATE_INDETERMINADO;
-      }
-
-      const dataInicio = input.dataInicio || emp.dataAdmissao || new Date().toISOString().split("T")[0];
-      const prazo = input.prazoExperienciaDias || 45;
-      const prazoProrr = input.prazoProrrogacaoDias || prazo;
-      const dataFimObj = new Date(dataInicio + "T12:00:00");
-      dataFimObj.setDate(dataFimObj.getDate() + prazo);
-      const dataFim = dataFimObj.toISOString().split("T")[0];
-      const dataFimProrr = new Date(dataFim + "T12:00:00");
-      dataFimProrr.setDate(dataFimProrr.getDate() + prazoProrr);
-
-      const valorHora = input.valorHoraOverride || emp.valorHora || emp.salarioBase || "0";
-      const valorHoraNum = parseFloat(valorHora.replace(",", ".")) || 0;
-
-      const horario = input.horarioTrabalhoOverride || emp.jornadaTrabalho || "de 2ª feira à 5ª feira: 07h00 às 12h00 e das 13h00 às 17h00<br>na 6ª feira: 07h00 às 12h00 e das 13h00 às 16h00";
-
-      // Gerar cabeçalho com logo da empresa
-      const logoUrl = company.logoUrl || "";
-      const telefoneEmpresa = (company as any).telefone || "";
-      const emailEmpresa = (company as any).email || "";
-      const siteEmpresa = (company as any).site || "";
-      const cabecalhoEmpresa = logoUrl
-        ? `<div style="text-align: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #1B2A4A;">
-<img src="${logoUrl}" alt="Logo" style="max-height: 70px; max-width: 280px; object-fit: contain; margin-bottom: 8px;" />
-<div style="font-size: 11pt; font-weight: bold; color: #1B2A4A;">${company.razaoSocial}</div>
-<div style="font-size: 9pt; color: #555;">CNPJ: ${company.cnpj}${company.endereco ? ` | ${company.endereco}` : ""}${company.cidade ? ` — ${company.cidade}/${company.estado || "SP"}` : ""}</div>
-</div>`
-        : `<div style="text-align: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #1B2A4A;">
-<div style="font-size: 14pt; font-weight: bold; color: #1B2A4A; letter-spacing: 1px;">${company.razaoSocial}</div>
-<div style="font-size: 9pt; color: #555;">CNPJ: ${company.cnpj}${company.endereco ? ` | ${company.endereco}` : ""}${company.cidade ? ` — ${company.cidade}/${company.estado || "SP"}` : ""}</div>
-</div>`;
-
-      // Gerar rodapé com dados de contato da empresa
-      const rodapeItems: string[] = [];
-      if (telefoneEmpresa) rodapeItems.push(`Tel: ${telefoneEmpresa}`);
-      if (emailEmpresa) rodapeItems.push(`E-mail: ${emailEmpresa}`);
-      if (siteEmpresa) rodapeItems.push(`Site: ${siteEmpresa}`);
-      const rodapeEmpresa = rodapeItems.length > 0
-        ? `<div style="margin-top: 50px; padding-top: 15px; border-top: 1px solid #ccc; text-align: center; font-size: 8pt; color: #777;">
-<div style="font-weight: bold; color: #1B2A4A; font-size: 9pt; margin-bottom: 4px;">${company.razaoSocial}</div>
-<div>${rodapeItems.join(" | ")}</div>
-${company.endereco ? `<div>${company.endereco}${company.cidade ? ` — ${company.cidade}/${company.estado || "SP"}` : ""}</div>` : ""}
-</div>`
-        : "";
-
-      const placeholders: Record<string, string> = {
-        CABECALHO_EMPRESA: cabecalhoEmpresa,
-        RODAPE_EMPRESA: rodapeEmpresa,
-        EMPRESA_RAZAO_SOCIAL: company.razaoSocial,
-        EMPRESA_CNPJ: company.cnpj,
-        EMPRESA_ENDERECO: company.endereco || "",
-        EMPRESA_CIDADE: company.cidade || "Guaratinguetá",
-        EMPRESA_ESTADO: company.estado || "SP",
-        NOME_FUNCIONARIO: emp.nomeCompleto,
-        CPF: emp.cpf,
-        CTPS: emp.ctps || "",
-        SERIE_CTPS: emp.serieCtps || "",
-        PIS: emp.pis || "",
-        ENDERECO_FUNCIONARIO: emp.logradouro || "",
-        NUMERO_FUNCIONARIO: emp.numero || "",
-        BAIRRO_FUNCIONARIO: emp.bairro || "",
-        CIDADE_FUNCIONARIO: emp.cidade || "",
-        ESTADO_FUNCIONARIO: emp.estado || "",
-        FUNCAO: input.funcaoOverride || emp.funcao || emp.cargo || "",
-        LOCAL_TRABALHO: input.localTrabalhoOverride || `${company.endereco || ""}, ${company.cidade || ""}, estado de ${company.estado || ""}`,
-        HORARIO_TRABALHO: jornadaParaTabela(horario),
-        VALOR_HORA: valorHora,
-        VALOR_HORA_EXTENSO: valorPorExtenso(valorHoraNum),
-        DATA_INICIO: formatarDataCurta(dataInicio),
-        DATA_FIM: formatarDataCurta(dataFim),
-        DATA_FIM_PRORROGACAO: formatarDataCurta(dataFimProrr.toISOString().split("T")[0]),
-        PRAZO_EXPERIENCIA: String(prazo),
-        PRAZO_PRORROGACAO: String(prazoProrr),
-        DATA_EXTENSO: formatarData(dataInicio),
-        DATA_ADMISSAO: formatarDataCurta(emp.dataAdmissao),
-      };
-
-      const conteudoGerado = substituirPlaceholders(templateHtml, placeholders);
-
-      return {
-        conteudoHtml: conteudoGerado,
-        dados: {
-          tipo: input.tipo,
-          dataInicio,
-          dataFim: input.tipo === "experiencia" ? dataFim : null,
-          prazoExperienciaDias: input.tipo === "experiencia" ? prazo : null,
-          prazoProrrogacaoDias: input.tipo === "experiencia" ? prazoProrr : null,
-          salarioBase: emp.salarioBase,
-          valorHora,
-          funcao: input.funcaoOverride || emp.funcao || emp.cargo || "",
-          jornadaTrabalho: horario,
-          localTrabalho: placeholders.LOCAL_TRABALHO,
-        },
-      };
+      return montarContratoPreenchido(db, input);
     }),
+
 
   // Salvar contrato gerado
   salvarContrato: protectedProcedure
@@ -546,6 +575,10 @@ ${company.endereco ? `<div>${company.endereco}${company.cidade ? ` — ${company
       observacoes: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
+      // Rev. 5195 — management mutation (save contract): full access only,
+      // scoped to the target company, plus target-employee scope.
+      await assertFullRaioXAccess(ctx as any, input.companyId);
+      await assertRaioXAccess(ctx as any, input.employeeId);
       const db = await getDb();
 
       if (input.tipo === "experiencia") {
@@ -582,6 +615,39 @@ ${company.endereco ? `<div>${company.endereco}${company.cidade ? ` — ${company
         criadoPor: ctx.user.name || ctx.user.email,
         criadoPorUserId: ctx.user.id,
       }).returning();
+
+      // Rev. 4980 — UNIFICAÇÃO com o dossiê (Documentos do Colaborador):
+      // espelha o contrato de experiência como documento do checklist, para
+      // não acusar "Faltando" nem existir um 2º modelo divergente.
+      if (input.tipo === "experiencia" || input.tipo === "indeterminado") {
+        const docTipo = input.tipo === "experiencia" ? "contrato_experiencia" : "contrato_trabalho_clt";
+        const docTitulo = input.tipo === "experiencia" ? "Contrato de Experiência" : "Contrato de Trabalho (CLT)";
+        const docCodigo = input.tipo === "experiencia" ? "FC-RH-001" : "FC-RH-016";
+        try {
+          const { rhDocumentos } = await import("../../drizzle/schema");
+          const [docAtivo] = await db.select({ id: rhDocumentos.id }).from(rhDocumentos).where(and(
+            eq(rhDocumentos.companyId, input.companyId),
+            eq(rhDocumentos.employeeId, input.employeeId),
+            eq(rhDocumentos.tipo, docTipo),
+            isNull(rhDocumentos.deletedAt),
+          )).limit(1);
+          if (!docAtivo) {
+            await db.insert(rhDocumentos).values({
+              companyId: input.companyId,
+              employeeId: input.employeeId,
+              tipo: docTipo,
+              titulo: docTitulo,
+              codigo: docCodigo,
+              conteudoHtml: input.conteudoGerado,
+              status: "gerado",
+              criadoPorId: ctx.user.id,
+              criadoPorNome: `${ctx.user.name || ctx.user.email} (via cadastro)`,
+            }).onConflictDoNothing();
+          }
+        } catch (e) {
+          console.warn("[Contratos] Falha ao espelhar contrato no dossiê:", e);
+        }
+      }
       return { id: result.id };
     }),
 
@@ -594,8 +660,15 @@ ${company.endereco ? `<div>${company.endereco}${company.cidade ? ` — ${company
       const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
       const allowedIds = allowedCompanies.map((c: any) => c.id);
       if (!allowedIds.includes(contrato.companyId)) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Acesso negado" });
+        // Rev. 5196 — employee/company-based deny must use the central message,
+        // never a bespoke string, to avoid leaking a different deny for an
+        // arbitrary target.
+        throw new TRPCError({ code: "FORBIDDEN", message: RAIO_X_FORBIDDEN_MSG });
       }
+      // Rev. 5195 — management mutation (delete contract): full access only,
+      // scoped to the contract's real company, plus target-employee scope.
+      await assertFullRaioXAccess(ctx as any, contrato.companyId);
+      await assertRaioXAccess(ctx as any, contrato.employeeId);
       const linked = await db.select({ id: employeeContracts.id })
         .from(employeeContracts)
         .where(eq(employeeContracts.contratoAnteriorId, input.id));
@@ -603,6 +676,23 @@ ${company.endereco ? `<div>${company.endereco}${company.cidade ? ` — ${company
         throw new TRPCError({ code: "BAD_REQUEST", message: "Este contrato possui contratos vinculados. Exclua-os primeiro." });
       }
       await db.delete(employeeContracts).where(eq(employeeContracts.id, input.id));
+      // Rev. 4980 — remove SÓ o espelho no dossiê (não assinado e marcado como
+      // espelho/backfill do cadastro; docs gerados no dossiê e N/A ficam intactos)
+      if (contrato.tipo === "experiencia" || contrato.tipo === "indeterminado") {
+        try {
+          const { rhDocumentos } = await import("../../drizzle/schema");
+          await db.update(rhDocumentos).set({ deletedAt: sql`now()`, updatedAt: sql`now()` }).where(and(
+            eq(rhDocumentos.companyId, contrato.companyId),
+            eq(rhDocumentos.employeeId, contrato.employeeId),
+            eq(rhDocumentos.tipo, contrato.tipo === "experiencia" ? "contrato_experiencia" : "contrato_trabalho_clt"),
+            sql`${rhDocumentos.status} <> 'assinado'`,
+            sql`(${rhDocumentos.criadoPorNome} LIKE '%(via cadastro)' OR ${rhDocumentos.criadoPorNome} = 'Backfill (contrato do cadastro)')`,
+            isNull(rhDocumentos.deletedAt),
+          ));
+        } catch (e) {
+          console.warn("[Contratos] Falha ao remover espelho do dossiê:", e);
+        }
+      }
       return { success: true };
     }),
 
@@ -622,8 +712,13 @@ ${company.endereco ? `<div>${company.endereco}${company.cidade ? ` — ${company
       const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
       const allowedIds = allowedCompanies.map((c: any) => c.id);
       if (!allowedIds.includes(contrato.companyId)) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Acesso negado" });
+        // Rev. 5196 — central deny message for employee/company-based denial.
+        throw new TRPCError({ code: "FORBIDDEN", message: RAIO_X_FORBIDDEN_MSG });
       }
+      // Rev. 5195 — management mutation (edit contract): full access only,
+      // scoped to the contract's real company, plus target-employee scope.
+      await assertFullRaioXAccess(ctx as any, contrato.companyId);
+      await assertRaioXAccess(ctx as any, contrato.employeeId);
       const data: any = { updatedAt: sql`NOW()` };
       if (input.funcao !== undefined) data.funcao = input.funcao;
       if (input.observacoes !== undefined) data.observacoes = input.observacoes;
@@ -647,7 +742,9 @@ ${company.endereco ? `<div>${company.endereco}${company.cidade ? ` — ${company
     .input(z.object({ id: z.number(), companyId: z.number() }))
     .mutation(async ({ input, ctx }) => {
       if (ctx.user.role !== "admin_master") {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Apenas usuários Admin Master podem reverter uma efetivação." });
+        // Rev. 5197 — keep admin_master-only policy, but emit the shared central
+        // deny message (task #192), consistent with all other Raio-X denials.
+        throw new TRPCError({ code: "FORBIDDEN", message: RAIO_X_FORBIDDEN_MSG });
       }
       const db = await getDb();
       const [contrato] = await db.select().from(employeeContracts).where(eq(employeeContracts.id, input.id));
@@ -655,7 +752,10 @@ ${company.endereco ? `<div>${company.endereco}${company.cidade ? ` — ${company
       const allowedCompanies3 = await getCompaniesForUser(ctx.user.id, ctx.user.role);
       const allowedIds3 = allowedCompanies3.map((c: any) => c.id);
       if (!allowedIds3.includes(contrato.companyId)) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Acesso negado" });
+        // Rev. 5196 — company/employee-based deny uses the central message. The
+        // stricter admin_master role gate above intentionally keeps its own
+        // explanatory message (role restriction, not a target-based denial).
+        throw new TRPCError({ code: "FORBIDDEN", message: RAIO_X_FORBIDDEN_MSG });
       }
       if (contrato.status !== "efetivado") {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Contrato não está efetivado." });
@@ -683,7 +783,9 @@ ${company.endereco ? `<div>${company.endereco}${company.cidade ? ` — ${company
   // Listar contratos de um funcionário
   listarContratos: protectedProcedure
     .input(z.object({ employeeId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      // Rev. 5192 — Raio-X guard.
+      await assertRaioXAccess(ctx as any, input.employeeId);
       const db = await getDb();
       return db.select().from(employeeContracts)
         .where(eq(employeeContracts.employeeId, input.employeeId))
@@ -693,10 +795,16 @@ ${company.endereco ? `<div>${company.endereco}${company.cidade ? ` — ${company
   // Obter contrato por ID
   getContrato: protectedProcedure
     .input(z.object({ id: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
       const [contrato] = await db.select().from(employeeContracts).where(eq(employeeContracts.id, input.id));
-      return contrato || null;
+      if (!contrato) return null;
+      // Rev. 5196 — auxiliary read must be guarded: derive the contract's real
+      // employee/company server-side, then run the central Raio-X guard. Prevents
+      // reading an arbitrary contract by ID (self users → own record only;
+      // rh-dp full → within authorized companies; admin_master → global).
+      await assertRaioXAccess(ctx as any, contrato.employeeId);
+      return contrato;
     }),
 
   // Upload contrato assinado
@@ -708,8 +816,19 @@ ${company.endereco ? `<div>${company.endereco}${company.cidade ? ` — ${company
       mimeType: z.string(),
       tipoProrrogacao: z.boolean().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      // Rev. 5195 — management mutation (upload signed contract): derive record
+      // employee/company server-side, then require full access. Fail closed if
+      // the contract does not exist.
       const db = await getDb();
+      const [contratoCheck] = await db.select({
+        employeeId: employeeContracts.employeeId,
+        companyId:  employeeContracts.companyId,
+      })
+        .from(employeeContracts).where(eq(employeeContracts.id, input.contratoId)).limit(1);
+      if (!contratoCheck) throw new TRPCError({ code: "NOT_FOUND", message: "Contrato não encontrado" });
+      await assertFullRaioXAccess(ctx as any, contratoCheck.companyId);
+      await assertRaioXAccess(ctx as any, contratoCheck.employeeId);
       const buffer = Buffer.from(input.fileBase64, "base64");
       const suffix = Math.random().toString(36).substring(2, 8);
       const key = `contratos/${input.contratoId}/${suffix}-${input.fileName}`;
@@ -735,8 +854,19 @@ ${company.endereco ? `<div>${company.endereco}${company.cidade ? ` — ${company
       dataProrrogacao: z.string().optional(),
       dataEfetivacao: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      // Rev. 5195 — management mutation (change contract status): derive record
+      // employee/company server-side, then require full access. Fail closed if
+      // the contract does not exist.
       const db = await getDb();
+      const [contratoCheck] = await db.select({
+        employeeId: employeeContracts.employeeId,
+        companyId:  employeeContracts.companyId,
+      })
+        .from(employeeContracts).where(eq(employeeContracts.id, input.id)).limit(1);
+      if (!contratoCheck) throw new TRPCError({ code: "NOT_FOUND", message: "Contrato não encontrado" });
+      await assertFullRaioXAccess(ctx as any, contratoCheck.companyId);
+      await assertRaioXAccess(ctx as any, contratoCheck.employeeId);
       const updateData: any = { status: input.status };
       if (input.dataProrrogacao) updateData.dataProrrogacao = input.dataProrrogacao;
       if (input.dataEfetivacao) updateData.dataEfetivacao = input.dataEfetivacao;

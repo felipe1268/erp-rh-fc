@@ -12,6 +12,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useAuth } from "@/_core/hooks/useAuth";
 import {
   X, FileSignature, AlertTriangle, Cake, ExternalLink, Banknote,
 } from "lucide-react";
@@ -46,7 +47,9 @@ export default function AlertasDiaPrompt({ modulo }: { modulo: "rh" | "financeir
     ? ["contratos", "avisos", "aniversariantes"]
     : ["avisos"];
 
-  const skipKey = `alertasDiaSkip:${modulo}:${companyId}:${data?.hoje ?? ""}`;
+  const { user } = useAuth();
+  // Rev. 4977 — chave POR USUÁRIO: cada usuário de RH/master resolve o seu
+  const skipKey = `alertasDiaSkip:${user?.id ?? "anon"}:${modulo}:${companyId}:${data?.hoje ?? ""}`;
   const getSkipped = (): Set<string> => {
     try { return new Set(JSON.parse(sessionStorage.getItem(skipKey) || "[]")); }
     catch { return new Set(); }
@@ -121,7 +124,9 @@ export default function AlertasDiaPrompt({ modulo }: { modulo: "rh" | "financeir
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o) fechar(); }}>
-      <DialogContent className="max-w-lg p-0 overflow-hidden border-0 shadow-2xl">
+      {/* Rev. 4977 — z-[80] acima do alerta de locações; só fecha nos botões */}
+      <DialogContent className="max-w-lg p-0 overflow-hidden border-0 shadow-2xl z-[80]"
+        onInteractOutside={(e) => e.preventDefault()} onEscapeKeyDown={(e) => e.preventDefault()}>
         <div className={`relative bg-gradient-to-br ${cfg.grad} px-6 py-5 text-white`}>
           <button
             onClick={fechar}

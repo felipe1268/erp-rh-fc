@@ -81,6 +81,8 @@ export function VincularItemCombobox({
   emptyHint,
   disabled,
   placeholder,
+  sugestaoIds,
+  preFiltro,
 }: {
   items: ItemVinculavel[];
   value: string; // id do item vinculado ("" = nenhum)
@@ -89,9 +91,46 @@ export function VincularItemCombobox({
   emptyHint?: string;
   disabled?: boolean;
   placeholder?: string;
+  // Task 150 — itens SUGERIDOS p/ a categoria do contorno (histórico da obra +
+  // casamento de texto), fixados no topo. Sugestão nunca vincula sozinha.
+  sugestaoIds?: number[];
+  // Rev. 4855 — PRÉ-FILTRO automático (decisão do user): ao abrir, mostra só
+  // itens que casam com a CATEGORIA do serviço e/ou o PAVIMENTO da planta
+  // (EAP por andar). "Ver todos" tira o filtro; digitar busca no orçamento todo.
+  preFiltro?: { tokens?: string[]; pavimento?: string };
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
+  const [verTodos, setVerTodos] = useState(false);
+
+  const normPf = (s: string) => String(s || "").toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const preFiltrados = useMemo(() => {
+    if (!preFiltro || verTodos || q.trim()) return null;
+    const toks = (preFiltro.tokens ?? []).map(normPf).filter((t) => t.length >= 4);
+    const pavToks = normPf(preFiltro.pavimento ?? "").split(/[^a-z0-9º°]+/).filter((t) => t.length >= 3 && !["pav", "pavimento", "andar"].includes(t));
+    if (!toks.length && !pavToks.length) return null;
+    const res = items.filter((i) => {
+      const s = normPf(i.search);
+      const okCat = !toks.length || toks.some((t) => s.includes(t));
+      const okPav = !pavToks.length || pavToks.some((t) => normPf(i.grupoPath).includes(t));
+      return okCat && okPav;
+    });
+    return res.length ? res : null; // palpite vazio → não esconde nada
+  }, [preFiltro, verTodos, q, items]);
+
+  const sugeridos = useMemo(() => {
+    if (!sugestaoIds?.length || q.trim()) return [] as ItemVinculavel[];
+    const byId = new Map(items.map((i) => [i.id, i]));
+    const list = sugestaoIds.map((id) => byId.get(id)).filter(Boolean) as ItemVinculavel[];
+    // pré-filtro ativo → sugestões de OUTRO pavimento/categoria ficam de fora
+    if (preFiltrados && !verTodos) {
+      const ok = new Set(preFiltrados.map((i) => i.id));
+      const dentro = list.filter((i) => ok.has(i.id));
+      if (dentro.length) return dentro;
+    }
+    return list;
+  }, [sugestaoIds, items, q, preFiltrados, verTodos]);
 
   const selected = useMemo(
     () => items.find((i) => String(i.id) === String(value)),
@@ -100,11 +139,12 @@ export function VincularItemCombobox({
 
   const filtered = useMemo(() => {
     const tokens = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const base = preFiltrados ?? items;
     const res = tokens.length
       ? items.filter((i) => tokens.every((t) => i.search.includes(t)))
-      : items;
+      : base;
     return res.slice(0, LIMITE);
-  }, [items, q]);
+  }, [items, q, preFiltrados]);
 
   const grupos = useMemo(() => {
     const m = new Map<string, ItemVinculavel[]>();
@@ -118,7 +158,7 @@ export function VincularItemCombobox({
   }, [filtered]);
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setVerTodos(false); setQ(""); } }}>
       <PopoverTrigger asChild>
         <Button
           variant="outline"
@@ -160,6 +200,16 @@ export function VincularItemCombobox({
               </div>
             ) : (
               <>
+                {preFiltrados ? (
+                  <div className="flex items-center justify-between gap-2 border-b bg-indigo-50/60 px-3 py-1.5 text-[11px] text-indigo-700">
+                    <span className="truncate">
+                      Filtrado: {[preFiltro?.tokens?.[0], preFiltro?.pavimento].filter(Boolean).join(" · ")} ({preFiltrados.length})
+                    </span>
+                    <button type="button" className="shrink-0 font-medium underline" onClick={() => setVerTodos(true)}>
+                      Ver todos
+                    </button>
+                  </div>
+                ) : null}
                 {value ? (
                   <CommandItem
                     value="__desvincular"
@@ -172,6 +222,27 @@ export function VincularItemCombobox({
                     <X className="mr-1 h-3.5 w-3.5" /> Desvincular item
                   </CommandItem>
                 ) : null}
+                {sugeridos.length > 0 && (
+                  <CommandGroup heading="✨ Sugeridos para esta categoria">
+                    {sugeridos.map((i) => {
+                      const sel = String(value) === String(i.id);
+                      return (
+                        <CommandItem
+                          key={`sug-${i.id}`}
+                          value={`sug-${i.id}`}
+                          onSelect={() => { onChange(String(i.id)); setOpen(false); }}
+                          className="items-start gap-1 text-xs bg-amber-50/60"
+                        >
+                          <Check className={cn("mt-0.5 h-3.5 w-3.5 shrink-0", sel ? "opacity-100" : "opacity-0")} />
+                          <span className="flex flex-col leading-tight">
+                            <span><b>{i.eapCodigo}</b> · {i.descricao}{i.unidade ? <span className="text-gray-400"> ({i.unidade})</span> : null}</span>
+                            {i.grupoPath ? <span className="text-[10px] text-gray-400">{i.grupoPath}</span> : null}
+                          </span>
+                        </CommandItem>
+                      );
+                    })}
+                  </CommandGroup>
+                )}
                 {grupos.map(([path, list]) => (
                   <CommandGroup key={path} heading={path === "—" ? "Sem agrupamento" : path}>
                     {list.map((i) => {

@@ -65,9 +65,15 @@ function statusBadge(s: string) {
   }
 }
 
-export default function IntegraSignAssinar() {
+// Rev. 5110 — o mesmo componente pode ser EMBUTIDO em outra tela (ex.: diálogo da tela
+// Prêmios): `tokenProp` substitui o token da rota, `embedded` compacta o layout e
+// `onAssinado` avisa o pai após a assinatura ser registrada.
+export default function IntegraSignAssinar(props: { tokenProp?: string; embedded?: boolean; onAssinado?: () => void } = {}) {
   const [, params] = useRoute("/integrasign/assinar/:token");
-  const token = params?.token || "";
+  const token = props.tokenProp || params?.token || "";
+  const embedded = !!props.embedded;
+  const wrapCls = embedded ? "py-1" : "min-h-screen bg-gray-50 py-6 px-4";
+  const centerCls = embedded ? "py-10 flex items-center justify-center" : "min-h-screen flex items-center justify-center bg-gray-50";
 
   const [termoAceito, setTermoAceito] = useState(false);
   const [nomeConfirmado, setNomeConfirmado] = useState("");
@@ -142,13 +148,36 @@ export default function IntegraSignAssinar() {
   }, []);
 
   useEffect(() => {
-    if (doc.data) {
-      setTimeout(() => {
-        initCanvas(sigCanvasRef.current, "sig");
-        initCanvas(rubCanvasRef.current, "rub");
-      }, 100);
+    if (!doc.data) return;
+    // Rev. 5110 — dentro de Dialog a animação de abertura (transform ~200ms) distorce o
+    // getBoundingClientRect; espere a animação acabar antes de criar o bitmap e
+    // reinicialize quando o container mudar de tamanho (resize/maximizar/rotação).
+    const t = setTimeout(() => {
+      initCanvas(sigCanvasRef.current, "sig");
+      initCanvas(rubCanvasRef.current, "rub");
+    }, embedded ? 320 : 100);
+    let ro: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== "undefined") {
+      let lastW = { sig: 0, rub: 0 };
+      ro = new ResizeObserver(() => {
+        const sig = sigCanvasRef.current, rub = rubCanvasRef.current;
+        const sw = sig ? Math.round(sig.getBoundingClientRect().width) : 0;
+        const rw = rub ? Math.round(rub.getBoundingClientRect().width) : 0;
+        // Só reinicializa se a largura CSS realmente mudou vs. o bitmap (evita loop e
+        // não apaga a assinatura à toa). Reset dos flags: o traço antigo é descartado.
+        const dpr = window.devicePixelRatio || 1;
+        if (sig && sw > 0 && Math.abs(sig.width - sw * dpr) > 2 && sw !== lastW.sig) {
+          lastW.sig = sw; initCanvas(sig, "sig"); setSigHasContent(false);
+        }
+        if (rub && rw > 0 && Math.abs(rub.width - rw * dpr) > 2 && rw !== lastW.rub) {
+          lastW.rub = rw; initCanvas(rub, "rub"); setRubHasContent(false);
+        }
+      });
+      if (sigCanvasRef.current) ro.observe(sigCanvasRef.current);
+      if (rubCanvasRef.current) ro.observe(rubCanvasRef.current);
     }
-  }, [doc.data, initCanvas]);
+    return () => { clearTimeout(t); ro?.disconnect(); };
+  }, [doc.data, initCanvas, embedded]);
 
   function getPos(e: any, canvas: HTMLCanvasElement) {
     const rect = canvas.getBoundingClientRect();
@@ -221,6 +250,7 @@ export default function IntegraSignAssinar() {
       });
 
       doc.refetch();
+      props.onAssinado?.();
       setSucesso(true);
       setSucessoMsg(result.concluido
         ? "Todas as assinaturas foram concluídas! O contrato está ativo."
@@ -258,7 +288,7 @@ export default function IntegraSignAssinar() {
 
   if (!token) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className={centerCls}>
         <Card className="max-w-md"><CardContent className="p-8 text-center">
           <AlertTriangle className="mx-auto h-12 w-12 text-red-500 mb-4" />
           <h2 className="text-xl font-bold mb-2">Link Inválido</h2>
@@ -270,7 +300,7 @@ export default function IntegraSignAssinar() {
 
   if (doc.isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className={centerCls}>
         <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
         <span className="ml-3 text-gray-600">Carregando documento...</span>
       </div>
@@ -279,7 +309,7 @@ export default function IntegraSignAssinar() {
 
   if (doc.error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className={centerCls}>
         <Card className="max-w-md"><CardContent className="p-8 text-center">
           <XCircle className="mx-auto h-12 w-12 text-red-500 mb-4" data-testid="icon-erro-link" />
           <h2 className="text-xl font-bold mb-2">Erro</h2>
@@ -320,15 +350,15 @@ export default function IntegraSignAssinar() {
     };
 
     return (
-      <div className="min-h-screen bg-gray-50 py-6 px-4">
+      <div className={wrapCls}>
         <div className="max-w-2xl mx-auto space-y-6">
-          <div className="text-center mb-6">
+          {!embedded && (<div className="text-center mb-6">
             <div className="flex items-center justify-center gap-2 mb-2">
               <PenLine className="h-8 w-8 text-blue-600" />
               <h1 className="text-2xl font-bold text-gray-800">FcSign</h1>
             </div>
             <p className="text-gray-500">Assinatura Eletrônica de Contratos</p>
-          </div>
+          </div>)}
 
           <Card>
             <CardContent className="p-8 text-center">
@@ -421,7 +451,7 @@ export default function IntegraSignAssinar() {
     };
 
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className={centerCls}>
         <Card className="max-w-lg"><CardContent className="p-8 text-center">
           <CheckCircle2 className="mx-auto h-16 w-16 text-green-600 mb-4" />
           <h2 className="text-2xl font-bold mb-3">Concluído!</h2>
@@ -446,15 +476,15 @@ export default function IntegraSignAssinar() {
   const podeAssinar = signatario.podeAssinar;
 
   return (
-    <div className="min-h-screen bg-gray-50 py-6 px-4">
+    <div className={wrapCls}>
       <div className="max-w-4xl mx-auto space-y-6">
-        <div className="text-center mb-6">
+        {!embedded && (<div className="text-center mb-6">
           <div className="flex items-center justify-center gap-2 mb-2">
             <PenLine className="h-8 w-8 text-blue-600" />
             <h1 className="text-2xl font-bold text-gray-800">IntegraSign</h1>
           </div>
           <p className="text-gray-500">Assinatura Eletrônica de Contratos</p>
-        </div>
+        </div>)}
 
         <Card>
           <CardHeader>

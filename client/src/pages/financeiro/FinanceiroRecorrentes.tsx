@@ -28,7 +28,7 @@ const FREQ_LABELS: Record<string, string> = {
 const INITIAL_FORM = {
   descricao: "", valor: "", tipo: "despesa" as string, natureza: "fixo",
   contaNome: "", obraNome: "", frequencia: "mensal",
-  diaVencimento: "5", formaPagamento: "", fornecedorNome: "", observacoes: "",
+  diaVencimento: "5", dataLimite: "", primeiroVencimento: "", formaPagamento: "", fornecedorNome: "", observacoes: "",
 };
 
 export default function FinanceiroRecorrentes() {
@@ -87,6 +87,8 @@ export default function FinanceiroRecorrentes() {
       obraNome: item.obraNome ?? "",
       frequencia: item.frequencia ?? "mensal",
       diaVencimento: String(item.diaVencimento ?? "5"),
+      dataLimite: item.dataLimite ? String(item.dataLimite).slice(0, 10) : "",
+      primeiroVencimento: "",
       formaPagamento: item.formaPagamento ?? "",
       fornecedorNome: item.fornecedorNome ?? "",
       observacoes: item.observacoes ?? "",
@@ -109,6 +111,7 @@ export default function FinanceiroRecorrentes() {
       obraNome: form.obraNome || undefined,
       frequencia: form.frequencia,
       diaVencimento: parseInt(form.diaVencimento) || 5,
+      dataLimite: form.dataLimite || null,
       formaPagamento: form.formaPagamento || undefined,
       fornecedorNome: form.fornecedorNome || undefined,
       observacoes: form.observacoes || undefined,
@@ -116,7 +119,8 @@ export default function FinanceiroRecorrentes() {
     if (editId) {
       updateMut.mutate({ ...payload, id: editId });
     } else {
-      createMut.mutate(payload);
+      // Rev. 5150 — 1º vencimento explícito (sem ele o servidor decidia e podia pular o mês corrente)
+      createMut.mutate({ ...payload, primeiroVencimento: form.primeiroVencimento || undefined });
     }
   }
 
@@ -303,6 +307,20 @@ export default function FinanceiroRecorrentes() {
                 <div>
                   <Label>Dia Vencimento</Label>
                   <Input type="number" min={1} max={31} value={form.diaVencimento} onChange={(e) => setForm({ ...form, diaVencimento: e.target.value })} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                {!editId && (
+                  <div>
+                    <Label>1º vencimento (opcional)</Label>
+                    <Input type="date" value={form.primeiroVencimento} onChange={(e) => setForm({ ...form, primeiroVencimento: e.target.value })} />
+                    <p className="text-[11px] text-gray-400 mt-1">Data da primeira parcela. Em branco: dia de vencimento deste mês (ou do próximo, se já passou).</p>
+                  </div>
+                )}
+                <div>
+                  <Label>Data limite (opcional)</Label>
+                  <Input type="date" value={form.dataLimite} onChange={(e) => setForm({ ...form, dataLimite: e.target.value })} />
+                  <p className="text-[11px] text-gray-400 mt-1">Última data em que a recorrência gera parcela; depois dela é encerrada automaticamente.</p>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">

@@ -19,16 +19,18 @@ import GoldenRulesPanel from "@/components/GoldenRulesPanel";
 import EmployeeCombobox from "@/components/EmployeeCombobox";
 import BeneficiosAlimentacaoTab from "@/components/BeneficiosAlimentacaoTab";
 import { ComprasConfigSection } from "@/pages/configuracoes/ComprasConfigSection";
+import { TerceirosConfigSection } from "@/pages/configuracoes/TerceirosConfigSection";
 import { FinanceiroConfigSection } from "@/pages/configuracoes/FinanceiroConfigSection";
 import { SociosAdministradorSection } from "@/pages/configuracoes/SociosAdministradorSection";
 import { AlmoxarifadoConfigSection } from "@/pages/configuracoes/AlmoxarifadoConfigSection";
 import { PlanejamentoConfigSection } from "@/pages/configuracoes/PlanejamentoConfigSection";
 import { MedicaoConfigSection } from "@/pages/configuracoes/MedicaoConfigSection";
+import { CriteriosMedicaoSection } from "@/pages/configuracoes/CriteriosMedicaoSection";
 import { IAConfigSection } from "@/pages/configuracoes/IAConfigSection";
 import { ScorecardBetaConfigSection } from "@/pages/configuracoes/ScorecardBetaConfigSection";
 import TemplatesDocsTab from "@/pages/configuracoes/TemplatesDocsTab";
 
-import { Settings, Users, Trash2, Key, Scale, Clock, FileText, AlertTriangle, Gift, Palmtree, UserX, RotateCcw, Save, ChevronRight, ChevronDown, Info, GripVertical, ArrowUp, ArrowDown, Eye, EyeOff, Shield, Bell, Mail, Plus, Check, X, ToggleLeft, ToggleRight, History, Send, CheckCheck, AlertCircle, RefreshCw, Pencil, Hash, HardHat, ClipboardList, Database, Download, Loader2, TrendingUp, Landmark, PlayCircle, UtensilsCrossed, Coffee, MapPin, Gavel, Star, Handshake, BadgeCheck, BookOpen, Building2, CalendarCheck, HardDrive, ExternalLink, Calculator, ShoppingCart, Warehouse, DollarSign, FolderOpen, FileBarChart, Hammer, Truck, Megaphone, Briefcase, Brain, SlidersHorizontal, GitBranch, Upload, ShieldCheck, ShieldAlert, UserCheck, Receipt, FileSpreadsheet, PenLine } from "lucide-react";
+import { Settings, Users, Trash2, Key, Scale, Clock, FileText, AlertTriangle, Gift, Palmtree, UserX, RotateCcw, Save, ChevronRight, ChevronDown, Info, GripVertical, ArrowUp, ArrowDown, Eye, EyeOff, Shield, Bell, Mail, Plus, Check, X, ToggleLeft, ToggleRight, History, Send, CheckCheck, AlertCircle, RefreshCw, Pencil, Hash, HardHat, ClipboardList, Database, Download, Loader2, TrendingUp, Landmark, PlayCircle, UtensilsCrossed, Coffee, MapPin, Gavel, Star, Handshake, BadgeCheck, BookOpen, Building2, CalendarCheck, HardDrive, ExternalLink, Calculator, ShoppingCart, Warehouse, DollarSign, FolderOpen, FileBarChart, Hammer, Truck, Megaphone, Briefcase, Brain, SlidersHorizontal, GitBranch, Upload, ShieldCheck, ShieldAlert, UserCheck, Receipt, FileSpreadsheet, PenLine, Ruler, HandCoins, Smartphone } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { removeAccents } from "@/lib/searchUtils";
@@ -95,7 +97,7 @@ const CATEGORIAS = [
   { key: "almoxarifado", label: "Almoxarifado / Locações", icon: Warehouse, color: "text-yellow-700", bgColor: "bg-yellow-50", borderColor: "border-yellow-200" },
 ];
 
-type TabKey = "criterios" | "senha" | "limpeza" | "regras" | "notificacoes" | "sync_he" | "sindical" | "beneficios_alimentacao" | "modulos" | "backup" | "terceiros" | "portal_cliente" | "templates_docs" | "socios" | "smtp_config";
+type TabKey = "criterios" | "criterios_medicao" | "senha" | "limpeza" | "regras" | "notificacoes" | "sync_he" | "sindical" | "beneficios_alimentacao" | "modulos" | "backup" | "terceiros" | "portal_cliente" | "templates_docs" | "socios" | "smtp_config";
 
 // Rev. 2403: mapa estático de cores das abas. CRÍTICO: Tailwind JIT só vê
 // classes LITERAIS no source — interpolação tipo `bg-${c}-500` não gera CSS.
@@ -246,6 +248,9 @@ export default function Configuracoes() {
   const criteriosByCategoria = useMemo(() => {
     const map: Record<string, any[]> = {};
     for (const c of criteriaQuery.data || []) {
+      // Rev. 5003 — chave JSON do Critério de Medição padrão tem editor próprio
+      // (Configurações por Módulo › Terceiros); não exibir o JSON cru no accordion.
+      if (c.chave === "terceiro_criterio_medicao_padrao") continue;
       if (!map[c.categoria]) map[c.categoria] = [];
       map[c.categoria].push(c);
     }
@@ -338,6 +343,7 @@ export default function Configuracoes() {
     { key: "modulos" as TabKey, label: "Módulos do Sistema", icon: ToggleRight, minRole: "admin", color: "indigo" },
     { key: "regras" as TabKey, label: "Regras de Ouro", icon: Shield, minRole: "admin", color: "amber" },
     { key: "criterios" as TabKey, label: "Critérios do Sistema", icon: Scale, minRole: "admin", color: "blue" },
+    { key: "criterios_medicao" as TabKey, label: "Critérios de Medição", icon: Ruler, minRole: "admin", color: "teal" },
     { key: "socios" as TabKey, label: "Sócios", icon: Handshake, minRole: "admin", color: "emerald" },
     { key: "templates_docs" as TabKey, label: "Templates de Documentos", icon: FileText, minRole: "admin", color: "sky" },
     { key: "senha" as TabKey, label: "Minha Senha", icon: Key, minRole: "user", color: "emerald" },
@@ -495,6 +501,22 @@ export default function Configuracoes() {
         {/* TAB: Templates de Documentos (Rev. 2141) */}
         {activeTab === "templates_docs" && (
           <TemplatesDocsTab />
+        )}
+
+        {/* TAB: Critérios de Medição (esquadrias/vãos) */}
+        {activeTab === "criterios_medicao" && (
+          <div className="space-y-4">
+            <div>
+              <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                <Ruler className="w-5 h-5 text-teal-600" /> Critérios de Medição
+              </h2>
+              <p className="text-sm text-gray-500 mt-0.5">
+                Regras de desconto de vãos e requadro por serviço. Critérios <b>definidos</b> são congelados
+                dentro de cada contrato de terceiro na criação — mudanças aqui não alteram contratos já criados.
+              </p>
+            </div>
+            <CriteriosMedicaoSection />
+          </div>
         )}
 
         {/* TAB: Critérios do Sistema */}
@@ -699,6 +721,7 @@ export default function Configuracoes() {
                 <FinanceiroConfigSection onManageSocios={() => setActiveTab("socios")} />
                 <PlanejamentoConfigSection />
                 <MedicaoConfigSection />
+                <TerceirosConfigSection />
                 <ScorecardBetaConfigSection />
               </div>
             </div>
@@ -1892,7 +1915,7 @@ function ContratoPJTab({ companyId, userName }: { companyId: number; userName: s
   );
   const upsertMutation = (trpc as any).docs.templates.upsert.useMutation({
     onSuccess: () => {
-      toast.success('Modelo do contrato PJ salvo com sucesso!');
+      toast.success('Modelo do contrato de prestador de serviço salvo com sucesso!');
       setEditing(false);
       templateQuery.refetch();
     },
@@ -1933,7 +1956,7 @@ function ContratoPJTab({ companyId, userName }: { companyId: number; userName: s
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-semibold">Modelo do Contrato PJ</h3>
+          <h3 className="text-lg font-semibold">Modelo do Contrato de Prestador de Serviço</h3>
           <p className="text-sm text-muted-foreground">Defina o texto padrão do contrato de prestação de serviços PJ. Os placeholders serão substituídos automaticamente pelos dados do colaborador.</p>
         </div>
         {templateQuery.data?.isDefault && (
@@ -3014,7 +3037,6 @@ const MODULE_PAGES: Record<string, ModPageItem[]> = {
     { section: "Gestão de Pessoas", label: "Aviso Prévio", path: "/aviso-previo" },
     { section: "Gestão de Pessoas", label: "Férias", path: "/ferias" },
     { section: "Gestão de Pessoas", label: "Prestadores de Serviço", path: "/modulo-pj" },
-    { section: "Gestão de Pessoas", label: "PJ Medições", path: "/pj-medicoes" },
     { section: "Relatórios", label: "Raio-X do Funcionário", path: "/relatorios/raio-x" },
     { section: "Relatórios", label: "Relatório de Ponto", path: "/relatorios/ponto" },
     { section: "Relatórios", label: "Relatório de Folha", path: "/relatorios/folha" },
@@ -3228,11 +3250,33 @@ const MODULE_PAGES: Record<string, ModPageItem[]> = {
   "comunicados-internos": [
     { section: "Comunicados", label: "Comunicados Internos", path: "/comunicados-internos" },
   ],
+  reembolso: [
+    { section: "Reembolsos", label: "Painel de Reembolsos", path: "/reembolso/painel" },
+  ],
   curriculos: [
     { section: "Currículos", label: "Banco de Currículos", path: "/curriculos" },
   ],
   oraculo: [
     { section: "Oráculo", label: "Assistente IA", path: "/oraculo" },
+  ],
+  apontamento: [
+    { section: "Apontamento de Campo", label: "Ronda do Dia", path: "/apontamento" },
+    { section: "Apontamento de Campo", label: "Produção", path: "/apontamento?tab=producao" },
+    { section: "Apontamento de Campo", label: "Mapa de Frentes", path: "/apontamento?tab=frentes" },
+  ],
+  "medicao-terceiros": [
+    { section: "Medição de Terceiros", label: "Medições (a pagar)", path: "/terceiros/medicoes" },
+  ],
+  fcsign: [
+    { section: "Assinaturas", label: "Central de Assinaturas", path: "/integrasign" },
+  ],
+  "gestao-interna": [
+    { section: "Central Operacional", label: "Gestão Interna", path: "/gestao-interna" },
+  ],
+  "telefones-corporativos": [
+    { section: "Telefones", label: "Plano Corporativo", path: "/telefones-corporativos" },
+    { section: "Telefones", label: "Linhas e Colaboradores", path: "/telefones-corporativos?tab=linhas" },
+    { section: "Telefones", label: "Consumo Mensal", path: "/telefones-corporativos?tab=uso" },
   ],
 };
 
@@ -3280,14 +3324,18 @@ function ModulosTab({ companyId, isMaster }: { companyId: number; isMaster: bool
     financeiro:     { label: "Financeiro",     subtitle: "Gestão Financeira",                    icon: DollarSign,    color: "text-yellow-600", bgColor: "bg-yellow-50", borderColor: "border-yellow-200", description: "Lançamentos, contas a pagar/receber, DRE, fluxo de caixa, plano de contas e obrigações fiscais." },
     medicao:        { label: "Medição Cliente", subtitle: "Medição de Contratos",                 icon: FileBarChart,  color: "text-teal-600",   bgColor: "bg-teal-50",   borderColor: "border-teal-200",   description: "Boletins de medição por contrato, planilha EAP com avanço físico, faturamento direto e controle de FDs." },
     "medicao-terceiros": { label: "Medição Terceiros", subtitle: "Medição de Empresas Terceiras", icon: Receipt, color: "text-orange-600", bgColor: "bg-orange-50", borderColor: "border-orange-200", description: "Medição de contratos de terceiros: levantamento de campo, alerta de divergência, FD do período e aprovação em 3 níveis (mede → gestor → sócio adm)." },
+    "apontamento": { label: "Apontamento de Campo", subtitle: "Ronda Diária de Produção", icon: ClipboardList, color: "text-lime-600", bgColor: "bg-lime-50", borderColor: "border-lime-200", description: "Apontamento diário da produção por trecho: local, serviço, quantidade e contrato. Alimenta a medição pré-carregada, RDO e produtividade." },
     "fcsign": { label: "FCSign", subtitle: "Central de Assinaturas", icon: PenLine, color: "text-teal-600", bgColor: "bg-teal-50", borderColor: "border-teal-200", description: "Assinatura eletrônica de contratos, boletins e memórias — pendências, links de assinatura e biblioteca dos documentos assinados." },
     "gestao-documentos": { label: "Proj./Doc. Técnicos", subtitle: "Projetos e Documentos Técnicos", icon: FolderOpen, color: "text-indigo-600", bgColor: "bg-indigo-50", borderColor: "border-indigo-200", description: "Controle de documentos técnicos, revisões com aprovação, disciplinas, ARTs/RRTs e distribuição." },
     operacional: { label: "Operacional", subtitle: "Gestão Operacional de Obras", icon: Hammer, color: "text-orange-600", bgColor: "bg-orange-50", borderColor: "border-orange-200", description: "RDO, checklists de qualidade, mapa de concretagem, não conformidades, registro fotográfico e dashboard operacional." },
     frotas: { label: "Frotas", subtitle: "Controle de Frotas", icon: Truck, color: "text-cyan-600", bgColor: "bg-cyan-50", borderColor: "border-cyan-200", description: "Veículos, manutenções, combustível, multas, IPVA, licenciamento, seguros com análise IA e rastreamento." },
     "comunicados-internos": { label: "Comunicados Internos", subtitle: "Avisos Oficiais da Empresa", icon: Megaphone, color: "text-blue-600", bgColor: "bg-blue-50", borderColor: "border-blue-200", description: "Cadastro e arquivo de comunicados internos com numeração automática anual e anexos." },
+    reembolso: { label: "Reembolso", subtitle: "Despesas e Fundo Fixo", icon: HandCoins, color: "text-orange-600", bgColor: "bg-orange-50", borderColor: "border-orange-200", description: "Reembolso de despesas pagas do próprio bolso e caixinhas (fundo fixo), com comprovante, aprovação do administrador e título automático no Contas a Pagar." },
     curriculos: { label: "Currículos", subtitle: "Banco de Currículos", icon: Briefcase, color: "text-amber-600", bgColor: "bg-amber-50", borderColor: "border-amber-200", description: "Banco de currículos recebidos organizado por função, com cadastro de novas funções e anexos." },
     oraculo: { label: "Oráculo", subtitle: "Assistente IA do Sistema", icon: Brain, color: "text-violet-600", bgColor: "bg-violet-50", borderColor: "border-violet-200", description: "Assistente inteligente com IA para consultas, análises e orientações sobre dados do sistema." },
     "portal-cliente": { label: "Portal do Cliente", subtitle: "Acesso Externo dos Clientes", icon: ExternalLink, color: "text-indigo-600", bgColor: "bg-indigo-50", borderColor: "border-indigo-200", description: "Administração das credenciais de acesso dos clientes ao portal externo, comentários e avaliações anônimas (NPS)." },
+    "gestao-interna": { label: "Gestão Interna", subtitle: "Central Operacional Interna", icon: SlidersHorizontal, color: "text-slate-600", bgColor: "bg-slate-50", borderColor: "border-slate-200", description: "Central operacional da empresa com visibilidade e controle dos processos internos." },
+    "telefones-corporativos": { label: "Telefones Corporativos", subtitle: "Gestão de Linhas Corporativas", icon: Smartphone, color: "text-blue-600", bgColor: "bg-blue-50", borderColor: "border-blue-200", description: "Plano corporativo com operadora, linhas vinculadas a colaboradores e registro de consumo mensal (crédito, dados, armazenamento)." },
   };
 
   if (isLoading) return <div className="flex items-center justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-blue-500" /></div>;

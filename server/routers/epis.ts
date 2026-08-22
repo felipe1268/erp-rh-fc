@@ -594,6 +594,9 @@ export const episRouter = router({
       employeeId: z.number().optional(),
       epiId: z.number().optional(),
       search: z.string().optional(),
+      categoria: z.string().optional(),
+      condicao: z.string().optional(),
+      tamanho: z.string().optional(),
       limit: z.number().min(1).max(200).default(50),
       offset: z.number().min(0).default(0),
     }))
@@ -614,8 +617,18 @@ export const episRouter = router({
           ilike(employees.funcao, like),
           ilike(epis.nome, like),
           ilike(epis.ca, like),
+          ilike(epis.fabricante, like),
         );
         if (searchCond) conds.push(searchCond);
+      }
+      if (input.categoria && input.categoria !== "Todos") {
+        conds.push(eq(epis.categoria, input.categoria));
+      }
+      if (input.condicao && input.condicao !== "Todos") {
+        conds.push(sql`COALESCE(${epis.condicao}, 'Novo') = ${input.condicao}`);
+      }
+      if (input.tamanho && input.tamanho !== "Todos") {
+        conds.push(eq(epis.tamanho, input.tamanho));
       }
 
       const whereClause = and(...conds);
@@ -638,6 +651,9 @@ export const episRouter = router({
           createdAt: epiDeliveries.createdAt,
           nomeEpi: epis.nome,
           caEpi: epis.ca,
+          categoriaEpi: epis.categoria,
+          condicaoEpi: epis.condicao,
+          tamanhoEpi: epis.tamanho,
           valorProdutoEpi: epis.valorProduto,
           tempoMinimoTrocaEpi: epis.tempoMinimoTroca,
           nomeFunc: employees.nomeCompleto,
@@ -816,40 +832,48 @@ export const episRouter = router({
         valorCobrado = String(Math.round(custoBase * (1 + bdiPct / 100) * 100) / 100);
       }
 
-      const result = await db.insert(epiDeliveries).values({
-        companyId: input.companyId,
-        epiId: input.epiId,
-        employeeId: input.employeeId,
-        quantidade: input.quantidade,
-        dataEntrega: input.dataEntrega,
-        dataDevolucao: input.dataDevolucao || null,
-        motivo: input.motivo || null,
-        observacoes: input.observacoes || null,
-        motivoTroca: input.motivoTroca || null,
-        valorCobrado,
-        fotoEstadoUrl,
-        origemEntrega: input.origemEntrega,
-        obraId: input.obraId || null,
-        grupoEntregaId: input.grupoEntregaId || null,
-        foraDoKit: input.foraDoKit ? 1 : 0,
-      } as any).returning();
-
-      // Update stock based on origin
-      if (input.origemEntrega === 'obra' && input.obraId) {
-        // Descontar do estoque da obra
-        const [estoqueObra] = await db.select().from(epiEstoqueObra)
-          .where(and(eq(epiEstoqueObra.epiId, input.epiId), eq(epiEstoqueObra.obraId, input.obraId)));
-        if (estoqueObra) {
-          await db.update(epiEstoqueObra)
-            .set({ quantidade: sql`GREATEST(${epiEstoqueObra.quantidade} - ${input.quantidade}, 0)` })
-            .where(eq(epiEstoqueObra.id, estoqueObra.id));
+      // Entrega e débito são uma única operação: a mesma linha de saldo é travada
+      // antes de gravar o histórico, para serializar com estornos de entradas de OC.
+      const result = await db.transaction(async (tx: any) => {
+        if (input.origemEntrega === 'obra' && input.obraId) {
+          await tx.execute(sql`
+            SELECT id FROM ${epiEstoqueObra}
+            WHERE epi_id = ${input.epiId} AND obra_id = ${input.obraId}
+            FOR UPDATE
+          `);
+        } else {
+          await tx.execute(sql`SELECT id FROM ${epis} WHERE id = ${input.epiId} FOR UPDATE`);
         }
-      } else {
-        // Descontar do estoque central
-        await db.update(epis)
-          .set({ quantidadeEstoque: sql`GREATEST(${epis.quantidadeEstoque} - ${input.quantidade}, 0)` })
-          .where(eq(epis.id, input.epiId));
-      }
+
+        const entrega = await tx.insert(epiDeliveries).values({
+          companyId: input.companyId,
+          epiId: input.epiId,
+          employeeId: input.employeeId,
+          quantidade: input.quantidade,
+          dataEntrega: input.dataEntrega,
+          dataDevolucao: input.dataDevolucao || null,
+          motivo: input.motivo || null,
+          observacoes: input.observacoes || null,
+          motivoTroca: input.motivoTroca || null,
+          valorCobrado,
+          fotoEstadoUrl,
+          origemEntrega: input.origemEntrega,
+          obraId: input.obraId || null,
+          grupoEntregaId: input.grupoEntregaId || null,
+          foraDoKit: input.foraDoKit ? 1 : 0,
+        } as any).returning();
+
+        if (input.origemEntrega === 'obra' && input.obraId) {
+          await tx.update(epiEstoqueObra)
+            .set({ quantidade: sql`GREATEST(${epiEstoqueObra.quantidade} - ${input.quantidade}, 0)` })
+            .where(and(eq(epiEstoqueObra.epiId, input.epiId), eq(epiEstoqueObra.obraId, input.obraId)));
+        } else {
+          await tx.update(epis)
+            .set({ quantidadeEstoque: sql`GREATEST(${epis.quantidadeEstoque} - ${input.quantidade}, 0)` })
+            .where(eq(epis.id, input.epiId));
+        }
+        return entrega;
+      });
 
       // Verificar se atingiu estoque mínimo e gerar SC automática (apenas para estoque central)
       if (input.origemEntrega !== 'obra') {
@@ -1334,7 +1358,7 @@ export const episRouter = router({
   // STATS
   // ============================================================
   stats: protectedProcedure
-    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), obraId: z.number().optional() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
       const ids = input.companyIds && input.companyIds.length > 0 ? input.companyIds : [input.companyId];
@@ -1345,14 +1369,33 @@ export const episRouter = router({
       const em90dias = new Date();
       em90dias.setDate(em90dias.getDate() + 90);
       const em90diasStr = em90dias.toISOString().split("T")[0];
+      // Quando uma obra é selecionada, o estoque deve ser lido da caixa
+      // independente daquela obra, e não do saldo central em `epis`.
+      const obraStockExpr = input.obraId
+        ? sql<number>`COALESCE((
+            SELECT SUM(eo.quantidade)
+            FROM epi_estoque_obra eo
+            WHERE eo."epiId" = ${epis.id}
+              AND eo."obraId" = ${input.obraId}
+              AND eo."companyId" IN (${sql.join(ids.map(id => sql`${id}`), sql`,`)})
+          ), 0)`
+        : null;
 
       const [episStats, deliveryStats, obrasValorRows, categoriaRows, entregasMesCount, alertasRows] = await Promise.all([
         db.select({
           totalItens: sql<number>`COUNT(*)`,
-          estoqueTotal: sql<number>`COALESCE(SUM(${epis.quantidadeEstoque}), 0)`,
-          estoqueBaixo: sql<number>`COUNT(CASE WHEN COALESCE(${epis.quantidadeEstoque}, 0) <= 5 THEN 1 END)`,
-          caVencido: sql<number>`COUNT(CASE WHEN ${epis.validadeCa} IS NOT NULL AND ${epis.validadeCa} < ${hoje} THEN 1 END)`,
-          valorTotalInventario: sql<number>`COALESCE(SUM(COALESCE(${epis.valorProduto}, 0) * COALESCE(${epis.quantidadeEstoque}, 0)), 0)`,
+          estoqueTotal: obraStockExpr
+            ? sql<number>`COALESCE(SUM(${obraStockExpr}), 0)`
+            : sql<number>`COALESCE(SUM(${epis.quantidadeEstoque}), 0)`,
+          estoqueBaixo: obraStockExpr
+            ? sql<number>`COUNT(CASE WHEN ${obraStockExpr} <= 5 THEN 1 END)`
+            : sql<number>`COUNT(CASE WHEN COALESCE(${epis.quantidadeEstoque}, 0) <= 5 THEN 1 END)`,
+          caVencido: obraStockExpr
+            ? sql<number>`COUNT(CASE WHEN ${epis.validadeCa} IS NOT NULL AND ${epis.validadeCa} < ${hoje} AND ${obraStockExpr} > 0 THEN 1 END)`
+            : sql<number>`COUNT(CASE WHEN ${epis.validadeCa} IS NOT NULL AND ${epis.validadeCa} < ${hoje} THEN 1 END)`,
+          valorTotalInventario: obraStockExpr
+            ? sql<number>`COALESCE(SUM(COALESCE(${epis.valorProduto}, 0) * ${obraStockExpr}), 0)`
+            : sql<number>`COALESCE(SUM(COALESCE(${epis.valorProduto}, 0) * COALESCE(${epis.quantidadeEstoque}, 0)), 0)`,
         }).from(epis).where(inArray(epis.companyId, ids)),
 
         db.select({
@@ -1402,7 +1445,7 @@ export const episRouter = router({
       const totalCusto = parseFloat(String(dStats?.totalCusto ?? 0));
       const funcUnicos = Number(dStats?.funcUnicos ?? 0);
       const valorObras = parseFloat(String(obrasValorRows[0]?.valorObras || 0));
-      const valorTotalGeral = valorTotalInventario + valorObras;
+      const valorTotalGeral = input.obraId ? valorTotalInventario : valorTotalInventario + valorObras;
       const entregasMes = Number(entregasMesCount[0]?.entregasMes ?? 0);
       const custoMedioPorFunc = funcUnicos > 0 ? totalCusto / funcUnicos : 0;
 
@@ -2289,6 +2332,174 @@ Exemplos de referência:
       return { success: true };
     }),
 
+  // Edita uma transferência preservando a consistência entre histórico e saldos.
+  // A movimentação anterior é revertida e a nova é aplicada na mesma transação.
+  editarTransferencia: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      quantidade: z.number().int().min(1),
+      tipoOrigem: z.enum(['central', 'obra']),
+      origemObraId: z.number().optional(),
+      tipoDestino: z.enum(['central', 'obra']),
+      destinoObraId: z.number().optional(),
+      data: z.string(),
+      observacoes: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      const [original] = await db.select().from(epiTransferencias).where(eq(epiTransferencias.id, input.id));
+      if (!original) throw new TRPCError({ code: "NOT_FOUND", message: "Transferência não encontrada." });
+      if (
+        !["central", "obra"].includes(original.tipoOrigem) ||
+        original.destinoObraId === null ||
+        original.destinoObraId === undefined
+      ) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Esta movimentação não pode ser editada como transferência." });
+      }
+      if (input.tipoOrigem === "central" && input.tipoDestino === "central") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Não é possível transferir do Central para o Central." });
+      }
+      if (input.tipoOrigem === "obra" && !input.origemObraId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Informe a obra de origem." });
+      }
+      if (input.tipoDestino === "obra" && !input.destinoObraId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Informe a obra de destino." });
+      }
+      if (input.tipoOrigem === "obra" && input.tipoDestino === "obra" && input.origemObraId === input.destinoObraId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Origem e destino não podem ser a mesma obra." });
+      }
+
+      const [epi] = await db.select({ companyId: epis.companyId }).from(epis).where(eq(epis.id, original.epiId));
+      if (!epi) throw new TRPCError({ code: "NOT_FOUND", message: "EPI da transferência não encontrado." });
+      const allowed = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!allowed.some((company) => company.id === epi.companyId) || original.companyId !== epi.companyId) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta transferência." });
+      }
+
+      const obraIds = Array.from(new Set([
+        original.tipoOrigem === "obra" ? original.origemObraId : undefined,
+        original.destinoObraId > 0 ? original.destinoObraId : undefined,
+        input.tipoOrigem === "obra" ? input.origemObraId : undefined,
+        input.tipoDestino === "obra" ? input.destinoObraId : undefined,
+      ].filter((value): value is number => typeof value === "number" && value > 0)));
+      if (obraIds.length) {
+        const obrasOk = await db.select({ id: obras.id }).from(obras)
+          .where(and(inArray(obras.id, obraIds), eq(obras.companyId, epi.companyId)));
+        if (obrasOk.length !== obraIds.length) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Obra de origem/destino inválida para esta empresa." });
+        }
+        for (const obraId of obraIds) await assertObraWrite(ctx, obraId);
+      }
+      if (
+        original.tipoOrigem === "central" ||
+        original.destinoObraId === 0 ||
+        input.tipoOrigem === "central" ||
+        input.tipoDestino === "central"
+      ) {
+        await assertCentralWrite(ctx);
+      }
+
+      await db.transaction(async (tx: any) => {
+        // Serializa mudanças do mesmo EPI junto com estornos de OC/EPI. Sem este
+        // lock, duas edições podem ler a mesma transferência antes de uma delas
+        // recalcular o saldo. Lock transacional é seguro no pooler do Neon.
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(478011, ${original.epiId})`);
+        const [lockedOriginal] = await tx.select().from(epiTransferencias)
+          .where(eq(epiTransferencias.id, input.id));
+        if (
+          !lockedOriginal ||
+          lockedOriginal.epiId !== original.epiId ||
+          lockedOriginal.quantidade !== original.quantidade ||
+          lockedOriginal.tipoOrigem !== original.tipoOrigem ||
+          lockedOriginal.origemObraId !== original.origemObraId ||
+          lockedOriginal.destinoObraId !== original.destinoObraId ||
+          lockedOriginal.data !== original.data ||
+          lockedOriginal.observacoes !== original.observacoes
+        ) {
+          throw new TRPCError({ code: "CONFLICT", message: "Esta transferência foi alterada por outro usuário. Recarregue a tela e tente novamente." });
+        }
+        const creditObra = async (obraId: number, quantidade: number) => {
+          const [row] = await tx.select().from(epiEstoqueObra).where(and(
+            eq(epiEstoqueObra.companyId, epi.companyId),
+            eq(epiEstoqueObra.epiId, original.epiId),
+            eq(epiEstoqueObra.obraId, obraId),
+          ));
+          if (row) {
+            await tx.update(epiEstoqueObra)
+              .set({ quantidade: sql`${epiEstoqueObra.quantidade} + ${quantidade}` })
+              .where(and(
+                eq(epiEstoqueObra.id, row.id),
+                eq(epiEstoqueObra.companyId, epi.companyId),
+                eq(epiEstoqueObra.epiId, original.epiId),
+                eq(epiEstoqueObra.obraId, obraId),
+              ));
+          } else {
+            await tx.insert(epiEstoqueObra).values({
+              companyId: epi.companyId,
+              epiId: original.epiId,
+              obraId,
+              quantidade,
+              criadoPor: ctx.user.name || "Sistema",
+            });
+          }
+        };
+        const debitObra = async (obraId: number, quantidade: number, message: string) => {
+          const updated = await tx.update(epiEstoqueObra)
+            .set({ quantidade: sql`${epiEstoqueObra.quantidade} - ${quantidade}` })
+            .where(and(
+              eq(epiEstoqueObra.companyId, epi.companyId),
+              eq(epiEstoqueObra.epiId, original.epiId),
+              eq(epiEstoqueObra.obraId, obraId),
+              gte(epiEstoqueObra.quantidade, quantidade),
+            ))
+            .returning({ id: epiEstoqueObra.id });
+          if (!updated.length) throw new TRPCError({ code: "CONFLICT", message });
+        };
+        const creditCentral = async (quantidade: number) => {
+          await tx.update(epis)
+            .set({ quantidadeEstoque: sql`${epis.quantidadeEstoque} + ${quantidade}` })
+            .where(eq(epis.id, original.epiId));
+        };
+        const debitCentral = async (quantidade: number, message: string) => {
+          const updated = await tx.update(epis)
+            .set({ quantidadeEstoque: sql`${epis.quantidadeEstoque} - ${quantidade}` })
+            .where(and(eq(epis.id, original.epiId), gte(epis.quantidadeEstoque, quantidade)))
+            .returning({ id: epis.id });
+          if (!updated.length) throw new TRPCError({ code: "CONFLICT", message });
+        };
+
+        // Reverte a movimentação original: devolve à origem e retira do destino.
+        if (original.tipoOrigem === "central") await creditCentral(original.quantidade);
+        else await creditObra(original.origemObraId!, original.quantidade);
+        if (original.destinoObraId === 0) {
+          await debitCentral(original.quantidade, "Não é possível editar: o saldo Central já foi utilizado depois desta transferência.");
+        } else {
+          await debitObra(original.destinoObraId, original.quantidade, "Não é possível editar: o saldo da obra de destino já foi utilizado depois desta transferência.");
+        }
+
+        // Aplica a nova movimentação.
+        if (input.tipoOrigem === "central") {
+          await debitCentral(input.quantidade, "Estoque Central insuficiente para a nova transferência.");
+        } else {
+          await debitObra(input.origemObraId!, input.quantidade, "Estoque da obra de origem insuficiente para a nova transferência.");
+        }
+        if (input.tipoDestino === "central") await creditCentral(input.quantidade);
+        else await creditObra(input.destinoObraId!, input.quantidade);
+
+        await tx.update(epiTransferencias)
+          .set({
+            quantidade: input.quantidade,
+            tipoOrigem: input.tipoOrigem,
+            origemObraId: input.tipoOrigem === "obra" ? input.origemObraId! : null,
+            destinoObraId: input.tipoDestino === "central" ? 0 : input.destinoObraId!,
+            data: input.data,
+            observacoes: input.observacoes?.trim() || null,
+          })
+          .where(eq(epiTransferencias.id, input.id));
+      });
+      return { success: true };
+    }),
+
   listarTransferencias: protectedProcedure
     .input(z.object({
       companyId: z.number(),
@@ -2296,9 +2507,13 @@ Exemplos de referência:
       epiId: z.number().optional(),
       obraId: z.number().optional(),
     }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = (await getDb())!;
       const ids = input.companyIds && input.companyIds.length > 0 ? input.companyIds : [input.companyId];
+      const allowed = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (ids.some((id) => !allowed.some((company) => company.id === id))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso às empresas solicitadas." });
+      }
       const conds: any[] = [inArray(epiTransferencias.companyId, ids)];
       if (input.epiId) conds.push(eq(epiTransferencias.epiId, input.epiId));
       if (input.obraId) {
@@ -2320,6 +2535,7 @@ Exemplos de referência:
         caEpi: epis.ca,
         tamanhoEpi: epis.tamanho,
         categoriaEpi: epis.categoria,
+        condicaoEpi: epis.condicao,
       })
         .from(epiTransferencias)
         .leftJoin(epis, eq(epiTransferencias.epiId, epis.id))
@@ -2700,6 +2916,7 @@ Exemplos de referência:
         matricula: employees.matricula,
         dataAdmissao: employees.dataAdmissao,
         status: employees.status,
+        empregadorDocumentos: (employees as any).empregadorDocumentos,
       }).from(employees).where(eq(employees.id, input.employeeId));
 
       // Rev. 4650 — fallback de foto: puxa do cadastro irmão (mesmo CPF em
@@ -2730,6 +2947,26 @@ Exemplos de referência:
         cidade: companies.cidade,
         estado: companies.estado,
       }).from(companies).where(eq(companies.id, fichaCompanyId));
+      // Rev. 4986 — empregador documental "JF": a ficha de EPI sai com os dados
+      // da JULIO FERRAZ (inclui soft-deletada; mesmo grupo empresarial).
+      let empresaFicha = empresa;
+      if ((emp as any)?.empregadorDocumentos === "JF") {
+        const [jf] = await db.select({
+          id: companies.id,
+          razaoSocial: companies.razaoSocial,
+          cnpj: companies.cnpj,
+          logoUrl: companies.logoUrl,
+          endereco: companies.endereco,
+          cidade: companies.cidade,
+          estado: companies.estado,
+        }).from(companies)
+          .where(and(
+            sql`${companies.cnpj} LIKE '03.426.403%'`,
+            sql`${companies.grupoEmpresarial} IS NOT DISTINCT FROM (SELECT c2."grupoEmpresarial" FROM companies c2 WHERE c2.id = ${fichaCompanyId})`,
+          ))
+          .orderBy(sql`(${companies.deletedAt} IS NULL) DESC`, companies.id);
+        if (jf) empresaFicha = jf;
+      }
 
       // Metadados de autenticação das assinaturas (epi_assinaturas)
       const deliveryIds = entregas.map(e => e.id);
@@ -2773,7 +3010,7 @@ Exemplos de referência:
       };
 
       return {
-        empresa: empresa || null,
+        empresa: empresaFicha || null,
         funcionario: emp ? {
           id: emp.id,
           nomeCompleto: emp.nomeCompleto,
@@ -2790,5 +3027,246 @@ Exemplos de referência:
           assinaturaArquivoOk: arquivoOk(e.assinaturaUrl),
         })),
       };
+    }),
+
+  // ============================================================
+  // Rev. 4992 — IMPORTAR DANFE (NF-e) NO CADASTRO DE EPI
+  // Fluxo Preview → usuário VALIDA → Confirmar (nunca grava direto):
+  //  • XML de NF-e = parse determinístico (fast-xml-parser);
+  //  • PDF/foto da DANFE = leitura por IA Vision (Gemini → fallback Claude);
+  //  • cada item é cruzado com o CATÁLOGO da empresa (CA primeiro, depois
+  //    nome normalizado) → sugestão "somar ao existente" ou "cadastrar novo".
+  // ============================================================
+  importarDanfePreview: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      fileBase64: z.string().min(50),
+      mimeType: z.string(),
+      fileName: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      const allowed = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!allowed.some((c) => c.id === input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+      const clean = input.fileBase64.includes(",") ? input.fileBase64.split(",").pop()! : input.fileBase64;
+      // Guard server-side de tamanho e tipo (o limite do browser não protege chamada direta):
+      if (clean.length > 20 * 1024 * 1024) { // ~15MB decodificados
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Arquivo muito grande (máx. 15MB)." });
+      }
+      const mimeOk = /^(text\/xml|application\/xml|application\/pdf|image\/(png|jpe?g|webp|heic|heif))$/i.test(input.mimeType);
+      if (!mimeOk && !/\.xml$/i.test(input.fileName || "")) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Tipo de arquivo não suportado — envie XML, PDF ou foto da nota." });
+      }
+      // parse BR-aware: aceita "2.500,00", "2500.00", "2500", número puro
+      const num = (v: any): number => {
+        if (v == null) return 0;
+        if (typeof v === "number") return isFinite(v) ? v : 0;
+        let s = String(v).trim().replace(/[^\d.,-]/g, "");
+        if (!s) return 0;
+        if (s.includes(",")) s = s.replace(/\./g, "").replace(",", ".");
+        const n = parseFloat(s);
+        return isFinite(n) ? n : 0;
+      };
+      type ItemLido = { nome: string; quantidade: number; valorUnitario: number; ca: string | null };
+      let fornecedorNome = ""; let fornecedorCnpj = ""; let numeroNota = ""; let dataEmissao = "";
+      let itensLidos: ItemLido[] = [];
+
+      const texto = Buffer.from(clean, "base64").toString("utf8").slice(0, 200);
+      const ehXml = /xml/i.test(input.mimeType) || /\.xml$/i.test(input.fileName || "") || texto.trimStart().startsWith("<?xml") || texto.trimStart().startsWith("<");
+      if (ehXml) {
+        const { XMLParser } = await import("fast-xml-parser");
+        const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "@_" });
+        let doc: any;
+        try { doc = parser.parse(Buffer.from(clean, "base64").toString("utf8")); }
+        catch { throw new TRPCError({ code: "BAD_REQUEST", message: "XML inválido — não consegui ler a nota." }); }
+        const inf = doc?.nfeProc?.NFe?.infNFe ?? doc?.NFe?.infNFe;
+        if (!inf) throw new TRPCError({ code: "BAD_REQUEST", message: "Este XML não parece ser uma NF-e (infNFe não encontrado)." });
+        fornecedorNome = String(inf?.emit?.xNome ?? "");
+        fornecedorCnpj = String(inf?.emit?.CNPJ ?? "");
+        numeroNota = String(inf?.ide?.nNF ?? "");
+        dataEmissao = String(inf?.ide?.dhEmi ?? inf?.ide?.dEmi ?? "").slice(0, 10);
+        const dets = Array.isArray(inf?.det) ? inf.det : inf?.det ? [inf.det] : [];
+        itensLidos = dets.map((d: any) => {
+          const p = d?.prod ?? {};
+          const desc = String(p.xProd ?? "").trim();
+          const caMatch = desc.match(/\bCA[\s.:#-]*(\d{3,6})\b/i);
+          return { nome: desc, quantidade: num(p.qCom), valorUnitario: num(p.vUnCom), ca: caMatch ? caMatch[1] : null };
+        }).filter((i: ItemLido) => i.nome);
+      } else {
+        const { invokeGeminiVision, invokeAnthropicVision } = await import("../_core/llm");
+        const prompt = `Você está lendo uma DANFE (nota fiscal eletrônica brasileira) de compra de EPIs/uniformes.
+Extraia e responda SOMENTE com JSON válido (sem markdown), no formato:
+{"fornecedor":{"nome":"...","cnpj":"..."},"numeroNota":"...","dataEmissao":"YYYY-MM-DD","itens":[{"nome":"...","quantidade":0,"valorUnitario":0,"ca":"12345 ou null"}]}
+Regras:
+- A nota pode ter VÁRIAS PÁGINAS — percorra TODAS as páginas e liste TODOS os produtos da tabela de itens (a tabela costuma continuar na página seguinte).
+- "itens" = produtos da tabela de itens da nota (descrição completa, quantidade comercial, valor UNITÁRIO).
+- Números SEMPRE com ponto decimal (ex.: 12.5), NUNCA formato brasileiro com vírgula.
+- "ca" = número do Certificado de Aprovação se aparecer na descrição (ex.: "CA 31469"), senão null.
+- Se algum campo não existir, use "" ou null.`;
+        const tenta = (s: string) => { try { return JSON.parse(s); } catch { return null; } };
+        const parseRaw = (raw: string): any => tenta(raw.trim())
+          ?? tenta(raw.replace(/```json|```/g, "").trim())
+          ?? tenta((raw.match(/\{[\s\S]*\}/) || [""])[0]);
+        const lerComIA = async (thinking: "off" | "auto") => {
+          let raw = "";
+          try {
+            raw = await invokeGeminiVision({ prompt, base64: clean, mimeType: input.mimeType, maxTokens: 16000, thinking });
+          } catch {
+            raw = await invokeAnthropicVision({ prompt, base64: clean, mimeType: input.mimeType, maxTokens: 16000 });
+          }
+          return parseRaw(raw);
+        };
+        let json: any = await lerComIA("off");
+        // Rev. 4996 — conferência anti-"só primeira página": em PDF, conta menções de CA
+        // no TEXTO de todas as páginas; se a IA devolveu bem menos itens, relê com
+        // raciocínio ligado (mais lento porém mais completo) e fica com a leitura maior.
+        if (/pdf/i.test(input.mimeType)) {
+          try {
+            const pdfParse = (await import("pdf-parse")).default;
+            const txt = (await pdfParse(Buffer.from(clean, "base64"))).text || "";
+            const casNoTexto = new Set((txt.match(/\bC\.?A[\s.:#-]*(\d{3,6})\b/gi) || []).map(s => s.replace(/\D/g, "")));
+            const lidos = Array.isArray(json?.itens) ? json.itens.length : 0;
+            if (casNoTexto.size > lidos) {
+              const json2: any = await lerComIA("auto");
+              if (Array.isArray(json2?.itens) && json2.itens.length > lidos) json = json2;
+            }
+          } catch { /* conferência é best-effort — segue com a leitura da IA */ }
+        }
+        if (!json || !Array.isArray(json.itens)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Não consegui ler os itens da nota. Tente uma foto/PDF mais nítido ou o XML da NF-e." });
+        }
+        fornecedorNome = String(json.fornecedor?.nome ?? "");
+        fornecedorCnpj = String(json.fornecedor?.cnpj ?? "").replace(/\D/g, "");
+        numeroNota = String(json.numeroNota ?? "");
+        dataEmissao = String(json.dataEmissao ?? "");
+        itensLidos = json.itens.map((i: any) => ({
+          nome: String(i.nome ?? "").trim(),
+          quantidade: num(i.quantidade),
+          valorUnitario: num(i.valorUnitario),
+          ca: i.ca ? String(i.ca).replace(/\D/g, "") || null : null,
+        })).filter((i: ItemLido) => i.nome);
+      }
+      if (itensLidos.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhum item encontrado na nota." });
+
+      // ---- cruzamento com o catálogo da empresa ----
+      const catalogo = await db.select({
+        id: epis.id, nome: epis.nome, ca: epis.ca, tamanho: epis.tamanho,
+        categoria: epis.categoria, quantidadeEstoque: epis.quantidadeEstoque, valorProduto: epis.valorProduto,
+      }).from(epis).where(eq(epis.companyId, input.companyId));
+      const norm = (s: string) => String(s || "").toUpperCase()
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^A-Z0-9]+/g, " ").trim();
+      const toks = (s: string) => new Set(norm(s).split(" ").filter(t => t.length >= 3));
+      const catPrep = catalogo.map(c => ({ ...c, caDigits: String(c.ca || "").replace(/\D/g, ""), tokens: toks(c.nome || "") }));
+      const itens = itensLidos.map(it => {
+        let match: any = null; let via = "";
+        if (it.ca) {
+          const porCa = catPrep.filter(c => c.caDigits && c.caDigits === it.ca);
+          if (porCa.length === 1) { match = porCa[0]; via = "CA"; }
+        }
+        if (!match) {
+          const tIt = toks(it.nome);
+          let best: any = null; let bestScore = 0;
+          for (const c of catPrep) {
+            if (!c.tokens.size || !tIt.size) continue;
+            let inter = 0; tIt.forEach(t => { if (c.tokens.has(t)) inter++; });
+            const score = inter / Math.max(1, Math.min(tIt.size, c.tokens.size));
+            if (score > bestScore) { bestScore = score; best = c; }
+          }
+          if (best && bestScore >= 0.6) { match = best; via = "nome"; }
+        }
+        return {
+          nome: it.nome, quantidade: it.quantidade, valorUnitario: it.valorUnitario, ca: it.ca,
+          sugestao: match ? "somar" as const : "novo" as const,
+          matchVia: via || null,
+          match: match ? { epiId: match.id, nome: match.nome, ca: match.ca, tamanho: match.tamanho, categoria: match.categoria, estoqueCentral: match.quantidadeEstoque ?? 0, valorAtual: match.valorProduto } : null,
+        };
+      });
+      return { fornecedor: { nome: fornecedorNome, cnpj: fornecedorCnpj }, numeroNota, dataEmissao, itens };
+    }),
+
+  // Confirmação: o usuário já validou item a item (somar/novo/ignorar).
+  // NÃO reexecuta IA — grava exatamente o que foi revisado na tela.
+  importarDanfeConfirmar: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      numeroNota: z.string().optional(),
+      fornecedorNome: z.string().optional(),
+      fornecedorCnpj: z.string().optional(),
+      itens: z.array(z.object({
+        acao: z.enum(["somar", "novo", "ignorar"]),
+        epiId: z.number().optional(),
+        nome: z.string(),
+        quantidade: z.number().min(0),
+        valorUnitario: z.number().optional(),
+        ca: z.string().nullable().optional(),
+        categoria: z.enum(["EPI", "Uniforme", "Calcado"]).optional(),
+        tamanho: z.string().nullable().optional(),
+        vidaUtilDias: z.number().optional(),
+      })).min(1),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      const allowed = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!allowed.some((c) => c.id === input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+      // Toda entrada via nota credita o Almoxarifado CENTRAL
+      await assertCentralWrite(ctx);
+      const userName = ctx.user?.name || "Sistema";
+      const refNota = input.numeroNota ? `NF ${input.numeroNota}` : "nota (DANFE)";
+      let somados = 0, criados = 0, ignorados = 0;
+      for (const it of input.itens) {
+        if (it.acao === "ignorar" || it.quantidade <= 0) { ignorados++; continue; }
+        if (it.acao === "somar") {
+          if (!it.epiId) throw new TRPCError({ code: "BAD_REQUEST", message: `Item "${it.nome}": faltou o EPI de destino para somar.` });
+          await db.transaction(async (tx) => {
+            // anti-IDOR + anti-corrida: valida ownership e credita na MESMA transação;
+            // o UPDATE ... RETURNING serializa o saldo → log de ajuste sempre fiel.
+            const qtd = Math.round(it.quantidade);
+            const upd: any = await tx.execute(sql`
+              UPDATE epis
+              SET quantidade_estoque = COALESCE(quantidade_estoque, 0) + ${qtd}
+                  ${it.valorUnitario != null && it.valorUnitario > 0 ? sql`, valor_produto = ${String(it.valorUnitario)}` : sql``}
+              WHERE id = ${it.epiId} AND company_id = ${input.companyId}
+              RETURNING COALESCE(quantidade_estoque, 0) AS depois
+            `);
+            const rows = upd?.rows ?? upd;
+            if (!rows || rows.length === 0) {
+              throw new TRPCError({ code: "FORBIDDEN", message: `Item "${it.nome}": EPI de destino inválido.` });
+            }
+            const depois = Number(rows[0].depois ?? 0);
+            await tx.insert(epiEstoqueAjustes).values({
+              companyId: input.companyId,
+              epiId: it.epiId!,
+              quantidadeAntes: depois - qtd,
+              quantidadeDepois: depois,
+              motivo: `Entrada via ${refNota}${input.fornecedorNome ? ` — ${input.fornecedorNome}` : ""}`,
+              criadoPor: userName,
+              criadoPorUserId: ctx.user?.id || null,
+            } as any);
+          });
+          somados++;
+        } else {
+          await db.insert(epis).values({
+            companyId: input.companyId,
+            nome: it.nome,
+            ca: it.ca || null,
+            fornecedor: input.fornecedorNome || null,
+            fornecedorCnpj: input.fornecedorCnpj || null,
+            categoria: it.categoria || "EPI",
+            tamanho: it.tamanho || null,
+            quantidadeEstoque: Math.round(it.quantidade),
+            valorProduto: it.valorUnitario != null && it.valorUnitario > 0 ? String(it.valorUnitario) : null,
+            tempoMinimoTroca: it.vidaUtilDias || 180,
+            condicao: "Novo",
+            criadoPor: userName,
+          } as any);
+          criados++;
+        }
+      }
+      return { somados, criados, ignorados };
     }),
 });

@@ -11705,6 +11705,7 @@ export function EfetivoObraView({ equipeRaw, isLoading, docsMap = {}, companyId,
                     <th className="text-center px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Status</th>
                     <th className="text-center px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">ASO</th>
                     <th className="text-center px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Trein.</th>
+                    <th className="text-center px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Experiência</th>
                     <th className="text-left px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Tempo de Empresa</th>
                     <th className="text-center px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Ações</th>
                   </tr>
@@ -11838,6 +11839,36 @@ export function EfetivoObraView({ equipeRaw, isLoading, docsMap = {}, companyId,
                           </span>
                         )}
                       </td>
+                      {/* Rev. 5060 — Em experiência × Efetivado (só CLT; PJ/terceiro não têm) */}
+                      <td className="px-2 py-2 text-center whitespace-nowrap">{(() => {
+                        if (!isCLT) return <span className="text-[10px] text-slate-300">—</span>;
+                        const hojeStr = new Date().toISOString().slice(0, 10);
+                        const fimExp = (e.experienciaFim2 || e.experienciaFim1 || "").slice(0, 10);
+                        const st = String(e.experienciaStatus || "");
+                        // Fallback sem dados do módulo: admissão + 90 dias
+                        let emExperiencia: boolean;
+                        let ateStr = "";
+                        if (st === "efetivado") emExperiencia = false;
+                        else if (fimExp) { emExperiencia = fimExp >= hojeStr; ateStr = fimExp; }
+                        else if (e.dataAdmissao) {
+                          const adm = String(e.dataAdmissao).slice(0, 10);
+                          if (/^\d{4}-\d{2}-\d{2}$/.test(adm)) {
+                            const d = new Date(adm + "T00:00:00"); d.setDate(d.getDate() + 89);
+                            ateStr = d.toISOString().slice(0, 10);
+                            emExperiencia = ateStr >= hojeStr;
+                          } else emExperiencia = false;
+                        } else emExperiencia = false;
+                        const fmt = (s: string) => s ? `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}` : "";
+                        return emExperiencia ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200" title={ateStr ? `Em contrato de experiência até ${fmt(ateStr)}` : "Em contrato de experiência"}>
+                            ⏳ Experiência{ateStr ? ` · até ${fmt(ateStr)}` : ""}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200" title={e.experienciaEfetivadoEm ? `Efetivado em ${fmt(String(e.experienciaEfetivadoEm).slice(0, 10))}` : "Período de experiência concluído"}>
+                            ✓ Efetivado
+                          </span>
+                        );
+                      })()}</td>
                       <td className="px-4 py-2 text-slate-500 text-[13px]">{(() => {
                         if (!e.dataAdmissao) return "—";
                         // Rev. 1849 — fatiar pra "YYYY-MM-DD" antes do Date():
@@ -11889,7 +11920,7 @@ export function EfetivoObraView({ equipeRaw, isLoading, docsMap = {}, companyId,
                     </tr>
                     {expanded && podeExpandir && (
                       <tr className="bg-slate-50/60">
-                        <td colSpan={12} className="px-6 py-4">
+                        <td colSpan={13} className="px-6 py-4">
                           <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 text-xs">
                             {/* Rev. 1590 — Integração de Segurança SST.
                                 Módulo Planejamento (engenheiro): mostra
@@ -11981,7 +12012,7 @@ export function EfetivoObraView({ equipeRaw, isLoading, docsMap = {}, companyId,
                     );
                   })}
                   {listaFiltrada.length === 0 && (
-                    <tr><td colSpan={12} className="text-center py-10 text-slate-400 text-sm">Nenhum funcionário encontrado</td></tr>
+                    <tr><td colSpan={13} className="text-center py-10 text-slate-400 text-sm">Nenhum funcionário encontrado</td></tr>
                   )}
                 </tbody>
               </table>

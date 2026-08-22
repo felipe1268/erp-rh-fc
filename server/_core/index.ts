@@ -22,7 +22,10 @@ import { registerSpedEcfRoute } from "../routers/downloadSpedEcf";
 import { registerSpedEcdRoute } from "../routers/downloadSpedEcd";
 import { registerDdsAtaRoute } from "../routers/downloadDdsAta";
 import { registerComunicadoPdfRoute } from "../routers/comunicadoPdf";
+import { registerCotacaoMapaPdfRoute } from "../routers/cotacaoMapaPdf";
+import { registerContratoPreviewPdfRoute } from "../routers/contratoPreviewPdf";
 import { registerDdsAtaLoteRoute } from "../routers/downloadDdsAtaLote";
+import { registerDownloadTelefonesContratoRoute } from "../routers/downloadTelefonesContrato";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
@@ -340,7 +343,10 @@ async function startServer() {
   registerSpedEcdRoute(app);
   registerDdsAtaRoute(app);
   registerComunicadoPdfRoute(app);
+  registerCotacaoMapaPdfRoute(app);
+  registerContratoPreviewPdfRoute(app);
   registerDdsAtaLoteRoute(app);
+  registerDownloadTelefonesContratoRoute(app);
 
   // Upload multipart para documentos SST grandes (PGR/PCMSO/LTCAT — até 150MB)
   const multer = (await import("multer")).default;
@@ -1001,6 +1007,722 @@ Regras:
         const { getDb } = await import("../db");
         const db = (await getDb())!;
         const { sql } = await import("drizzle-orm");
+        // Rev. 4864 — fc_money(text): parse monetário FORMAT-AWARE em SQL.
+        // Colunas VARCHAR de dinheiro têm formatos mistos ("3.068,97" BR e
+        // "3068.97" ponto-decimal); o parse ingênuo REPLACE('.','') transformava
+        // 3068.97 em 306897 (bug dos R$ 300 mil nas férias do Scorecard).
+        // Criada NO INÍCIO do bootstrap, em try próprio, para não depender do
+        // sucesso de migrações não relacionadas.
+        try {
+          await db.execute(sql`
+            CREATE OR REPLACE FUNCTION fc_money(v text) RETURNS numeric
+            LANGUAGE sql IMMUTABLE AS $fn$
+              SELECT COALESCE(CASE
+                WHEN v IS NULL OR v !~ '[0-9]' THEN NULL
+                WHEN v ~ ',' THEN NULLIF(regexp_replace(REPLACE(REPLACE(v,'.',''),',','.'),'[^0-9.-]','','g'),'')::numeric
+                WHEN v ~ '^-?[0-9]{1,3}(\\.[0-9]{3})+$' THEN REPLACE(v,'.','')::numeric
+                WHEN v ~ '^-?[0-9]+(\\.[0-9]+)?$' THEN v::numeric
+                ELSE NULLIF(regexp_replace(v,'[^0-9.]','','g'),'')::numeric
+              END, 0)
+            $fn$
+          `);
+          console.log("[SyncSchema+] Rev. 4864: função fc_money garantida (parse monetário format-aware).");
+        } catch (e) {
+          console.error("[SyncSchema+] Rev. 4864: falha ao criar fc_money:", e);
+        }
+        // Rev. 5038 — Integração Folha oficial ↔ Financeiro: índice único do
+        // título exato (dedup atômico do ON CONFLICT em upsertTituloFolhaOficial)
+        // e recriação do índice de projeções incluindo folha_prevista_*.
+        try {
+          await db.execute(sql`
+            CREATE UNIQUE INDEX IF NOT EXISTS uq_fin_entries_folha_oficial
+            ON financial_entries (company_id, origem_descricao)
+            WHERE origem_modulo='folha_oficial' AND status<>'cancelado'
+          `);
+          const idx: any = await db.execute(sql`SELECT indexdef FROM pg_indexes WHERE indexname='uq_fin_entries_projecao'`);
+          const def = String((idx?.rows ?? idx)?.[0]?.indexdef || "");
+          if (def && !def.includes("folha_prevista_vale")) {
+            await db.execute(sql`DROP INDEX IF EXISTS uq_fin_entries_projecao`);
+            await db.execute(sql`
+              CREATE UNIQUE INDEX uq_fin_entries_projecao
+              ON financial_entries (company_id, origem_modulo, origem_id)
+              WHERE status='previsto' AND origem_modulo::text = ANY (ARRAY['folha_projetada','encargos_projetado','beneficio_va_projetado','beneficio_vr_projetado','decimo_terceiro_projetado','pj_projetado','ferias_projetada','rescisao_projetada','folha_prevista_vale','folha_prevista_pagamento'])
+            `);
+          }
+          console.log("[SyncSchema+] Rev. 5038: índices folha_oficial/projeção garantidos.");
+        } catch (e) {
+          console.error("[SyncSchema+] Rev. 5038: falha nos índices folha_oficial:", e);
+        }
+        // Rev. 5144 — alertas automáticos de Compras precisam ser idempotentes
+        // também para escritores concorrentes fora do agendador. As chaves são
+        // nulas no histórico para não apagar nem bloquear registros já existentes.
+        try {
+          await db.execute(sql`ALTER TABLE almoxarifado_notificacoes ADD COLUMN IF NOT EXISTS dedup_key VARCHAR(255)`);
+          await db.execute(sql`ALTER TABLE notification_logs ADD COLUMN IF NOT EXISTS dedup_key VARCHAR(255)`);
+          await db.execute(sql`
+            CREATE UNIQUE INDEX IF NOT EXISTS uq_almoxarifado_notificacoes_auto_dedup
+            ON almoxarifado_notificacoes (company_id, dedup_key)
+            WHERE dedup_key IS NOT NULL
+          `);
+          await db.execute(sql`
+            CREATE UNIQUE INDEX IF NOT EXISTS uq_notification_logs_auto_dedup
+            ON notification_logs ("companyId", dedup_key)
+            WHERE dedup_key IS NOT NULL
+          `);
+          console.log("[SyncSchema+] Rev. 5144: chaves únicas dos alertas automáticos de Compras garantidas.");
+        } catch (e) {
+          console.error("[SyncSchema+] Rev. 5144: falha nas chaves dos alertas automáticos de Compras:", e);
+        }
+        // Rev. 5145 — Paginação de Cotações: índices que sustentam a janela
+        // company+data e os relacionamentos processados somente para a página visível.
+        try {
+          await db.execute(sql`
+            CREATE INDEX IF NOT EXISTS idx_compras_cotacoes_company_created
+            ON compras_cotacoes (company_id, created_at, id)
+          `);
+          await db.execute(sql`
+            CREATE INDEX IF NOT EXISTS idx_compras_cotacoes_itens_cotacao
+            ON compras_cotacoes_itens (cotacao_id)
+          `);
+          await db.execute(sql`
+            CREATE INDEX IF NOT EXISTS idx_compras_ordens_company_cotacao
+            ON compras_ordens (company_id, cotacao_id)
+          `);
+          console.log("[SyncSchema+] Rev. 5145: índices da listagem paginada de Cotações garantidos.");
+        } catch (e) {
+          console.error("[SyncSchema+] Rev. 5145: falha nos índices da listagem de Cotações:", e);
+        }
+        // Rev. 5042 — Vale Transporte: tabelas do módulo mensal.
+        try {
+          await db.execute(sql`CREATE TABLE IF NOT EXISTS vt_meses (
+            id SERIAL PRIMARY KEY,
+            "companyId" INTEGER NOT NULL,
+            "mesReferencia" VARCHAR(7) NOT NULL,
+            status TEXT NOT NULL DEFAULT 'aberto',
+            "anexoUrl" TEXT,
+            "anexoNome" VARCHAR(255),
+            "entryId" INTEGER,
+            "consolidadoPor" VARCHAR(255),
+            "consolidadoEm" TIMESTAMP,
+            "enviadoPor" VARCHAR(255),
+            "enviadoEm" TIMESTAMP,
+            "createdAt" TIMESTAMP NOT NULL DEFAULT NOW(),
+            "updatedAt" TIMESTAMP NOT NULL DEFAULT NOW()
+          )`);
+          await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_vt_meses_company_mes ON vt_meses ("companyId", "mesReferencia")`);
+          await db.execute(sql`CREATE TABLE IF NOT EXISTS vt_lancamentos (
+            id SERIAL PRIMARY KEY,
+            "companyId" INTEGER NOT NULL,
+            "employeeId" INTEGER NOT NULL,
+            "mesReferencia" VARCHAR(7) NOT NULL,
+            "diasTrabalhados" INTEGER NOT NULL DEFAULT 0,
+            "valorDiario" VARCHAR(20),
+            "valorTotal" VARCHAR(20),
+            observacoes TEXT,
+            "criadoPor" VARCHAR(255),
+            "createdAt" TIMESTAMP NOT NULL DEFAULT NOW(),
+            "updatedAt" TIMESTAMP NOT NULL DEFAULT NOW()
+          )`);
+          await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_vt_lanc_company_emp_mes ON vt_lancamentos ("companyId", "employeeId", "mesReferencia")`);
+          // Garantia no BANCO de título ÚNICO ativo por mês de VT (dedup sob concorrência)
+          await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_fin_entries_vale_transporte
+            ON financial_entries (company_id, origem_id)
+            WHERE origem_modulo = 'vale_transporte' AND status <> 'cancelado'`);
+          // Rev. 5043 — múltiplos boletos por mês de VT + espelho no título
+          await db.execute(sql`ALTER TABLE vt_meses ADD COLUMN IF NOT EXISTS "anexosJson" TEXT`);
+          await db.execute(sql`ALTER TABLE vt_meses ADD COLUMN IF NOT EXISTS "taxasJson" TEXT`);
+          await db.execute(sql`ALTER TABLE financial_entries ADD COLUMN IF NOT EXISTS anexos_json TEXT`);
+          // Rev. 5124 — data limite de recorrência (fim programado do lançamento recorrente)
+          await db.execute(sql`ALTER TABLE financial_recurring_entries ADD COLUMN IF NOT EXISTS data_limite DATE`);
+          // Rev. 5044 — agendamento de renovação de ASO (informativo nos alertas)
+          await db.execute(sql`ALTER TABLE asos ADD COLUMN IF NOT EXISTS "dataAgendamentoRenovacao" DATE`);
+          await db.execute(sql`ALTER TABLE trainings ADD COLUMN IF NOT EXISTS "dataAgendamentoRenovacao" DATE`);
+          // Rev. 5051 — cadeia de reciclagem: novo treinamento referencia o substituído
+          await db.execute(sql`ALTER TABLE trainings ADD COLUMN IF NOT EXISTS "treinamentoAnteriorId" INTEGER`);
+          // 1 sucessor por treinamento (evita corrida criando 2 reciclagens do mesmo anterior)
+          await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uniq_trainings_sucessor ON trainings ("treinamentoAnteriorId") WHERE "treinamentoAnteriorId" IS NOT NULL AND "deletedAt" IS NULL`);
+          // Rev. 5044 — VA aprovado vira título único ativo por mês (dedup sob concorrência)
+          await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_fin_entries_vale_alimentacao
+            ON financial_entries (company_id, origem_descricao)
+            WHERE origem_modulo = 'vale_alimentacao' AND status <> 'cancelado'`);
+          console.log("[SyncSchema+] Rev. 5042: tabelas vt_meses/vt_lancamentos garantidas.");
+        } catch (e) {
+          console.error("[SyncSchema+] Rev. 5042: falha nas tabelas de Vale Transporte:", e);
+        }
+        // Rev. 5052 — Módulo Reembolso: fundos fixos (caixinha) + solicitações + despesas.
+        try {
+          await db.execute(sql`CREATE TABLE IF NOT EXISTS reembolso_fundos (
+            id SERIAL PRIMARY KEY,
+            company_id INTEGER NOT NULL,
+            employee_id INTEGER NOT NULL,
+            valor_fundo VARCHAR(20) NOT NULL,
+            descricao TEXT,
+            status VARCHAR(20) NOT NULL DEFAULT 'ativo',
+            criado_por VARCHAR(255),
+            criado_em TIMESTAMP DEFAULT NOW(),
+            encerrado_em TIMESTAMP,
+            deleted_at TIMESTAMP
+          )`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_reemb_fundo_company ON reembolso_fundos (company_id)`);
+          await db.execute(sql`CREATE TABLE IF NOT EXISTS reembolso_solicitacoes (
+            id SERIAL PRIMARY KEY,
+            company_id INTEGER NOT NULL,
+            employee_id INTEGER NOT NULL,
+            fundo_id INTEGER,
+            tipo VARCHAR(20) NOT NULL DEFAULT 'avulso',
+            status VARCHAR(30) NOT NULL DEFAULT 'pendente',
+            motivo TEXT,
+            motivo_decisao TEXT,
+            valor_total VARCHAR(20) NOT NULL DEFAULT '0',
+            valor_aprovado VARCHAR(20),
+            pagamento_tipo VARCHAR(20),
+            pagamento_chave TEXT,
+            aprovado_por_nome VARCHAR(255),
+            aprovado_em TIMESTAMP,
+            criado_por_user_id INTEGER,
+            criado_por_nome VARCHAR(255),
+            criado_em TIMESTAMP DEFAULT NOW(),
+            deleted_at TIMESTAMP
+          )`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_reemb_sol_company ON reembolso_solicitacoes (company_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_reemb_sol_employee ON reembolso_solicitacoes (employee_id)`);
+          await db.execute(sql`CREATE TABLE IF NOT EXISTS reembolso_despesas (
+            id SERIAL PRIMARY KEY,
+            company_id INTEGER NOT NULL,
+            solicitacao_id INTEGER NOT NULL,
+            obra_id INTEGER,
+            categoria VARCHAR(60) NOT NULL DEFAULT 'outros',
+            descricao TEXT NOT NULL,
+            data_despesa VARCHAR(10) NOT NULL,
+            valor VARCHAR(20) NOT NULL,
+            comprovante_url TEXT,
+            comprovante_key TEXT,
+            status VARCHAR(20) NOT NULL DEFAULT 'pendente',
+            motivo_reprovacao TEXT,
+            criado_em TIMESTAMP DEFAULT NOW(),
+            deleted_at TIMESTAMP
+          )`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_reemb_desp_sol ON reembolso_despesas (solicitacao_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_reemb_desp_company ON reembolso_despesas (company_id)`);
+          // 1 título ativo por solicitação aprovada (dedup sob concorrência)
+          await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_fin_entries_reembolso
+            ON financial_entries (origem_modulo, origem_id)
+            WHERE origem_modulo IN ('reembolso', 'reembolso_fundo') AND status <> 'cancelado'`);
+          console.log("[SyncSchema+] Rev. 5052: tabelas do módulo Reembolso garantidas.");
+        } catch (e) {
+          console.error("[SyncSchema+] Rev. 5052: falha nas tabelas de Reembolso:", e);
+        }
+        // Rev. 5062 — Reembolso: alocação de custo no planejamento orçamentário (EAP).
+        try {
+          await db.execute(sql`ALTER TABLE reembolso_despesas ADD COLUMN IF NOT EXISTS orcamento_item_id INTEGER`);
+          await db.execute(sql`ALTER TABLE reembolso_despesas ADD COLUMN IF NOT EXISTS eap_codigo VARCHAR(40)`);
+          await db.execute(sql`ALTER TABLE reembolso_despesas ADD COLUMN IF NOT EXISTS eap_descricao TEXT`);
+          console.log("[SyncSchema+] Rev. 5062: colunas de EAP em reembolso_despesas garantidas.");
+        } catch (e) {
+          console.error("[SyncSchema+] Rev. 5062: falha nas colunas de EAP de reembolso_despesas:", e);
+        }
+        // Rev. 5064 — Reembolso: dados do estabelecimento lidos da notinha pela IA.
+        try {
+          await db.execute(sql`ALTER TABLE reembolso_despesas ADD COLUMN IF NOT EXISTS estabelecimento_nome TEXT`);
+          await db.execute(sql`ALTER TABLE reembolso_despesas ADD COLUMN IF NOT EXISTS estabelecimento_cnpj VARCHAR(20)`);
+          await db.execute(sql`ALTER TABLE reembolso_despesas ADD COLUMN IF NOT EXISTS estabelecimento_endereco TEXT`);
+          console.log("[SyncSchema+] Rev. 5064: colunas de estabelecimento em reembolso_despesas garantidas.");
+        } catch (e) {
+          console.error("[SyncSchema+] Rev. 5064: falha nas colunas de estabelecimento:", e);
+        }
+        // Rev. 5072 — Reembolso: rastreio antifraude do documento fiscal (anti-duplicidade).
+        try {
+          await db.execute(sql`ALTER TABLE reembolso_despesas ADD COLUMN IF NOT EXISTS doc_chave VARCHAR(60)`);
+          await db.execute(sql`ALTER TABLE reembolso_despesas ADD COLUMN IF NOT EXISTS doc_numero VARCHAR(30)`);
+          await db.execute(sql`ALTER TABLE reembolso_despesas ADD COLUMN IF NOT EXISTS doc_fingerprint VARCHAR(140)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_reemb_desp_fingerprint ON reembolso_despesas (company_id, doc_fingerprint) WHERE doc_fingerprint IS NOT NULL`);
+          console.log("[SyncSchema+] Rev. 5072: colunas doc_* (antifraude) em reembolso_despesas garantidas.");
+        } catch (e) {
+          console.error("[SyncSchema+] Rev. 5072: falha nas colunas doc_*:", e);
+        }
+        // Rev. 5080 — Reembolso: itens discriminados da nota (IA; [{qtd,descricao,valor}]).
+        try {
+          await db.execute(sql`ALTER TABLE reembolso_despesas ADD COLUMN IF NOT EXISTS itens_json JSONB`);
+          console.log("[SyncSchema+] Rev. 5080: coluna itens_json em reembolso_despesas garantida.");
+        } catch (e) {
+          console.error("[SyncSchema+] Rev. 5080: falha na coluna itens_json:", e);
+        }
+        // Rev. 5081 — Reembolso: vínculo com veículo da Frota (poka-yoke).
+        try {
+          await db.execute(sql`ALTER TABLE reembolso_despesas ADD COLUMN IF NOT EXISTS vehicle_id INTEGER`);
+          await db.execute(sql`ALTER TABLE reembolso_despesas ADD COLUMN IF NOT EXISTS vehicle_placa VARCHAR(15)`);
+          await db.execute(sql`ALTER TABLE reembolso_despesas ADD COLUMN IF NOT EXISTS vehicle_modelo VARCHAR(100)`);
+          await db.execute(sql`ALTER TABLE reembolso_despesas ADD COLUMN IF NOT EXISTS frota_manutencao_id INTEGER`);
+          console.log("[SyncSchema+] Rev. 5081: colunas vehicle_id/placa/modelo/frota_manutencao_id em reembolso_despesas garantidas.");
+        } catch (e) {
+          console.error("[SyncSchema+] Rev. 5081: falha nas colunas de vínculo Frota:", e);
+        }
+        // Rev. 5082 — Reembolso: km do hodômetro + km prevista para próxima manutenção.
+        try {
+          await db.execute(sql`ALTER TABLE reembolso_despesas ADD COLUMN IF NOT EXISTS km_na_manutencao VARCHAR(15)`);
+          await db.execute(sql`ALTER TABLE reembolso_despesas ADD COLUMN IF NOT EXISTS km_proxima VARCHAR(15)`);
+          console.log("[SyncSchema+] Rev. 5082: colunas km_na_manutencao/km_proxima em reembolso_despesas garantidas.");
+        } catch (e) {
+          console.error("[SyncSchema+] Rev. 5082: falha nas colunas km:", e);
+        }
+        // Rev. 5087 — Patrimônio Imobiliário: tabelas imoveis e imovel_documentos.
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS imoveis (
+              id                          SERIAL PRIMARY KEY,
+              company_id                  INTEGER NOT NULL,
+              tipo                        VARCHAR(50)  NOT NULL DEFAULT 'outro',
+              nome                        VARCHAR(200) NOT NULL,
+              status                      VARCHAR(30)  NOT NULL DEFAULT 'disponivel',
+              logradouro                  TEXT,
+              numero                      VARCHAR(20),
+              complemento                 VARCHAR(100),
+              bairro                      VARCHAR(100),
+              cidade                      VARCHAR(100),
+              estado                      VARCHAR(2),
+              cep                         VARCHAR(10),
+              lat                         NUMERIC(10,7),
+              lng                         NUMERIC(10,7),
+              area_total                  NUMERIC(14,2),
+              area_construida             NUMERIC(14,2),
+              data_compra                 DATE,
+              valor_compra                NUMERIC(18,2),
+              valor_venal                 NUMERIC(18,2),
+              valor_comercial             NUMERIC(18,2),
+              valor_venda                 NUMERIC(18,2),
+              iptu_valor                  NUMERIC(14,2),
+              iptu_vencimento             DATE,
+              financiamento_banco         VARCHAR(100),
+              financiamento_parcela       NUMERIC(14,2),
+              financiamento_saldo_devedor NUMERIC(18,2),
+              financiamento_vencimento    DATE,
+              observacoes                 TEXT,
+              foto_capa_url               TEXT,
+              foto_capa_key               TEXT,
+              created_by                  INTEGER,
+              created_at                  TIMESTAMPTZ NOT NULL DEFAULT now(),
+              updated_at                  TIMESTAMPTZ NOT NULL DEFAULT now(),
+              deleted_at                  TIMESTAMPTZ
+            )
+          `);
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS imovel_documentos (
+              id               SERIAL PRIMARY KEY,
+              imovel_id        INTEGER NOT NULL,
+              company_id       INTEGER NOT NULL,
+              tipo             VARCHAR(50)  NOT NULL DEFAULT 'outro',
+              descricao        TEXT,
+              arquivo_url      TEXT,
+              arquivo_key      TEXT,
+              data_documento   DATE,
+              data_vencimento  DATE,
+              created_by       INTEGER,
+              created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+              deleted_at       TIMESTAMPTZ
+            )
+          `);
+          console.log("[SyncSchema+] Rev. 5087: tabelas imoveis + imovel_documentos garantidas.");
+        } catch (e) {
+          console.error("[SyncSchema+] Rev. 5087: falha nas tabelas de Patrimônio:", e);
+        }
+        // Rev. 5088 — Patrimônio Imobiliário: campos cartoriais, vendedores, compradores, ITBI, etc.
+        try {
+          await db.execute(sql`
+            ALTER TABLE imoveis
+              ADD COLUMN IF NOT EXISTS matricula           VARCHAR(100),
+              ADD COLUMN IF NOT EXISTS livro               VARCHAR(100),
+              ADD COLUMN IF NOT EXISTS folha               VARCHAR(100),
+              ADD COLUMN IF NOT EXISTS tabelionato         VARCHAR(200),
+              ADD COLUMN IF NOT EXISTS cidade_cartorio     VARCHAR(100),
+              ADD COLUMN IF NOT EXISTS itbi_valor          NUMERIC(18,2),
+              ADD COLUMN IF NOT EXISTS cadastro_prefeitura VARCHAR(100),
+              ADD COLUMN IF NOT EXISTS inscricao_municipal VARCHAR(100),
+              ADD COLUMN IF NOT EXISTS vendedores          TEXT,
+              ADD COLUMN IF NOT EXISTS compradores         TEXT,
+              ADD COLUMN IF NOT EXISTS data_escritura      DATE,
+              ADD COLUMN IF NOT EXISTS numero_registro     VARCHAR(100)
+          `);
+          console.log("[SyncSchema+] Rev. 5088: colunas cartoriais de imoveis garantidas.");
+        } catch (e) {
+          console.error("[SyncSchema+] Rev. 5088: falha colunas cartoriais:", e);
+        }
+        // Rev. 5089 — Patrimônio: colunas de Zoneamento/Plano Diretor.
+        try {
+          await db.execute(sql`
+            ALTER TABLE imoveis
+              ADD COLUMN IF NOT EXISTS zoneamento                   VARCHAR(150),
+              ADD COLUMN IF NOT EXISTS plano_diretor_municipio      VARCHAR(100),
+              ADD COLUMN IF NOT EXISTS uso_permitido                TEXT,
+              ADD COLUMN IF NOT EXISTS coef_aproveitamento_basico   NUMERIC(8,2),
+              ADD COLUMN IF NOT EXISTS coef_aproveitamento_maximo   NUMERIC(8,2),
+              ADD COLUMN IF NOT EXISTS taxa_ocupacao                NUMERIC(5,2),
+              ADD COLUMN IF NOT EXISTS taxa_permeabilidade          NUMERIC(5,2),
+              ADD COLUMN IF NOT EXISTS gabarito_maximo              VARCHAR(80),
+              ADD COLUMN IF NOT EXISTS recuo_frontal                NUMERIC(6,2),
+              ADD COLUMN IF NOT EXISTS recuo_lateral                NUMERIC(6,2),
+              ADD COLUMN IF NOT EXISTS recuo_fundos                 NUMERIC(6,2),
+              ADD COLUMN IF NOT EXISTS observacoes_zoneamento       TEXT,
+              ADD COLUMN IF NOT EXISTS plano_diretor_url            TEXT
+          `);
+          console.log("[SyncSchema+] Rev. 5089: colunas de zoneamento/Plano Diretor garantidas.");
+        } catch (e) {
+          console.error("[SyncSchema+] Rev. 5089: falha colunas zoneamento:", e);
+        }
+        // Rev. 5091 — Patrimônio: dimensões do terreno, imóvel averbado, renda mensal.
+        try {
+          await db.execute(sql`
+            ALTER TABLE imoveis
+              ADD COLUMN IF NOT EXISTS terreno_largura        NUMERIC,
+              ADD COLUMN IF NOT EXISTS terreno_comprimento    NUMERIC,
+              ADD COLUMN IF NOT EXISTS terreno_frentes        INTEGER,
+              ADD COLUMN IF NOT EXISTS imovel_averbado        BOOLEAN DEFAULT false,
+              ADD COLUMN IF NOT EXISTS area_averbada          NUMERIC,
+              ADD COLUMN IF NOT EXISTS ano_construcao         INTEGER,
+              ADD COLUMN IF NOT EXISTS gera_renda             BOOLEAN DEFAULT false,
+              ADD COLUMN IF NOT EXISTS renda_mensal           NUMERIC,
+              ADD COLUMN IF NOT EXISTS renda_locatario        VARCHAR(200),
+              ADD COLUMN IF NOT EXISTS renda_dia_vencimento   INTEGER,
+              ADD COLUMN IF NOT EXISTS renda_contrato_inicio  DATE,
+              ADD COLUMN IF NOT EXISTS renda_contrato_fim     DATE
+          `);
+          console.log("[SyncSchema+] Rev. 5091: dimensões/averbado/renda garantidas em imoveis.");
+        } catch (e) {
+          console.error("[SyncSchema+] Rev. 5091: falha colunas dimensões/renda:", e);
+        }
+        // Rev. 5092 — Patrimônio: campo de proprietário (empresa ou sócio).
+        try {
+          await db.execute(sql`
+            ALTER TABLE imoveis
+              ADD COLUMN IF NOT EXISTS owner_type  VARCHAR(20)  DEFAULT 'empresa',
+              ADD COLUMN IF NOT EXISTS socio_nome  VARCHAR(200),
+              ADD COLUMN IF NOT EXISTS socio_cpf   VARCHAR(20),
+              ADD COLUMN IF NOT EXISTS socio_doc   VARCHAR(100)
+          `);
+          console.log("[SyncSchema+] Rev. 5092: colunas de proprietário (owner_type/socio_*) garantidas em imoveis.");
+        } catch (e) {
+          console.error("[SyncSchema+] Rev. 5092: falha colunas proprietário:", e);
+        }
+        // Rev. 5095 — Patrimônio: múltiplos proprietários (JSONB array, até N sócios/pessoas físicas).
+        try {
+          await db.execute(sql`ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS socios_json JSONB`);
+          console.log("[SyncSchema+] Rev. 5095: coluna socios_json (JSONB) garantida em imoveis.");
+        } catch (e) {
+          console.error("[SyncSchema+] Rev. 5095: falha socios_json:", e);
+        }
+        // Rev. 5094 — Patrimônio: campos de financiamento detalhados (taxa, índice, parcelas, data início).
+        try {
+          await db.execute(sql`
+            ALTER TABLE imoveis
+              ADD COLUMN IF NOT EXISTS financiamento_taxa_anual      NUMERIC(6,3),
+              ADD COLUMN IF NOT EXISTS financiamento_indice           VARCHAR(20),
+              ADD COLUMN IF NOT EXISTS financiamento_numero_parcelas  INTEGER,
+              ADD COLUMN IF NOT EXISTS financiamento_parcelas_pagas   INTEGER,
+              ADD COLUMN IF NOT EXISTS financiamento_data_inicio      DATE
+          `);
+          console.log("[SyncSchema+] Rev. 5094: colunas de financiamento detalhado garantidas em imoveis.");
+        } catch (e) {
+          console.error("[SyncSchema+] Rev. 5094: falha colunas financiamento detalhado:", e);
+        }
+        // Rev. 5093 — Patrimônio: tabela de pagamentos de encargos (IPTU, laudêmio, ITBI, condomínio, etc.)
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS imovel_pagamentos (
+              id                SERIAL PRIMARY KEY,
+              imovel_id         INTEGER      NOT NULL,
+              company_id        INTEGER      NOT NULL,
+              tipo              VARCHAR(30)  NOT NULL DEFAULT 'iptu',
+              descricao         TEXT,
+              valor             NUMERIC(14,2),
+              data_vencimento   DATE         NOT NULL,
+              data_pagamento    DATE,
+              comprovante_url   TEXT,
+              comprovante_key   TEXT,
+              created_by        INTEGER,
+              created_at        TIMESTAMPTZ  NOT NULL DEFAULT now(),
+              deleted_at        TIMESTAMPTZ
+            )
+          `);
+          console.log("[SyncSchema+] Rev. 5093: tabela imovel_pagamentos garantida.");
+        } catch (e) {
+          console.error("[SyncSchema+] Rev. 5093: falha na tabela imovel_pagamentos:", e);
+        }
+        // Rev. 5145 — Patrimônio: coluna notificado_em em imovel_pagamentos (dedup de alerta de encargos)
+        try {
+          await db.execute(sql`
+            ALTER TABLE imovel_pagamentos
+              ADD COLUMN IF NOT EXISTS notificado_em DATE
+          `);
+          console.log("[SyncSchema+] Rev. 5145: coluna notificado_em em imovel_pagamentos garantida.");
+        } catch (e) {
+          console.error("[SyncSchema+] Rev. 5145: falha ao adicionar notificado_em:", e);
+        }
+        // Rev. 5150 — Módulo Telefones Corporativos: planos, linhas e consumo mensal.
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS telefones_planos (
+              id                  SERIAL PRIMARY KEY,
+              company_id          INTEGER NOT NULL,
+              operadora           VARCHAR(100),
+              nome_plano          VARCHAR(200),
+              cnpj_operadora      VARCHAR(20),
+              telefone_operadora  VARCHAR(30),
+              valor_mensal        VARCHAR(30),
+              dia_vencimento      INTEGER,
+              data_inicio         VARCHAR(10),
+              data_fim            VARCHAR(10),
+              multa_rescisoria    VARCHAR(30),
+              fidelidade_meses    INTEGER,
+              franquia_dados_gb   VARCHAR(30),
+              clausulas_json      TEXT,
+              observacoes         TEXT,
+              contrato_url        TEXT,
+              contrato_key        TEXT,
+              contrato_nome       VARCHAR(255),
+              ia_extraiu          INTEGER DEFAULT 0,
+              ia_extraiu_em       TIMESTAMP,
+              criado_por_id       INTEGER,
+              criado_por_nome     VARCHAR(255),
+              created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+              updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_tel_planos_company ON telefones_planos(company_id)`);
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS telefones_linhas (
+              id                  SERIAL PRIMARY KEY,
+              company_id          INTEGER NOT NULL,
+              plano_id            INTEGER,
+              numero              VARCHAR(30) NOT NULL,
+              operadora           VARCHAR(100),
+              nome_plano_linha    VARCHAR(200),
+              employee_id         INTEGER,
+              employee_nome       VARCHAR(255),
+              imei                VARCHAR(60),
+              data_aquisicao      VARCHAR(10),
+              status              VARCHAR(20) NOT NULL DEFAULT 'ativa',
+              observacoes         TEXT,
+              criado_por_id       INTEGER,
+              criado_por_nome     VARCHAR(255),
+              created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+              updated_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+              deleted_at          TIMESTAMPTZ
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_tel_linhas_company ON telefones_linhas(company_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_tel_linhas_employee ON telefones_linhas(employee_id)`);
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS telefones_uso (
+              id                    SERIAL PRIMARY KEY,
+              company_id            INTEGER NOT NULL,
+              linha_id              INTEGER NOT NULL,
+              competencia           VARCHAR(7) NOT NULL,
+              credito_usado         VARCHAR(30),
+              credito_total         VARCHAR(30),
+              dados_mb              VARCHAR(30),
+              dados_total_mb        VARCHAR(30),
+              armazenamento_mb      VARCHAR(30),
+              armazenamento_total_mb VARCHAR(30),
+              observacoes           TEXT,
+              lancado_por_id        INTEGER,
+              lancado_por_nome      VARCHAR(255),
+              created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+              updated_at            TIMESTAMPTZ NOT NULL DEFAULT now()
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_tel_uso_linha ON telefones_uso(linha_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_tel_uso_company_comp ON telefones_uso(company_id, competencia)`);
+          await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_tel_uso_linha_comp ON telefones_uso(linha_id, competencia)`);
+          console.log("[SyncSchema+] Rev. 5150: tabelas telefones_planos/linhas/uso garantidas.");
+        } catch (e) {
+          console.error("[SyncSchema+] Rev. 5150: falha nas tabelas de Telefones Corporativos:", e);
+        }
+        // Rev. 5151 — Contratos de Serviço Continuado: contratos, itens e competências mensais.
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS contratos_servico (
+              id                    SERIAL PRIMARY KEY,
+              company_id            INTEGER NOT NULL,
+              fornecedor_id         INTEGER,
+              tipo_servico          VARCHAR(100) NOT NULL DEFAULT 'outro',
+              nome                  VARCHAR(255) NOT NULL,
+              vigencia_inicio       DATE,
+              vigencia_fim          DATE,
+              renovacao_automatica  BOOLEAN DEFAULT false,
+              dia_vencimento        INTEGER DEFAULT 10,
+              tolerancia_divergencia NUMERIC(5,2) DEFAULT 5,
+              observacoes           TEXT,
+              status                VARCHAR(50) DEFAULT 'ativo',
+              created_by            INTEGER,
+              created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+              updated_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+              deleted_at            TIMESTAMPTZ
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_contratos_svc_company ON contratos_servico(company_id)`);
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS contratos_servico_itens (
+              id             SERIAL PRIMARY KEY,
+              contrato_id    INTEGER NOT NULL,
+              company_id     INTEGER NOT NULL,
+              tipo           VARCHAR(100) NOT NULL,
+              descricao      VARCHAR(255),
+              valor_unitario NUMERIC(12,2),
+              percentual     NUMERIC(8,4),
+              created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_contratos_svc_itens ON contratos_servico_itens(contrato_id)`);
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS contratos_servico_competencias (
+              id                 SERIAL PRIMARY KEY,
+              contrato_id        INTEGER NOT NULL,
+              company_id         INTEGER NOT NULL,
+              competencia        VARCHAR(7) NOT NULL,
+              valor_esperado     NUMERIC(12,2),
+              qtd_funcionarios   INTEGER,
+              qtd_admissoes      INTEGER,
+              qtd_demissoes      INTEGER,
+              valor_folha        NUMERIC(12,2),
+              valor_cobrado      NUMERIC(12,2),
+              nota_numero        VARCHAR(100),
+              nota_chave         VARCHAR(100),
+              status             VARCHAR(50) DEFAULT 'aberta',
+              divergencia        BOOLEAN DEFAULT false,
+              observacoes        TEXT,
+              financial_entry_id INTEGER,
+              aprovado_por_id    INTEGER,
+              aprovado_por_nome  VARCHAR(255),
+              aprovado_em        TIMESTAMPTZ,
+              created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+              updated_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+              UNIQUE(contrato_id, competencia)
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_contratos_svc_comp ON contratos_servico_competencias(contrato_id, competencia)`);
+          console.log("[SyncSchema+] Rev. 5151: tabelas contratos_servico garantidas.");
+        } catch (e) {
+          console.error("[SyncSchema+] Rev. 5151: falha nas tabelas de Contratos de Serviço:", e);
+        }
+        // Rev. 5085 — Reembolso: índice único parcial anti-duplicidade no Contas a Pagar.
+        // Garante que nunca haverá dois títulos ativos (não cancelados) para a mesma
+        // solicitação. Segue o mesmo padrão de aviso_previo_fgts, ferias e pj_medicao.
+        try {
+          await db.execute(sql`
+            CREATE UNIQUE INDEX IF NOT EXISTS uq_fin_entries_reembolso
+              ON financial_entries (origem_modulo, origem_id)
+              WHERE origem_modulo = 'reembolso' AND status <> 'cancelado'
+          `);
+          console.log("[SyncSchema+] Rev. 5085: índice único uq_fin_entries_reembolso garantido (anti-duplicidade Contas a Pagar).");
+        } catch (e) {
+          console.error("[SyncSchema+] Rev. 5085: falha no índice uq_fin_entries_reembolso:", e);
+        }
+        // Rev. 5041 — Férias complementar ("por fora"): valor próprio no período.
+        try {
+          await db.execute(sql`ALTER TABLE vacation_periods ADD COLUMN IF NOT EXISTS valor_ferias_complementar VARCHAR(20)`);
+          console.log("[SyncSchema+] Rev. 5041: vacation_periods.valor_ferias_complementar garantida.");
+        } catch (e) {
+          console.error("[SyncSchema+] Rev. 5041: falha na coluna valor_ferias_complementar:", e);
+        }
+        // Rev. 4865 — Mapa de Concretagem na planta + rastreabilidade caminhão↔NF-e↔ensaio.
+        // concretagem_trechos: trecho desenhado na planta (geometria normalizada 0..1,
+        // mesmo padrão de medicao_campo_contornos) vinculado ao elemento do mapa.
+        // fiscal_note_id no lançamento: NF-e do SEFAZ selecionada na descarga do caminhão.
+        // lancamento_id no ensaio: qual caminhão o corpo de prova representa.
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS concretagem_trechos (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              obra_id INTEGER NOT NULL,
+              mapa_id INTEGER NOT NULL,
+              pavimento_id INTEGER,
+              pdf_id INTEGER NOT NULL,
+              pagina INTEGER DEFAULT 1,
+              geometria_json TEXT NOT NULL,
+              created_at TIMESTAMPTZ DEFAULT NOW(),
+              deleted_at TIMESTAMPTZ
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_conctrecho_mapa ON concretagem_trechos(mapa_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_conctrecho_obra ON concretagem_trechos(company_id, obra_id)`);
+          await db.execute(sql`ALTER TABLE concretagem_lancamentos ADD COLUMN IF NOT EXISTS fiscal_note_id INTEGER`);
+          await db.execute(sql`ALTER TABLE ensaios_tecnologicos ADD COLUMN IF NOT EXISTS lancamento_id INTEGER`);
+          console.log("[SyncSchema+] Rev. 4865: concretagem_trechos + fiscal_note_id + ensaios.lancamento_id garantidos.");
+        } catch (e) {
+          console.error("[SyncSchema+] Rev. 4865: falha (mapa de concretagem):", e);
+        }
+
+        // Rev. 4866 — Plano de Desligamento (layoff): fila sequencial de demissões programadas.
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS plano_desligamento (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              employee_id INTEGER NOT NULL,
+              mes_planejado VARCHAR(7) NOT NULL,
+              ordem INTEGER NOT NULL DEFAULT 0,
+              status VARCHAR(30) NOT NULL DEFAULT 'planejado',
+              observacoes TEXT,
+              criado_por VARCHAR(255),
+              criado_em TIMESTAMP DEFAULT NOW(),
+              atualizado_em TIMESTAMP,
+              deleted_at TIMESTAMP
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_plano_deslig_company_mes ON plano_desligamento(company_id, mes_planejado)`);
+          await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_plano_deslig_emp_ativo ON plano_desligamento(company_id, employee_id) WHERE deleted_at IS NULL`);
+          console.log("[SyncSchema+] Rev. 4866: plano_desligamento garantida.");
+        } catch (e) {
+          console.error("[SyncSchema+] Rev. 4866: falha (plano_desligamento):", e);
+        }
+
+        // Rev. 4866b — Plano de Desligamento: governança (consolidação, revisões e solicitações de mudança)
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS plano_desligamento_estado (
+              company_id INTEGER PRIMARY KEY,
+              consolidado INTEGER NOT NULL DEFAULT 0,
+              revisao_atual INTEGER NOT NULL DEFAULT 0,
+              consolidado_por VARCHAR(255),
+              consolidado_em TIMESTAMP
+            )
+          `);
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS plano_desligamento_revisoes (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              numero INTEGER NOT NULL,
+              descricao TEXT,
+              snapshot JSONB,
+              criado_por VARCHAR(255),
+              criado_em TIMESTAMP DEFAULT NOW()
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_pd_rev_company ON plano_desligamento_revisoes (company_id, numero)`);
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS plano_desligamento_mudancas (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              tipo VARCHAR(20) NOT NULL,
+              item_id INTEGER,
+              employee_id INTEGER,
+              employee_nome VARCHAR(255),
+              de VARCHAR(120),
+              para VARCHAR(120),
+              detalhe TEXT,
+              status VARCHAR(20) NOT NULL DEFAULT 'pendente',
+              criado_por VARCHAR(255),
+              criado_em TIMESTAMP DEFAULT NOW(),
+              decidido_por VARCHAR(255),
+              decidido_em TIMESTAMP
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_pd_mud_company_status ON plano_desligamento_mudancas (company_id, status)`);
+          console.log("[SyncSchema+] Rev. 4866b: governança do plano_desligamento garantida.");
+        } catch (e) {
+          console.error("[SyncSchema+] Rev. 4866b: falha (governança plano_desligamento):", e);
+        }
+
         await db.execute(sql`ALTER TABLE curriculos ADD COLUMN IF NOT EXISTS historico_status_json TEXT`);
         console.log(`[SyncSchema+] Coluna historico_status_json garantida na tabela curriculos.`);
 
@@ -1011,6 +1733,15 @@ Regras:
           await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS status varchar(20) DEFAULT 'ativo'`);
           console.log(`[SyncSchema+] Rev. 3159: coluna status garantida em users (controle de acesso ativo/desligado).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA users.status:`, e?.message || e); }
+
+        // Rev. 5047 — CPF do usuário: a checagem de signatário interno do FCSign compara
+        // o CPF do usuário logado com o do signatário, mas users não tinha CPF → NINGUÉM
+        // com signer.cpf preenchido conseguia assinar ("Usuário incorreto"). Coluna nova
+        // + fallback por e-mail do colaborador no signatures.ts.
+        try {
+          await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS cpf varchar(14)`);
+          console.log(`[SyncSchema+] Rev. 5047: coluna cpf garantida em users (match de signatário FCSign).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA users.cpf:`, e?.message || e); }
 
         // Rev. 2898 — soft-delete de envelopes IntegraSign ("excluir" sem destruir registro
         // legal/assinaturas; substitui o hard DELETE). ADD COLUMN IF NOT EXISTS (R-001/R-007/R-010 OK).
@@ -1143,8 +1874,112 @@ Regras:
             )
           `);
           await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_rhdoc_emp ON rh_documentos(company_id, employee_id)`);
-          console.log(`[SyncSchema+] Rev. 4669: tabela rh_documentos garantida (Documentos do Colaborador).`);
+          // Uma via ativa por tipo nos documentos permanentes do checklist.
+          // Antes de criar o índice, normaliza duplicidades legadas mantendo a
+          // assinatura (ou, sem assinatura, a via mais recente) como canônica.
+          await db.execute(sql`
+            WITH classificados AS (
+              SELECT id,
+                ROW_NUMBER() OVER (
+                  PARTITION BY company_id, employee_id, tipo
+                  ORDER BY
+                    CASE status WHEN 'assinado' THEN 0 WHEN 'gerado' THEN 1 ELSE 2 END,
+                    created_at DESC,
+                    id DESC
+                ) AS posicao
+              FROM rh_documentos
+              WHERE deleted_at IS NULL
+                AND (
+                  tipo IN (
+                    'ficha_registro', 'contrato_experiencia', 'regulamento_interno',
+                    'codigo_etica', 'termo_lgpd', 'termo_confidencialidade',
+                    'termo_equipamentos', 'acordo_banco_horas',
+                    'acordo_compensacao', 'contrato_trabalho_clt',
+                    'adesao_plano_saude', 'adesao_vt', 'adesao_va',
+                    'adesao_seguro_vida'
+                  )
+                  OR tipo LIKE 'custom\\_%' ESCAPE '\\'
+                )
+            )
+            UPDATE rh_documentos
+            SET deleted_at = now(), updated_at = now()
+            WHERE id IN (SELECT id FROM classificados WHERE posicao > 1)
+          `);
+          await db.execute(sql`
+            CREATE UNIQUE INDEX IF NOT EXISTS uq_rhdoc_checklist_ativo
+              ON rh_documentos(company_id, employee_id, tipo)
+              WHERE deleted_at IS NULL
+                AND (
+                  tipo IN (
+                    'ficha_registro', 'contrato_experiencia', 'regulamento_interno',
+                    'codigo_etica', 'termo_lgpd', 'termo_confidencialidade',
+                    'termo_equipamentos', 'acordo_banco_horas',
+                    'acordo_compensacao', 'contrato_trabalho_clt',
+                    'adesao_plano_saude', 'adesao_vt', 'adesao_va',
+                    'adesao_seguro_vida'
+                  )
+                  OR tipo LIKE 'custom\\_%' ESCAPE '\\'
+                )
+          `);
+          // Rev. 5100 — colunas de assinatura do EMPREGADOR (additive, safe in prod)
+          // Signatário imutável = sócio administrador (employee identity)
+          await db.execute(sql`ALTER TABLE rh_documentos ADD COLUMN IF NOT EXISTS empregador_assinatura_url TEXT`);
+          await db.execute(sql`ALTER TABLE rh_documentos ADD COLUMN IF NOT EXISTS empregador_assinatura_key TEXT`);
+          await db.execute(sql`ALTER TABLE rh_documentos ADD COLUMN IF NOT EXISTS empregador_assinatura_hash VARCHAR(64)`);
+          await db.execute(sql`ALTER TABLE rh_documentos ADD COLUMN IF NOT EXISTS empregador_assinado_em TIMESTAMP`);
+          await db.execute(sql`ALTER TABLE rh_documentos ADD COLUMN IF NOT EXISTS empregador_socio_id INTEGER`);
+          await db.execute(sql`ALTER TABLE rh_documentos ADD COLUMN IF NOT EXISTS empregador_socio_nome VARCHAR(255)`);
+          // Operador que disparou (admin user em lote; "Sistema" em automático)
+          await db.execute(sql`ALTER TABLE rh_documentos ADD COLUMN IF NOT EXISTS empregador_operador_nome VARCHAR(255)`);
+          await db.execute(sql`ALTER TABLE rh_documentos ADD COLUMN IF NOT EXISTS empregador_modo VARCHAR(20)`);
+          // Config snapshot ID — preserva evidência mesmo após rotação da config
+          await db.execute(sql`ALTER TABLE rh_documentos ADD COLUMN IF NOT EXISTS empregador_config_id INTEGER`);
+          // Rev. 5101 — renomear colunas antigas se ainda existirem (migrações de instâncias
+          // que rodaram a rev. 5100 antes da correção de identidade)
+          await db.execute(sql`
+            DO $$ BEGIN
+              IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='rh_documentos' AND column_name='empregador_assinado_por_id') THEN
+                ALTER TABLE rh_documentos RENAME COLUMN empregador_assinado_por_id TO empregador_socio_id_old;
+              END IF;
+            END $$
+          `).catch(() => {});
+          await db.execute(sql`
+            DO $$ BEGIN
+              IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='rh_documentos' AND column_name='empregador_assinado_por_nome') THEN
+                ALTER TABLE rh_documentos RENAME COLUMN empregador_assinado_por_nome TO empregador_operador_nome_old;
+              END IF;
+            END $$
+          `).catch(() => {});
+          console.log(`[SyncSchema+] Rev. 4669/5101: tabela rh_documentos garantida (Documentos do Colaborador + colunas empregador com identidade correta).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA rh_documentos:`, e?.message || e); }
+
+        // Rev. 5100 — CONFIGURAÇÃO DE ASSINATURA DO EMPREGADOR por empresa.
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS rh_employer_sig_config (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              socio_admin_employee_id INTEGER,
+              socio_admin_nome VARCHAR(255),
+              assinatura_url TEXT,
+              assinatura_key TEXT,
+              assinatura_hash VARCHAR(64),
+              auto_sign_ativo INTEGER DEFAULT 0 NOT NULL,
+              configurado_por_id INTEGER,
+              configurado_por_nome VARCHAR(255),
+              configurado_em TIMESTAMP DEFAULT NOW() NOT NULL,
+              updated_at TIMESTAMP DEFAULT NOW() NOT NULL,
+              deleted_at TIMESTAMP
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_rhempsig_company ON rh_employer_sig_config(company_id)`);
+          await db.execute(sql`
+            CREATE UNIQUE INDEX IF NOT EXISTS uq_rhempsig_company
+              ON rh_employer_sig_config(company_id)
+              WHERE deleted_at IS NULL
+          `);
+          console.log(`[SyncSchema+] Rev. 5100: tabela rh_employer_sig_config garantida (Assinatura do Empregador).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA rh_employer_sig_config:`, e?.message || e); }
 
         // Rev. 4672 — FASE 4: dependentes do colaborador + PDI/feedbacks da Avaliação.
         try {
@@ -1244,6 +2079,140 @@ Regras:
           await db.execute(sql`ALTER TABLE bank_cheque_vinculos ADD COLUMN IF NOT EXISTS forma_pagamento TEXT`);
           console.log(`[SyncSchema+] Rev. 4081: coluna forma_pagamento garantida em bank_cheque_vinculos (dinheiro/depósito/cheque próprio/outro nos vínculos tipo "ajuste").`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA bank_cheque_vinculos.forma_pagamento:`, e?.message || e); }
+
+        // Task #187 — FECHAMENTO CONSOLIDADO DE FORNECEDOR: persistência auditável de
+        // fechamentos por fornecedor+janela de competência. Quatro tabelas aditivas (CREATE
+        // TABLE IF NOT EXISTS). Cada bloco é independente — falha em um não quebra os outros.
+
+        // 1. Cabeçalho do fechamento (estados rascunho|conferido|pago|cancelado)
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS fechamento_fornecedor (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              supplier_id INTEGER NOT NULL,
+              supplier_nome VARCHAR(255) NOT NULL,
+              -- Vínculo estável com cadastro Compras (empresas_terceiras.fornecedor_id)
+              supplier_fornecedor_id INTEGER,
+              janela VARCHAR(20) NOT NULL,
+              ciclo VARCHAR(30) NOT NULL,
+              data_fechamento VARCHAR(10),
+              valor_itens NUMERIC(15,2) NOT NULL DEFAULT 0,
+              valor_ajustes NUMERIC(15,2) NOT NULL DEFAULT 0,
+              valor_total NUMERIC(15,2) NOT NULL DEFAULT 0,
+              boleto_codigo VARCHAR(100),
+              boleto_vencimento VARCHAR(10),
+              forma_pagamento VARCHAR(30),
+              num_parcelas INTEGER DEFAULT 1,
+              prazo_parcela INTEGER DEFAULT 30,
+              observacoes TEXT,
+              status VARCHAR(20) NOT NULL DEFAULT 'rascunho',
+              confirmado_em TIMESTAMP,
+              confirmado_por_id INTEGER,
+              confirmado_por_nome VARCHAR(255),
+              pago_em TIMESTAMP,
+              pago_por_id INTEGER,
+              pago_por_nome VARCHAR(255),
+              cancelado_em TIMESTAMP,
+              cancelado_por_id INTEGER,
+              cancelado_por_nome VARCHAR(255),
+              cancelado_motivo TEXT,
+              created_by_id INTEGER,
+              created_by_nome VARCHAR(255),
+              created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+              updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+            )
+          `);
+          // Self-heal: add supplier_fornecedor_id column if not yet present (idempotent)
+          await db.execute(sql`
+            ALTER TABLE fechamento_fornecedor
+            ADD COLUMN IF NOT EXISTS supplier_fornecedor_id INTEGER
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_ff_company ON fechamento_fornecedor(company_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_ff_supplier ON fechamento_fornecedor(company_id, supplier_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_ff_janela ON fechamento_fornecedor(company_id, supplier_id, janela)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_ff_status ON fechamento_fornecedor(company_id, status)`);
+          // Unique partial: one active closing per company+supplier+janela.
+          // Prevents race-condition duplicates; ON CONFLICT catchable as 23505.
+          await db.execute(sql`
+            CREATE UNIQUE INDEX IF NOT EXISTS uq_ff_active_janela
+            ON fechamento_fornecedor(company_id, supplier_id, janela)
+            WHERE status IN ('rascunho','conferido','pago')
+          `);
+          console.log(`[SyncSchema+] Task #187: tabela fechamento_fornecedor garantida.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA fechamento_fornecedor:`, e?.message || e); }
+
+        // 2. Itens do fechamento (financial_entries vinculados)
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS fechamento_fornecedor_itens (
+              id SERIAL PRIMARY KEY,
+              fechamento_id INTEGER NOT NULL,
+              company_id INTEGER NOT NULL,
+              entry_id INTEGER NOT NULL,
+              valor_previsto_snapshot NUMERIC(15,2) NOT NULL,
+              ativo SMALLINT NOT NULL DEFAULT 1,
+              removido_em TIMESTAMP,
+              removido_por_id INTEGER,
+              created_at TIMESTAMP DEFAULT NOW() NOT NULL
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_ffi_fechamento ON fechamento_fornecedor_itens(fechamento_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_ffi_company ON fechamento_fornecedor_itens(company_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_ffi_entry ON fechamento_fornecedor_itens(entry_id)`);
+          // Unique parcial: um entry só em 1 fechamento não-cancelado com item ativo
+          await db.execute(sql`
+            CREATE UNIQUE INDEX IF NOT EXISTS uq_ffi_entry_ativo
+            ON fechamento_fornecedor_itens(entry_id)
+            WHERE ativo = 1
+          `);
+          console.log(`[SyncSchema+] Task #187: tabela fechamento_fornecedor_itens garantida.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA fechamento_fornecedor_itens:`, e?.message || e); }
+
+        // 3. Ajustes do fechamento (valores assinados e tipados)
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS fechamento_fornecedor_ajustes (
+              id SERIAL PRIMARY KEY,
+              fechamento_id INTEGER NOT NULL,
+              company_id INTEGER NOT NULL,
+              tipo VARCHAR(40) NOT NULL,
+              descricao TEXT,
+              valor NUMERIC(15,2) NOT NULL,
+              ativo SMALLINT NOT NULL DEFAULT 1,
+              created_by_id INTEGER,
+              created_at TIMESTAMP DEFAULT NOW() NOT NULL
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_ffa_fechamento ON fechamento_fornecedor_ajustes(fechamento_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_ffa_company ON fechamento_fornecedor_ajustes(company_id)`);
+          console.log(`[SyncSchema+] Task #187: tabela fechamento_fornecedor_ajustes garantida.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA fechamento_fornecedor_ajustes:`, e?.message || e); }
+
+        // 4. Vínculos de pagamento (rastreio de baixas geradas via fechamentoId)
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS fechamento_fornecedor_pagamentos (
+              id SERIAL PRIMARY KEY,
+              fechamento_id INTEGER NOT NULL,
+              company_id INTEGER NOT NULL,
+              entry_id INTEGER NOT NULL,
+              baixa_id INTEGER NOT NULL,
+              valor NUMERIC(15,2) NOT NULL,
+              data_pagamento VARCHAR(10),
+               cheque_proprio_lote_id VARCHAR(36),
+               cheque_terceiro_grupo_id VARCHAR(36),
+              estornado_em TIMESTAMP,
+              created_at TIMESTAMP DEFAULT NOW() NOT NULL
+            )
+          `);
+          await db.execute(sql`ALTER TABLE fechamento_fornecedor_pagamentos ADD COLUMN IF NOT EXISTS cheque_proprio_lote_id VARCHAR(36)`);
+          await db.execute(sql`ALTER TABLE fechamento_fornecedor_pagamentos ADD COLUMN IF NOT EXISTS cheque_terceiro_grupo_id VARCHAR(36)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_ffp_fechamento ON fechamento_fornecedor_pagamentos(fechamento_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_ffp_company ON fechamento_fornecedor_pagamentos(company_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_ffp_baixa ON fechamento_fornecedor_pagamentos(baixa_id)`);
+          console.log(`[SyncSchema+] Task #187: tabela fechamento_fornecedor_pagamentos garantida.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA fechamento_fornecedor_pagamentos:`, e?.message || e); }
 
         // Rev. 3352 — feriados.observado: a empresa ADOTA (segue) o feriado?
         // Cria a coluna SÓ se não existir (idempotente) e, NESSE ÚNICO momento, faz o
@@ -2803,6 +3772,25 @@ REGRAS DE EXTRAÇÃO:
           console.log(`[SyncSchema+] Rev. 4209: coluna scorecard_beta_ativo garantida em companies.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA companies scorecard_beta_ativo:`, e?.message || e); }
 
+        // Rev. 4867 — LGPD: modo "só total" nos Custos RH do Scorecard.
+        // Quando ativo, não-Admin Master vê apenas efetivo total + custo total
+        // (sem quebra por função). Default 0 = mantém visão por função.
+        try {
+          await db.execute(sql`ALTER TABLE companies ADD COLUMN IF NOT EXISTS scorecard_custos_so_total SMALLINT NOT NULL DEFAULT 0`);
+          console.log(`[SyncSchema+] Rev. 4867: coluna scorecard_custos_so_total garantida em companies.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA companies scorecard_custos_so_total:`, e?.message || e); }
+
+        // Rev. 4868 — Plano de Desligamento: meta configurável (nº de pessoas).
+        // NULL = automático (50% do quadro); > 0 = quantidade fixa definida pelo gestor.
+        try {
+          await db.execute(sql`ALTER TABLE companies ADD COLUMN IF NOT EXISTS plano_deslig_meta INTEGER`);
+          console.log(`[SyncSchema+] Rev. 4868: coluna plano_deslig_meta garantida em companies.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA companies plano_deslig_meta:`, e?.message || e); }
+        try {
+          await db.execute(sql`ALTER TABLE companies ADD COLUMN IF NOT EXISTS plano_deslig_teto_mes NUMERIC`);
+          console.log(`[SyncSchema+] coluna plano_deslig_teto_mes garantida em companies.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA companies plano_deslig_teto_mes:`, e?.message || e); }
+
         // Rev. 2914 — Necessidade de EPI/Uniforme por funcionário (configurável por tipo).
         try {
           await db.execute(sql`ALTER TABLE companies ADD COLUMN IF NOT EXISTS epi_nec_camisa SMALLINT NOT NULL DEFAULT 1`);
@@ -3127,6 +4115,23 @@ REGRAS DE EXTRAÇÃO:
           await db.execute(sql`ALTER TABLE terceiro_contratos ADD COLUMN IF NOT EXISTS motivo_cancelamento TEXT`);
           console.log(`[SyncSchema+] Rev. 2909: colunas de cancelamento (cancelado_por/em + motivo) garantidas em compras_ordens e terceiro_contratos.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2909 cancelamento:`, e?.message || e); }
+
+        // Rev. 5000 — Proposta comercial do fornecedor anexada ao contrato de
+        // terceiros (copiada da cotação na geração). Aditivo, idempotente.
+        try {
+          await db.execute(sql`ALTER TABLE terceiro_contratos ADD COLUMN IF NOT EXISTS proposta_url TEXT`);
+          await db.execute(sql`ALTER TABLE terceiro_contratos ADD COLUMN IF NOT EXISTS proposta_nome VARCHAR(255)`);
+          await db.execute(sql`ALTER TABLE obras ADD COLUMN IF NOT EXISTS terceiro_criterio_medicao TEXT`);
+          console.log(`[SyncSchema+] Rev. 5000: proposta_url/proposta_nome (terceiro_contratos) + terceiro_criterio_medicao (obras) garantidas.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.5000 proposta contrato:`, e?.message || e); }
+
+        // Rev. 5003 — Critério de medição padrão da empresa ganhou datas do fluxo
+        // no JSON (diaMedicao/prazoAprovacaoDias/prazoPagamentoDias); não cabe em
+        // VARCHAR(255). Idempotente.
+        try {
+          await db.execute(sql`ALTER TABLE system_criteria ALTER COLUMN valor TYPE TEXT`);
+          console.log(`[SyncSchema+] Rev. 5003: system_criteria.valor TYPE TEXT garantido.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.5003 system_criteria.valor TEXT:`, e?.message || e); }
 
         // Rev. 2305 — Estorno auditável de movimentações do almoxarifado.
         // Soft-delete: marca a mov como estornada (preserva histórico),
@@ -3516,6 +4521,12 @@ REGRAS DE EXTRAÇÃO:
           console.log(`[SyncSchema+] Rev. 2755: tabela recontratacao_solicitacoes + colunas recontratado_de_* garantidas.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2755 recontratacao:`, e?.message || e); }
 
+        // Rev. 4984 — empregador dos DOCUMENTOS do colaborador (FC padrão / JF)
+        try {
+          await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS empregador_documentos VARCHAR(4) DEFAULT 'FC'`);
+          console.log(`[SyncSchema+] Rev. 4984: coluna empregador_documentos garantida.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.4984 empregador_documentos:`, e?.message || e); }
+
         // Rev. 2858 — COLETA DE CAMPO (RH): link externo por obra (token+QR, sem
         // login) + fila de revisão. Tabelas 100% aditivas; nenhuma coluna nova em
         // employees (todas já existem). RH aprova antes de gravar na ficha.
@@ -3863,6 +4874,60 @@ REGRAS DE EXTRAÇÃO:
           await db.execute(sql`ALTER TABLE notification_recipients ADD COLUMN IF NOT EXISTS "notificarRelatorioSemanal" SMALLINT NOT NULL DEFAULT 0`);
           await db.execute(sql`CREATE TABLE IF NOT EXISTS relatorio_semanal_envios (
             id SERIAL PRIMARY KEY, semana_ref VARCHAR(10) NOT NULL UNIQUE, criado_em TIMESTAMP NOT NULL DEFAULT NOW())`);
+
+          // Rev. — Critérios de Medição (catálogo global) + Mapa de Vãos (esquadrias no DXF)
+          await db.execute(sql`CREATE TABLE IF NOT EXISTS medicao_criterios (
+            id SERIAL PRIMARY KEY, company_id INTEGER NOT NULL,
+            servico VARCHAR(100) NOT NULL, chave_servico VARCHAR(50), unidade VARCHAR(10) DEFAULT 'm2',
+            status VARCHAR(20) NOT NULL DEFAULT 'rascunho',
+            limite_vao_m2 NUMERIC(10,2) DEFAULT 2.00, desconta_acima VARCHAR(20) DEFAULT 'integral',
+            paga_requadro INTEGER DEFAULT 0, requadro_inclui_peitoril INTEGER DEFAULT 0,
+            quem_paga_requadro VARCHAR(100), referencia TEXT, regra_fc TEXT, incluso TEXT, observacoes TEXT,
+            ordem INTEGER DEFAULT 0, ativo INTEGER DEFAULT 1, atualizado_por VARCHAR(255),
+            criado_em TIMESTAMP DEFAULT NOW(), atualizado_em TIMESTAMP DEFAULT NOW())`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_mcrit_company ON medicao_criterios (company_id)`);
+          await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_mcrit_company_servico ON medicao_criterios (company_id, lower(servico)) WHERE ativo = 1`);
+          // Rev. — Apontamento de Campo (ronda diária de produção) + Mapa de Frentes
+          await db.execute(sql`CREATE TABLE IF NOT EXISTS apontamentos_producao (
+            id SERIAL PRIMARY KEY, company_id INTEGER NOT NULL, obra_id INTEGER NOT NULL,
+            pavimento_id INTEGER, contorno_id INTEGER, local VARCHAR(255),
+            servico VARCHAR(100) NOT NULL, contrato_id INTEGER, contrato_item_id INTEGER,
+            percentual NUMERIC(5,2) NOT NULL DEFAULT 100, quantidade NUMERIC(18,4), unidade VARCHAR(10) NOT NULL DEFAULT 'm2',
+            foto_url TEXT, observacoes TEXT, data DATE NOT NULL,
+            status VARCHAR(20) NOT NULL DEFAULT 'apontado', medicao_id INTEGER,
+            criado_por VARCHAR(255), validado_por VARCHAR(255), validado_em TIMESTAMP,
+            ativo INTEGER NOT NULL DEFAULT 1, criado_em TIMESTAMP DEFAULT NOW())`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_aprod_company_obra_data ON apontamentos_producao (company_id, obra_id, data)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_aprod_contrato ON apontamentos_producao (contrato_id)`);
+          await db.execute(sql`CREATE TABLE IF NOT EXISTS contrato_frentes (
+            id SERIAL PRIMARY KEY, company_id INTEGER NOT NULL, contrato_id INTEGER NOT NULL,
+            obra_id INTEGER NOT NULL, pavimento_id INTEGER NOT NULL,
+            criado_por VARCHAR(255), criado_em TIMESTAMP DEFAULT NOW(),
+            CONSTRAINT uq_cfrente_contrato_pav UNIQUE (contrato_id, pavimento_id))`);
+          await db.execute(sql`ALTER TABLE contrato_frentes ADD COLUMN IF NOT EXISTS criado_por VARCHAR(255)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_cfrente_obra ON contrato_frentes (obra_id)`);
+          await db.execute(sql`CREATE TABLE IF NOT EXISTS obra_esquadria_tipologias (
+            id SERIAL PRIMARY KEY, company_id INTEGER NOT NULL, obra_id INTEGER NOT NULL,
+            codigo VARCHAR(20) NOT NULL, tipo VARCHAR(10) NOT NULL,
+            largura NUMERIC(8,3) NOT NULL, altura NUMERIC(8,3) NOT NULL, peitoril NUMERIC(8,3),
+            descricao VARCHAR(255), criado_em TIMESTAMP DEFAULT NOW(), deleted_at TIMESTAMP)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_oetip_obra ON obra_esquadria_tipologias (obra_id)`);
+          await db.execute(sql`CREATE TABLE IF NOT EXISTS obra_esquadrias (
+            id SERIAL PRIMARY KEY, company_id INTEGER NOT NULL, obra_id INTEGER NOT NULL,
+            pavimento_id INTEGER NOT NULL, tipologia_id INTEGER NOT NULL, codigo VARCHAR(30) NOT NULL,
+            pos_x NUMERIC(10,6) NOT NULL, pos_y NUMERIC(10,6) NOT NULL,
+            requadro_pago_em TIMESTAMP, requadro_pago_servico VARCHAR(100), requadro_pago_origem VARCHAR(20),
+            requadro_pago_contrato_id INTEGER, requadro_pago_campo_id INTEGER, requadro_pago_contorno_id INTEGER,
+            observacoes TEXT, criado_em TIMESTAMP DEFAULT NOW(), atualizado_em TIMESTAMP DEFAULT NOW(), deleted_at TIMESTAMP)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_oesq_pav ON obra_esquadrias (pavimento_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_oesq_obra ON obra_esquadrias (obra_id)`);
+          await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_oesq_pav_codigo ON obra_esquadrias (pavimento_id, codigo) WHERE deleted_at IS NULL`);
+          await db.execute(sql`ALTER TABLE terceiro_contratos ADD COLUMN IF NOT EXISTS criterios_medicao_json TEXT`);
+          await db.execute(sql`ALTER TABLE medicao_campo_contornos ADD COLUMN IF NOT EXISTS vaos_json TEXT`);
+          await db.execute(sql`ALTER TABLE medicao_campo_contornos ADD COLUMN IF NOT EXISTS desconto_vaos NUMERIC(18,4)`);
+          await db.execute(sql`ALTER TABLE medicao_campo_contornos ADD COLUMN IF NOT EXISTS requadro_ml NUMERIC(18,4)`);
+          // Rev. 4863 — múltiplos itens da EAP por contorno (checkbox)
+          await db.execute(sql`ALTER TABLE medicao_campo_contornos ADD COLUMN IF NOT EXISTS itens_json TEXT`);
           await db.execute(sql`
             CREATE TABLE IF NOT EXISTS seguro_vida_alertas_enviados (
               id SERIAL PRIMARY KEY,
@@ -5792,14 +6857,23 @@ REGRAS DE EXTRAÇÃO:
         // o INSERT em banco_horas_lancamentos lançava erro silencioso. O saldo ficava
         // desatualizado; os lancamentos jamais foram gravados. Esse bloco detecta e corrige.
         try {
+          const { BANCO_HORAS_DATA_INICIO, bancoHorasEstaVigente } = await import("../utils/bancoHorasVigencia");
           const toDs = (v: any) => v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10);
           // Períodos aprovados onde NENHUM lancamento existe para aquele hePeriodId
           const periodsToFix = ((await db.execute(sql`
             SELECT hp.id, hp."companyId", hp."dataInicio", hp."dataFim"
             FROM he_periods hp
             WHERE hp.status = 'aprovado'
+              AND hp."dataFim" >= ${BANCO_HORAS_DATA_INICIO}::date
               AND NOT EXISTS (
                 SELECT 1 FROM banco_horas_lancamentos bhl WHERE bhl."hePeriodId" = hp.id
+              )
+              -- Rev. 5045 — NUNCA backfillar período encerrado ANTES de uma vigência com
+              -- zeramento de saldos: recriaria crédito pré-vigência que o zeramento descartou.
+              AND NOT EXISTS (
+                SELECT 1 FROM banco_horas_vigencias v
+                WHERE v."companyId" = hp."companyId" AND v."zerouSaldos" = 1
+                  AND v."dataInicio" > hp."dataFim"
               )
           `)) as any).rows || [];
 
@@ -5807,6 +6881,7 @@ REGRAS DE EXTRAÇÃO:
           for (const p of periodsToFix) {
             const dataFimStr = toDs(p.dataFim);
             const dataInicioStr = toDs(p.dataInicio);
+            if (!bancoHorasEstaVigente(dataFimStr)) continue;
             const descricao = `Crédito HE ${dataInicioStr} → ${dataFimStr} (backfill)`;
             const empRows = ((await db.execute(sql`
               SELECT "employeeId", "heTotalMins" FROM he_period_employees
@@ -5846,6 +6921,15 @@ REGRAS DE EXTRAÇÃO:
             console.log(`[SyncSchema+] Rev. 4188 backfill BH: ${periodsToFix.length} período(s), ${totalFixados} lançamento(s) inserido(s).`);
         } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.4188 backfill BH:", e?.message || e); }
 
+        // Rev. 5155 — A implantação do Banco de Horas começa em 15/05/2026.
+        // Mantém o histórico anterior no razão, mas reconstrói o cache de saldo
+        // usando exclusivamente os movimentos vigentes.
+        try {
+          const { recalcularSaldosBancoHorasVigentes } = await import("../utils/bancoHorasVigencia");
+          await recalcularSaldosBancoHorasVigentes(db);
+          console.log("[SyncSchema+] Rev. 5155: saldos do Banco de Horas recalculados a partir de 15/05/2026.");
+        } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.5155 marco inicial Banco de Horas:", e?.message || e); }
+
         try {
           await db.execute(sql`ALTER TABLE compras_solicitacoes_itens ADD COLUMN IF NOT EXISTS somente_mo BOOLEAN DEFAULT false`);
           await db.execute(sql`ALTER TABLE compras_cotacoes_itens ADD COLUMN IF NOT EXISTS somente_mo BOOLEAN DEFAULT false`);
@@ -5863,6 +6947,11 @@ REGRAS DE EXTRAÇÃO:
           await db.execute(sql`ALTER TABLE terceiro_medicao_itens ADD COLUMN IF NOT EXISTS valor_mdo_acumulado NUMERIC(18,2) DEFAULT 0`);
           console.log("[SyncSchema+] Rev. 4253: colunas MAT/MDO garantidas em cotacao_respostas + contrato_itens + medicao_itens.");
         } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.4253 MAT/MDO:", e?.message || e); }
+
+        try {
+          await db.execute(sql`ALTER TABLE compras_cotacao_respostas ADD COLUMN IF NOT EXISTS almoxarifado_item_id INTEGER`);
+          console.log("[SyncSchema+] Vínculo explícito da resposta de estoque ao item do almoxarifado garantido.");
+        } catch (e: any) { console.error("[SyncSchema+] FALHA vínculo resposta→almoxarifado:", e?.message || e); }
 
         try {
           await db.execute(sql`ALTER TABLE compras_cotacoes_itens ADD COLUMN IF NOT EXISTS pausado BOOLEAN DEFAULT false`);
@@ -6050,6 +7139,36 @@ REGRAS DE EXTRAÇÃO:
           console.log("[SyncSchema+] Rev. 4444: coluna valor_unitario garantida em oc_lista_recebimento.");
         } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.4444 valor_unitario:", e?.message || e); }
 
+        // OC EPI → SST: vínculo por item torna o recebimento idempotente e
+        // preserva o rastro necessário para estorno pontual do estoque.
+        try {
+          await db.execute(sql.raw(`
+            CREATE TABLE IF NOT EXISTS compras_oc_epi_importacoes (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              ordem_id INTEGER NOT NULL,
+              ordem_item_id INTEGER NOT NULL,
+              epi_id INTEGER NOT NULL,
+              obra_id INTEGER,
+              quantidade INTEGER NOT NULL,
+              recebido_em TIMESTAMP DEFAULT NOW() NOT NULL,
+              recebido_por_id INTEGER,
+              recebido_por_nome VARCHAR(255),
+              estornado_em TIMESTAMP,
+              estornado_por_id INTEGER,
+              estornado_por_nome VARCHAR(255),
+              estorno_motivo TEXT
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS ux_compras_oc_epi_importacoes_ordem_item
+              ON compras_oc_epi_importacoes(ordem_item_id);
+            CREATE INDEX IF NOT EXISTS idx_compras_oc_epi_importacoes_oc
+              ON compras_oc_epi_importacoes(company_id, ordem_id);
+            CREATE INDEX IF NOT EXISTS idx_compras_oc_epi_importacoes_epi
+              ON compras_oc_epi_importacoes(epi_id);
+          `));
+          console.log("[SyncSchema+] OC EPI → SST: rastreio de importação garantido.");
+        } catch (e: any) { console.error("[SyncSchema+] FALHA rastreio OC EPI → SST:", e?.message || e); }
+
         // Rev. 4479 — Gestores de Contratos: Gestor RH + userId explícito + tabela de substituições
         try {
           await db.execute(sql.raw(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS gestor_rh_id INTEGER`));
@@ -6122,6 +7241,13 @@ REGRAS DE EXTRAÇÃO:
           console.log("[SyncSchema+] Rev. 4594: pagamento_minimo em financial_cartao_faturas garantido.");
         } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.4594 pagamento_minimo:", e?.message || e); }
 
+        // Rev. 4996 — Fornecedores: telefone/celular com 2 números não cabiam em varchar(20)
+        try {
+          await db.execute(sql.raw(`ALTER TABLE fornecedores ALTER COLUMN telefone TYPE varchar(60)`));
+          await db.execute(sql.raw(`ALTER TABLE fornecedores ALTER COLUMN contato_celular TYPE varchar(60)`));
+          console.log("[SyncSchema+] Rev. 4996: fornecedores.telefone/contato_celular alargados p/ varchar(60).");
+        } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.4996 fornecedores telefone:", e?.message || e); }
+
         // Rev. 4593b — Anti-duplicidade a nível de banco: dedup de títulos
         // 'cartao_fatura' ativos (mantém o que tem baixa ativa; senão o menor id)
         // + índice único parcial que impede corrida de criar 2 títulos p/ 1 fatura.
@@ -6188,11 +7314,47 @@ REGRAS DE EXTRAÇÃO:
           console.log("[SyncSchema+] Rev. 4593: backfill de faturas em aberto → Contas a Pagar concluído.");
         } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.4593 backfill faturas:", e?.message || e); }
 
+        // Rev. 5031 — CNAB240 CAIXA (folha de pagamento): campos do convênio exigidos
+        // pelo leiaute 080/041 (tipo/código de compromisso, parâmetro de transmissão,
+        // ambiente T/P) + tabela de remessas geradas (NSA sequencial por conta —
+        // exigência do manual: NSA evolui de 1 em 1 a cada arquivo enviado).
+        try {
+          await db.execute(sql.raw(`ALTER TABLE company_bank_accounts ADD COLUMN IF NOT EXISTS cnab_tipo_compromisso VARCHAR(2)`));
+          await db.execute(sql.raw(`ALTER TABLE company_bank_accounts ADD COLUMN IF NOT EXISTS cnab_codigo_compromisso VARCHAR(4)`));
+          await db.execute(sql.raw(`ALTER TABLE company_bank_accounts ADD COLUMN IF NOT EXISTS cnab_parametro_transmissao VARCHAR(2)`));
+          await db.execute(sql.raw(`ALTER TABLE company_bank_accounts ADD COLUMN IF NOT EXISTS cnab_ambiente VARCHAR(1)`));
+          await db.execute(sql.raw(`
+            CREATE TABLE IF NOT EXISTS cnab_remessas (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              conta_bancaria_id INTEGER NOT NULL,
+              nsa INTEGER NOT NULL,
+              mes_referencia VARCHAR(7) NOT NULL,
+              nome_arquivo VARCHAR(120),
+              total_funcionarios INTEGER,
+              total_valor NUMERIC(14,2),
+              ambiente VARCHAR(1),
+              gerado_por_id INTEGER,
+              gerado_por_nome VARCHAR(120),
+              created_at TIMESTAMP DEFAULT NOW()
+            )
+          `));
+          await db.execute(sql.raw(`CREATE UNIQUE INDEX IF NOT EXISTS uq_cnab_remessas_conta_nsa ON cnab_remessas (conta_bancaria_id, nsa)`));
+          console.log("[SyncSchema+] Rev. 5031: colunas CNAB Caixa + tabela cnab_remessas garantidas.");
+        } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.5031 cnab caixa:", e?.message || e); }
+
+        // Rev. 5152 — colunas de contrato assinado em obras (upload PDF + leitura IA)
+        try {
+          await db.execute(sql.raw(`ALTER TABLE obras ADD COLUMN IF NOT EXISTS contrato_assinado_url TEXT`));
+          await db.execute(sql.raw(`ALTER TABLE obras ADD COLUMN IF NOT EXISTS contrato_assinado_key TEXT`));
+          console.log("[SyncSchema+] Rev. 5152: colunas contrato_assinado_url/key garantidas em obras.");
+        } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.5152 obras contrato:", e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v4910-2026-08-07-epi-ajustes";
+    const COLFIX_VERSION = "v5144-2026-08-19-oc-recorrencia";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -6229,6 +7391,12 @@ REGRAS DE EXTRAÇÃO:
           -- do ciclo de fechamento cadastrado / regra especial por produto do fornecedor.
           ALTER TABLE IF EXISTS compras_cotacao_fornecedores
             ADD COLUMN IF NOT EXISTS excecao_manual boolean DEFAULT false;
+
+          -- Rev. 5085 — OC pode gerar um título mensal no período informado.
+          ALTER TABLE IF EXISTS compras_ordens
+            ADD COLUMN IF NOT EXISTS lancamento_recorrente boolean DEFAULT false,
+            ADD COLUMN IF NOT EXISTS recorrencia_data_inicio varchar(10),
+            ADD COLUMN IF NOT EXISTS recorrencia_data_fim varchar(10);
         `);
         await db.execute(sql`
           DO $$ BEGIN
@@ -6510,6 +7678,11 @@ REGRAS DE EXTRAÇÃO:
             ALTER TABLE financial_approvals ADD COLUMN IF NOT EXISTS aprovador_nome VARCHAR(255);
             ALTER TABLE purchase_requests ADD COLUMN IF NOT EXISTS aprovador_nome VARCHAR(255);
             ALTER TABLE compras_cotacao_fornecedores ADD COLUMN IF NOT EXISTS modulo_medicao VARCHAR(30);
+            ALTER TABLE compras_cotacao_fornecedores ADD COLUMN IF NOT EXISTS mobilizacao_data_inicio VARCHAR(10);
+            ALTER TABLE compras_cotacao_fornecedores ADD COLUMN IF NOT EXISTS duracao_contrato_dias INTEGER;
+            ALTER TABLE terceiro_contratos ADD COLUMN IF NOT EXISTS titulo_contrato VARCHAR(200);
+            ALTER TABLE compras_cotacao_fornecedores ADD COLUMN IF NOT EXISTS anexos_contrato JSONB;
+            ALTER TABLE terceiro_contratos ADD COLUMN IF NOT EXISTS anexos_contrato JSONB;
             ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS rejeitado_por VARCHAR(255);
             ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS rejeitado_em TIMESTAMP;
             ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS data_inicio DATE;
@@ -8265,6 +9438,23 @@ REGRAS DE EXTRAÇÃO:
         }
       } catch (e: any) { console.error("[ColFix Rev.4910] FALHA epi_estoque_ajustes:", e?.message ?? e); }
 
+      // Rev. 5143 — Medições PJ: data de vencimento + título automático no Contas a Pagar
+      // ao aprovar. Índice único parcial anti-duplicidade (padrão férias/aviso prévio).
+      // Bloco isolado (colfix-do-block-silent-rollback).
+      try {
+        const db5143 = await getDb();
+        if (db5143) {
+          const { sql: sql5143 } = await import("drizzle-orm");
+          await db5143.execute(sql5143`ALTER TABLE pj_medicoes ADD COLUMN IF NOT EXISTS "dataVencimento" date`);
+          await db5143.execute(sql5143`
+            CREATE UNIQUE INDEX IF NOT EXISTS uq_fin_entries_pj_medicao
+              ON financial_entries (origem_modulo, origem_id)
+              WHERE origem_modulo = 'pj_medicao' AND status <> 'cancelado'
+          `);
+          console.log("[ColFix Rev.5143] pj_medicoes.dataVencimento + índice uq_fin_entries_pj_medicao garantidos.");
+        }
+      } catch (e: any) { console.error("[ColFix Rev.5143] FALHA pj_medicoes vencimento:", e?.message ?? e); }
+
       // Marcar ColFix como aplicado nesta versão — próximos restarts pulam todos os blocos.
       // Rev. 4605: só marca se o bloco crítico (índice único de projeções) passou.
       if (colFix4605Ok) {
@@ -8294,9 +9484,11 @@ REGRAS DE EXTRAÇÃO:
     );
 
     // t=20s — FeriasAutoConclude (conclui férias cujo gozo terminou)
-    delay(20_000).then(() =>
-      import("../routers/avisoPrevioFerias").then(m => m.startFeriasAutoConcludeJob()).catch(e => console.error("[FeriasAutoConclude] Falha ao iniciar:", e))
-    );
+    delay(20_000).then(() => {
+      import("../routers/avisoPrevioFerias").then(m => m.startFeriasAutoConcludeJob()).catch(e => console.error("[FeriasAutoConclude] Falha ao iniciar:", e));
+      // Rev. 5102 — Radar de Férias: cruza férias ≤60d com efetivo por obra e alerta masters + gestor da obra
+      import("../services/feriasRadarService").then(m => m.startFeriasRadarJob()).catch(e => console.error("[FeriasRadar] Falha ao iniciar:", e));
+    });
 
     // t=25s — UnitFix Rev.4165: corrige unidades erradas em compras_ordens_itens
     // IDs mapeados item-a-item: cimento m²→sc, areia m/un/vb/m²→m³, chapisco un→sc, conduíte un→m
@@ -8380,6 +9572,11 @@ REGRAS DE EXTRAÇÃO:
     // t=10s — SMO Rev.4296: recomputa registros sem teto de sanidade salarial (one-shot, idempotente)
     delay(10_000).then(() =>
       import("../routers/smo").then(m => m.recomputarSmosSemRev()).catch(e => console.error("[SMO Rev.4296] Erro no recompute startup:", e))
+    );
+
+    // t=155s — Encargos Imobiliários: alerta antecipado de IPTU, laudêmio etc. (09:00 Brasília)
+    delay(155_000).then(() =>
+      import("../services/encargosAlertaJob").then(m => m.startEncargosAlertaJob()).catch(e => console.error("[EncargosAlerta] Erro:", e))
     );
 
     // t=150s — SyncMonitor (saúde do backup + sincronização do código com o GitHub)

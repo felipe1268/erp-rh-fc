@@ -443,8 +443,8 @@ export async function computeDREDual(db: any, companyIds: number[], ano: number)
       SUM(CASE WHEN tipo='despesa' AND natureza='direta' THEN GREATEST(realizado, previsto) ELSE 0 END) AS cd_gerencial,
       SUM(CASE WHEN tipo='despesa' AND COALESCE(natureza,'') NOT IN ('direta') THEN realizado ELSE 0 END) AS ci_fiscal,
       SUM(CASE WHEN tipo='despesa' AND COALESCE(natureza,'') NOT IN ('direta') THEN GREATEST(realizado, previsto) ELSE 0 END) AS ci_gerencial,
-      SUM(CASE WHEN tipo='despesa' AND origem_modulo IN ('folha_realizada','folha_projetada','encargos_projetado') THEN realizado ELSE 0 END) AS folha_fiscal,
-      SUM(CASE WHEN tipo='despesa' AND origem_modulo IN ('folha_realizada','folha_projetada','encargos_projetado') THEN GREATEST(realizado, previsto) ELSE 0 END) AS folha_gerencial
+      SUM(CASE WHEN tipo='despesa' AND origem_modulo IN ('folha_realizada','folha_projetada','encargos_projetado','folha_oficial','folha_prevista_vale','folha_prevista_pagamento') THEN realizado ELSE 0 END) AS folha_fiscal,
+      SUM(CASE WHEN tipo='despesa' AND origem_modulo IN ('folha_realizada','folha_projetada','encargos_projetado','folha_oficial','folha_prevista_vale','folha_prevista_pagamento') THEN GREATEST(realizado, previsto) ELSE 0 END) AS folha_gerencial
     FROM base
   `, [ano]);
 

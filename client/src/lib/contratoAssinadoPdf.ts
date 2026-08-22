@@ -64,6 +64,66 @@ interface ContratoPdfParams {
    */
   modo?: "download" | "abrir";
   janela?: Window | null;
+  /**
+   * Rev. 5000 — Proposta comercial do fornecedor (anexo da cotação): emendada
+   * automaticamente ao FINAL do PDF do contrato (Anexo I), evitando distorção
+   * de informação entre proposta e contrato. PDF é mesclado página a página
+   * (pdf-lib); JPG/PNG viram página A4. Falha no anexo NÃO bloqueia o contrato.
+   */
+  anexoProposta?: { url: string; nome?: string | null } | null;
+}
+
+async function _appendAnexoProposta(contractBytes: ArrayBuffer, anexoUrl: string): Promise<Blob | null> {
+  const { PDFDocument } = await import("pdf-lib");
+  const resp = await fetch(anexoUrl, { credentials: "include" });
+  if (!resp.ok) return null;
+  const bytes = await resp.arrayBuffer();
+  const ct = (resp.headers.get("content-type") || "").toLowerCase();
+  const head = new Uint8Array(bytes.slice(0, 4));
+  const isPdf = ct.includes("pdf") || /\.pdf(\?|$)/i.test(anexoUrl)
+    || (head[0] === 0x25 && head[1] === 0x50 && head[2] === 0x44 && head[3] === 0x46); // %PDF
+  const isPng = ct.includes("png") || /\.png(\?|$)/i.test(anexoUrl);
+  const isJpg = ct.includes("jpeg") || ct.includes("jpg") || /\.jpe?g(\?|$)/i.test(anexoUrl);
+  if (!isPdf && !isPng && !isJpg) return null;
+
+  const doc = await PDFDocument.load(contractBytes);
+
+  // Rev. 5009 — pedido do user (IMG_5524): o contrato "morre" na página de
+  // assinaturas; o anexo entra depois de uma FOLHA DE ROSTO própria, dando a
+  // sensação de documento complementar unificado (como um merge de PDFs).
+  try {
+    const { StandardFonts, rgb } = await import("pdf-lib");
+    const fontB = await doc.embedFont(StandardFonts.HelveticaBold);
+    const fontR = await doc.embedFont(StandardFonts.Helvetica);
+    const A4W = 595.28, A4H = 841.89;
+    const capa = doc.addPage([A4W, A4H]);
+    const navy = rgb(27 / 255, 42 / 255, 74 / 255);
+    const cy = A4H / 2;
+    const sub1 = "DOCUMENTO COMPLEMENTAR — PARTE INTEGRANTE DO CONTRATO";
+    capa.drawText(sub1, { x: (A4W - fontR.widthOfTextAtSize(sub1, 8)) / 2, y: cy + 52, size: 8, font: fontR, color: rgb(0.6, 0.64, 0.69) });
+    capa.drawRectangle({ x: 40, y: cy - 4, width: A4W - 80, height: 40, color: navy });
+    const t1 = "ANEXO I — PROPOSTA COMERCIAL DA CONTRATADA";
+    capa.drawText(t1, { x: (A4W - fontB.widthOfTextAtSize(t1, 13)) / 2, y: cy + 10, size: 13, font: fontB, color: rgb(1, 1, 1) });
+  } catch { /* capa é cosmética — nunca bloqueia o merge */ }
+
+  if (isPdf) {
+    const anexo = await PDFDocument.load(bytes, { ignoreEncryption: true });
+    const pages = await doc.copyPages(anexo, anexo.getPageIndices());
+    for (const p of pages) doc.addPage(p);
+  } else {
+    const img = isPng ? await doc.embedPng(bytes) : await doc.embedJpg(bytes);
+    const A4W = 595.28, A4H = 841.89, M = 28;
+    const page = doc.addPage([A4W, A4H]);
+    const scale = Math.min((A4W - 2 * M) / img.width, (A4H - 2 * M) / img.height, 1);
+    page.drawImage(img, {
+      x: (A4W - img.width * scale) / 2,
+      y: (A4H - img.height * scale) / 2,
+      width: img.width * scale,
+      height: img.height * scale,
+    });
+  }
+  const out = await doc.save();
+  return new Blob([out as unknown as BlobPart], { type: "application/pdf" });
 }
 
 async function urlToDataUrl(url: string): Promise<string | null> {
@@ -422,7 +482,7 @@ export async function gerarContratoAssinadoPdf(params: ContratoPdfParams): Promi
     }
 
     // Fluxograma
-    if (/^\{\{FLUXOGRAMA_PAGAMENTO\}\}$/.test(trimmed)) {
+    if (/^\{\{FLUXOGRAMA_PAGAMENTO\}\}$/.test(trimmed) || /^MEDIÇÃO \(dia .*→.*PAGAMENTO/.test(trimmed)) {
       renderFluxograma();
       i++;
       continue;
@@ -826,12 +886,24 @@ export async function gerarContratoAssinadoPdf(params: ContratoPdfParams): Promi
     .replace(/[^a-zA-Z0-9À-ú ._-]/g, "")
     .trim()}_assinado.pdf`;
 
+  // Rev. 5000 — emenda a proposta comercial (Anexo I) ao final do PDF, se houver.
+  let blobFinal: Blob | null = null;
+  if (params.anexoProposta?.url) {
+    try {
+      blobFinal = await _appendAnexoProposta(pdf.output("arraybuffer") as ArrayBuffer, params.anexoProposta.url);
+    } catch (e) {
+      console.warn("[contratoAssinadoPdf] Falha ao anexar proposta comercial (contrato segue sem o anexo):", e);
+    }
+  }
+
   if (modo === "abrir") {
     try {
       // Só visualiza se a janela foi aberta DENTRO do gesto do clique (iOS/popup-blocker).
       // Sem janela válida (popup bloqueado), cai para download — evita clique sem efeito.
       if (params.janela && !params.janela.closed) {
-        params.janela.location.href = pdf.output("bloburl") as unknown as string;
+        params.janela.location.href = blobFinal
+          ? URL.createObjectURL(blobFinal)
+          : (pdf.output("bloburl") as unknown as string);
         return;
       }
     } catch {
@@ -840,5 +912,14 @@ export async function gerarContratoAssinadoPdf(params: ContratoPdfParams): Promi
     }
   }
 
+  if (blobFinal) {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blobFinal);
+    a.download = nomeArquivo;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { try { URL.revokeObjectURL(a.href); a.remove(); } catch { /* noop */ } }, 5000);
+    return;
+  }
   pdf.save(nomeArquivo);
 }

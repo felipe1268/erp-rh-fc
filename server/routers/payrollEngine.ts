@@ -7,8 +7,9 @@ import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { EMPLOYEE_STATUS_DESLIGADOS } from "../../shared/modules";
 import { TRPCError } from "@trpc/server";
 import { parseBRL } from "../utils/parseBRL";
-import { gerarCnab240 } from "./cnab240";
+import { gerarCnab240, gerarCnab240Caixa } from "./cnab240";
 import { calcularEncargosDiferenca } from "./sindical";
+import { BANCO_HORAS_DATA_INICIO, bancoHorasEstaVigente, bancoHorasMesTemDiasVigentes } from "../utils/bancoHorasVigencia";
 
 // ============================================================
 // HELPERS
@@ -114,12 +115,38 @@ function getExpectedMins(jornadaTrabalho: string | null | undefined, dateStr: st
     if (!day?.entrada || !day?.saida) return 0; // non-working day per jornada
     const toMins = (t: string) => { const [h, m] = t.split(":").map(Number); return (h || 0) * 60 + (m || 0); };
     let expectedMins = toMins(day.saida) - toMins(day.entrada);
-    if (day.intervalo) {
-      const [ih, im] = day.intervalo.split(":").map(Number);
-      expectedMins -= (ih || 0) * 60 + (im || 0); // subtract lunch break
-    }
+    expectedMins -= parseIntervaloMins(day.intervalo); // subtract lunch break
     return Math.max(0, expectedMins);
   } catch { return cargaHorariaDiaria * 60; }
+}
+
+// Tolerant parser for the jornada "intervalo" field. Accepts "01:00", "1:00",
+// and free-text forms like "1 hora", "1h", "1h30", "30 min", "1 hora e 30".
+// Legacy rows contain text (e.g. "1 hora") which the old HH:MM split parsed as 0,
+// causing the lunch break to NOT be subtracted (false -1:00 debits on those days).
+function parseIntervaloMins(intervalo: unknown): number {
+  if (intervalo == null) return 0;
+  const s = String(intervalo).trim().toLowerCase();
+  if (!s) return 0;
+  // HH:MM
+  const hm = s.match(/^(\d{1,2}):(\d{2})$/);
+  if (hm) return Number(hm[1]) * 60 + Number(hm[2]);
+  // "1h30" / "1h" / "1 hora" / "2 horas e 15" / "1 hora e 30 min"
+  const hText = s.match(/(\d+(?:[.,]\d+)?)\s*h(?:ora)?s?/);
+  const mText = s.match(/(\d+)\s*(?:min(?:uto)?s?)\b/);
+  const hAfter = s.match(/h(?:ora)?s?\s*(?:e\s*)?(\d+)\s*(?!h)/); // "1h30", "1 hora e 30"
+  if (hText) {
+    const h = Number(hText[1].replace(",", "."));
+    let mins = Math.round(h * 60);
+    if (mText) mins = Math.floor(h) * 60 + Number(mText[1]);
+    else if (hAfter && Number.isInteger(h)) mins = h * 60 + Number(hAfter[1]);
+    return mins;
+  }
+  if (mText) return Number(mText[1]);
+  // bare number: <=3 means hours (e.g. "1"), otherwise minutes (e.g. "60")
+  const n = Number(s.replace(",", "."));
+  if (Number.isFinite(n)) return n <= 3 ? Math.round(n * 60) : Math.round(n);
+  return 0;
 }
 
 // Get business days in a month (Mon-Sat, excluding Sundays)
@@ -491,8 +518,9 @@ async function getIdsInelegiveisVale(db: any, ids: number[], mesReferencia?: str
       WHERE id IN (${sql.join(limpos.map((id) => sql`${id}`), sql`,`)})
     `)) as any).rows || [];
     for (const r of rows as any[]) {
-      const tc = String(r.tipoContrato || "CLT");
-      if (r.deletedAt != null || tc === "PJ" || tc === "Socio") { inelegivel.add(Number(r.id)); continue; }
+      // Rev. 5036 — case-insensitive: o cadastro tem 'PJ' e 'pj' misturados.
+      const tc = String(r.tipoContrato || "CLT").trim().toLowerCase();
+      if (r.deletedAt != null || tc === "pj" || tc === "socio" || tc === "sócio") { inelegivel.add(Number(r.id)); continue; }
       if (primeiroDiaMes && EMPLOYEE_STATUS_DESLIGADOS.includes(String(r.status || ""))) {
         const saida = r.dataDesligamentoEfetiva || r.dataDemissao;
         if (saida) {
@@ -603,6 +631,49 @@ async function sanitizarPagamentoSnapshotDecisoesAviso(
   }
 }
 
+/**
+ * Rev. 5126 — Sanitiza o snapshot de vale NA LEITURA por EMPRESA: remove
+ * funcionários cujo cadastro pertence a OUTRA empresa (vazamento entre
+ * empresas do grupo em snapshots antigos gerados com lista combinada).
+ * Read-only; recalcula agregados. Mantém o tipo string.
+ */
+async function sanitizarValeSnapshotEmpresa(db: any, jsonStr: string | null, companyId: number): Promise<string | null> {
+  if (!jsonStr) return jsonStr;
+  try {
+    const json = typeof jsonStr === "string" ? JSON.parse(jsonStr) : jsonStr;
+    if (!json || !Array.isArray(json.funcionarios) || json.funcionarios.length === 0) return jsonStr;
+    const idsFunc = json.funcionarios.map((f: any) => Number(f.employeeId));
+    const idsExcl = Array.isArray(json.excluidos) ? json.excluidos.map((e: any) => Number(e.id)) : [];
+    const ids = Array.from(new Set([...idsFunc, ...idsExcl])).filter((n: number) => Number.isFinite(n) && n > 0);
+    if (ids.length === 0) return jsonStr;
+    const idsSql = sql.join(ids.map((id: number) => sql`${id}`), sql`,`);
+    // Deny-by-default: só permanece quem comprovadamente pertence à empresa
+    // do período (id inexistente/companyId nulo também sai do snapshot).
+    const rows = ((await db.execute(sql`
+      SELECT id FROM employees WHERE id IN (${idsSql}) AND "companyId" = ${companyId}
+    `)) as any).rows || [];
+    const daEmpresa = new Set<number>(rows.map((r: any) => Number(r.id)));
+    if (daEmpresa.size === ids.length) return jsonStr;
+    json.funcionarios = json.funcionarios.filter((f: any) => daEmpresa.has(Number(f.employeeId)));
+    if (Array.isArray(json.excluidos)) {
+      json.excluidos = json.excluidos.filter((e: any) => daEmpresa.has(Number(e.id)));
+    }
+    let totalVale = 0;
+    let totalAlertas = 0;
+    for (const f of json.funcionarios) {
+      if (f.status === "calculado") totalVale += Number(f.valorLiquido) || 0;
+      if (f.temAlerta) totalAlertas++;
+    }
+    json.totalFuncionarios = json.funcionarios.length;
+    json.totalAlertas = totalAlertas;
+    json.totalVale = Math.round(totalVale * 100) / 100;
+    return JSON.stringify(json);
+  } catch (e) {
+    console.error("[sanitizarValeSnapshotEmpresa] erro:", e);
+    return jsonStr;
+  }
+}
+
 export const payrollEngineRouter = router({
   // ============================================================
   // 1. ABRIR / LISTAR COMPETÊNCIAS
@@ -637,6 +708,9 @@ export const payrollEngineRouter = router({
       // PJ/Sócio/excluído pode aparecer (cura snapshots gerados quando era CLT).
       if (period.valeResultJson) {
         period.valeResultJson = await sanitizarValeSnapshotNaoClt(db, period.valeResultJson, input.mesReferencia);
+        // Rev. 5126 — remove funcionários de OUTRA empresa (snapshot antigo
+        // gerado com lista combinada do grupo vazava colaborador irmão).
+        period.valeResultJson = await sanitizarValeSnapshotEmpresa(db, period.valeResultJson, input.companyId);
       }
       // Rev. 4691 — aplica na leitura as decisões de aviso prévio já tomadas
       // (senão o card "Decisão Necessária" reaparece a cada reabertura da tela).
@@ -1200,10 +1274,31 @@ export const payrollEngineRouter = router({
   // 3. AFERIÇÃO - Cruzar ponto com período "no escuro" do mês anterior
   // ============================================================
   realizarAfericao: protectedProcedure
-    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string() }))
+    .input(z.object({
+      companyId: z.number(),
+      companyIds: z.array(z.number()).optional(),
+      mesReferencia: z.string(),
+      // Rev. 5128 — aferição PARCIAL: afere só estes funcionários, preservando o resto
+      employeeIds: z.array(z.number()).optional(),
+    }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+      // Rev. 5128 — tenant guard: intersecta as empresas pedidas com as acessíveis
+      {
+        const permitidas = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+        const permitidasIds = new Set((permitidas || []).map((c: any) => Number(c.id)));
+        const pedidas = resolveCompanyIds(input);
+        if (pedidas.some(id => !permitidasIds.has(Number(id)))) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso às empresas solicitadas" });
+        }
+      }
+
+      const selAf: Set<number> | null = (input.employeeIds && input.employeeIds.length > 0)
+        ? new Set(input.employeeIds.map(Number))
+        : null;
+      const selAfSql = selAf ? sql.join([...selAf].map(id => sql`${id}`), sql`,`) : null;
 
       // Garante que payroll_periods existe pra mesReferencia E prevMes (a aferição
       // UPDATEa ambos). Sem isso o UPDATE silenciosamente afetava 0 linhas.
@@ -1242,6 +1337,7 @@ export const payrollEngineRouter = router({
         AND "mesDesconto" = ${input.mesReferencia}
         AND tipo IN ('falta', 'atraso', 'sem_registro')
         AND status NOT IN ('pendente', 'cancelado', 'aplicado')
+        ${selAfSql ? sql`AND "employeeId" IN (${selAfSql})` : sql``}
       `);
 
       // Resetar todos os registros da aferição anterior, EXCETO os que:
@@ -1270,6 +1366,7 @@ export const payrollEngineRouter = router({
           WHERE pa."timecardDailyId" = td.id 
           AND pa.status IN ('pendente', 'cancelado', 'aplicado')
         )
+        ${selAfSql ? sql`AND td."employeeId" IN (${selAfSql})` : sql``}
       `);
 
       // Janela do "escuro" a aferir = competência inteira (cut-to-cut)
@@ -1305,9 +1402,53 @@ export const payrollEngineRouter = router({
             AND pa.status IN ('pendente', 'cancelado', 'aplicado')
           )
         )
+        ${selAfSql ? sql`AND td."employeeId" IN (${selAfSql})` : sql``}
         ORDER BY td."employeeId", td.data
       `)) as any).rows || [];
       if (!escuroRecords || (escuroRecords as any[]).length === 0) {
+        // Rev. 5128 — aferição PARCIAL sem registros no escuro: remove os itens dos
+        // selecionados do snapshot existente (senão preservaria resultado obsoleto).
+        if (selAf) {
+          const prevAfRows0 = ((await db.execute(sql`
+            SELECT "afericaoResultJson" FROM payroll_periods
+            WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
+              AND "afericaoResultJson" IS NOT NULL
+            LIMIT 1
+          `)) as any).rows || [];
+          const rawPrev0 = prevAfRows0[0]?.afericaoResultJson;
+          if (rawPrev0) {
+            try {
+              const prev = typeof rawPrev0 === 'string' ? JSON.parse(rawPrev0) : rawPrev0;
+              const keep = (arr: any[]) => (Array.isArray(arr) ? arr : []).filter((it: any) => !selAf.has(Number(it.employeeId)));
+              const dl = keep(prev?.divergenciasList);
+              const vl = keep(prev?.validadosList);
+              const jl = keep(prev?.justificadosList);
+              const payload0 = {
+                totalAferidos: dl.length + vl.length + jl.length,
+                divergencias: dl.length, totalOk: vl.length,
+                faltas: dl.filter((d: any) => d.tipo === 'falta').length,
+                atrasos: dl.filter((d: any) => d.tipo === 'atraso').length,
+                semRegistro: 0, totalJustificados: jl.length,
+                jaConfirmados: Number(prev?.jaConfirmados) || 0,
+                divergenciasList: dl, validadosList: vl, justificadosList: jl,
+              };
+              const json0 = JSON.stringify(payload0);
+              for (const cid of afericaoCompanyIds) {
+                await db.execute(sql`
+                  UPDATE payroll_periods SET "afericaoResultJson" = ${json0}, "totalDivergenciasAferidas" = ${dl.length}
+                  WHERE "companyId" = ${cid} AND "mesReferencia" = ${input.mesReferencia}
+                `);
+                await db.execute(sql`
+                  UPDATE payroll_periods SET "afericaoResultJson" = ${json0}
+                  WHERE "companyId" = ${cid} AND "mesReferencia" = ${prevMes}
+                `);
+              }
+            } catch (e) {
+              console.error('[realizarAfericao] snapshot anterior ilegível (parcial vazio):', (e as any)?.message);
+            }
+          }
+          return { totalAferidos: 0, divergencias: 0, message: "Nenhum registro 'no escuro' encontrado para os colaboradores selecionados." };
+        }
         for (const cid of afericaoCompanyIds) {
           await db.execute(sql`
             UPDATE payroll_periods SET status = 'aferida', "afericaoRealizada" = 1, "afericaoEm" = NOW(), "afericaoPor" = ${ctx.user.name || "Sistema"}
@@ -1887,15 +2028,49 @@ export const payrollEngineRouter = router({
         `));
       }
 
-      const totalJustificados = justificadosList.length;
-      const jaConfirmadosCount = jaDecididosRows.filter((a: any) => a.status === 'cancelado').length;
+      // Rev. 5128 — aferição PARCIAL: mescla listas com o snapshot anterior
+      // (mantém itens de quem NÃO estava na seleção; substitui os selecionados).
+      let mDivergenciasList = divergenciasList;
+      let mValidadosList = validadosList;
+      let mJustificadosList = justificadosList;
+      let mTotalAferidos = totalAferidos;
+      let mDivergencias = divergencias;
+      let mTotalOk = totalOk;
+      let mJaConfirmados = jaDecididosRows.filter((a: any) => a.status === 'cancelado').length;
+      if (selAf) {
+        const prevAfRows = ((await db.execute(sql`
+          SELECT "afericaoResultJson" FROM payroll_periods
+          WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
+            AND "afericaoResultJson" IS NOT NULL
+          LIMIT 1
+        `)) as any).rows || [];
+        const rawPrevAf = prevAfRows[0]?.afericaoResultJson;
+        if (rawPrevAf) {
+          try {
+            const prev = typeof rawPrevAf === 'string' ? JSON.parse(rawPrevAf) : rawPrevAf;
+            const keep = (arr: any[]) => (Array.isArray(arr) ? arr : []).filter((it: any) => !selAf.has(Number(it.employeeId)));
+            mDivergenciasList = [...keep(prev?.divergenciasList), ...divergenciasList];
+            mValidadosList = [...keep(prev?.validadosList), ...validadosList];
+            mJustificadosList = [...keep(prev?.justificadosList), ...justificadosList];
+            mDivergencias = mDivergenciasList.length;
+            mTotalOk = mValidadosList.length;
+            mTotalAferidos = mDivergenciasList.length + mValidadosList.length + mJustificadosList.length;
+            mJaConfirmados = (Number(prev?.jaConfirmados) || 0);
+          } catch (e) {
+            console.error('[realizarAfericao] snapshot anterior ilegível no merge parcial:', (e as any)?.message);
+          }
+        }
+      }
+
+      const totalJustificados = mJustificadosList.length;
       const afericaoResultPayload = {
-        totalAferidos, divergencias, totalOk, faltas: divergenciasList.filter((d: any) => d.tipo === 'falta').length,
-        atrasos: divergenciasList.filter((d: any) => d.tipo === 'atraso').length,
+        totalAferidos: mTotalAferidos, divergencias: mDivergencias, totalOk: mTotalOk,
+        faltas: mDivergenciasList.filter((d: any) => d.tipo === 'falta').length,
+        atrasos: mDivergenciasList.filter((d: any) => d.tipo === 'atraso').length,
         semRegistro: 0,
         totalJustificados,
-        jaConfirmados: jaConfirmadosCount,
-        divergenciasList, validadosList, justificadosList,
+        jaConfirmados: mJaConfirmados,
+        divergenciasList: mDivergenciasList, validadosList: mValidadosList, justificadosList: mJustificadosList,
       };
       const resultJson = JSON.stringify(afericaoResultPayload);
 
@@ -1906,7 +2081,7 @@ export const payrollEngineRouter = router({
             "afericaoRealizada" = 1,
             "afericaoEm" = NOW(),
             "afericaoPor" = ${ctx.user.name || "Sistema"},
-            "totalDivergenciasAferidas" = ${divergencias},
+            "totalDivergenciasAferidas" = ${mDivergencias},
             "afericaoResultJson" = ${resultJson}
           WHERE "companyId" = ${cid} AND "mesReferencia" = ${prevMes}
         `);
@@ -1917,7 +2092,7 @@ export const payrollEngineRouter = router({
       }
 
       // Create alert if divergences found
-      if (divergencias > 0) {
+      if (divergencias > 0 && !selAf) {
         await db.execute(sql`
           INSERT INTO payroll_alerts ("companyId", "mesReferencia", tipo, titulo, descricao, prioridade)
           VALUES (${input.companyId}, ${input.mesReferencia}, 'divergencias_aferidas',
@@ -1929,7 +2104,9 @@ export const payrollEngineRouter = router({
 
       return { 
         ...afericaoResultPayload,
-        message: `Aferição concluída: ${totalAferidos} dias aferidos, ${totalOk} OK, ${divergencias} divergências, ${totalJustificados} justificados`
+        message: selAf
+          ? `Aferição parcial concluída (${selAf.size} colaborador(es) selecionados): ${totalAferidos} dias aferidos, ${totalOk} OK, ${divergencias} divergências nesta rodada`
+          : `Aferição concluída: ${totalAferidos} dias aferidos, ${totalOk} OK, ${divergencias} divergências, ${totalJustificados} justificados`
       };
     }),
 
@@ -2155,20 +2332,22 @@ export const payrollEngineRouter = router({
             minutosDebito = (jH || 0) * 60 + (jM || 0);
           }
 
-          await db.execute(sql`
-            INSERT INTO banco_horas_saldo ("employeeId", "companyId", "saldoMinutos", "atualizadoEm")
-            VALUES (${adj.employeeId}, ${adj.companyId}, ${-minutosDebito}, NOW())
-            ON CONFLICT ("employeeId", "companyId")
-            DO UPDATE SET "saldoMinutos" = banco_horas_saldo."saldoMinutos" + ${-minutosDebito}, "atualizadoEm" = NOW()
-          `);
+          if (bancoHorasEstaVigente(adj.data)) {
+            await db.execute(sql`
+              INSERT INTO banco_horas_saldo ("employeeId", "companyId", "saldoMinutos", "atualizadoEm")
+              VALUES (${adj.employeeId}, ${adj.companyId}, ${-minutosDebito}, NOW())
+              ON CONFLICT ("employeeId", "companyId")
+              DO UPDATE SET "saldoMinutos" = banco_horas_saldo."saldoMinutos" + ${-minutosDebito}, "atualizadoEm" = NOW()
+            `);
 
-          const descBH = isAtraso
-            ? `Atraso aferição convertido em banco de horas negativo (${minutosDebito} min) — ${adj.data ? String(adj.data).slice(0, 10) : ''}`
-            : `Falta aferição convertida em banco de horas negativo — ${adj.data ? String(adj.data).slice(0, 10) : ''}`;
-          await db.execute(sql`
-            INSERT INTO banco_horas_lancamentos ("employeeId", "companyId", tipo, minutos, descricao, data, "criadoEm", "criadoPor", "minutosBase", "minutosAcrescimo")
-            VALUES (${adj.employeeId}, ${adj.companyId}, 'debito', ${minutosDebito}, ${descBH}, ${adj.data}, NOW(), ${ctx.user.name || 'Sistema'}, ${minutosDebito}, 0)
-          `);
+            const descBH = isAtraso
+              ? `Atraso aferição convertido em banco de horas negativo (${minutosDebito} min) — ${adj.data ? String(adj.data).slice(0, 10) : ''}`
+              : `Falta aferição convertida em banco de horas negativo — ${adj.data ? String(adj.data).slice(0, 10) : ''}`;
+            await db.execute(sql`
+              INSERT INTO banco_horas_lancamentos ("employeeId", "companyId", tipo, minutos, descricao, data, "criadoEm", "criadoPor", "minutosBase", "minutosAcrescimo")
+              VALUES (${adj.employeeId}, ${adj.companyId}, 'debito', ${minutosDebito}, ${descBH}, ${adj.data}, NOW(), ${ctx.user.name || 'Sistema'}, ${minutosDebito}, 0)
+            `);
+          }
 
           if (adj.timecardDailyId) {
             await db.execute(sql`
@@ -2297,11 +2476,30 @@ export const payrollEngineRouter = router({
       mesReferencia: z.string(),
       preservarEditados: z.boolean().optional(),
       forcarRecalculoTodos: z.boolean().optional(),
+      // Rev. 5128 — recálculo PARCIAL: recalcula SÓ estes funcionários,
+      // preservando advances/snapshot dos demais.
+      employeeIds: z.array(z.number()).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       try {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+      // Rev. 5128 — tenant guard: intersecta as empresas pedidas com as acessíveis
+      {
+        const permitidas = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+        const permitidasIds = new Set((permitidas || []).map((c: any) => Number(c.id)));
+        const pedidas = resolveCompanyIds(input);
+        if (pedidas.some(id => !permitidasIds.has(Number(id)))) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso às empresas solicitadas" });
+        }
+      }
+
+      // Rev. 5128 — seleção parcial de funcionários (null = todos)
+      const selVale: Set<number> | null = (input.employeeIds && input.employeeIds.length > 0)
+        ? new Set(input.employeeIds.map(Number))
+        : null;
+      const selValeSql = selVale ? sql.join([...selVale].map(id => sql`${id}`), sql`,`) : null;
 
       // Garante que payroll_periods existe — sem isso o UPDATE no fim da mutation
       // afetava 0 linhas e os dados de Vale não eram persistidos.
@@ -2338,7 +2536,7 @@ export const payrollEngineRouter = router({
           sql`${employees.deletedAt} IS NULL`,
           sql`(${employees.valorHora} IS NOT NULL AND ${employees.valorHora} != '') OR ${employees.tipoRemuneracao} = 'mensalista'`,
         )
-      );
+      ).then(rows => selVale ? rows.filter(e => selVale.has(Number(e.id))) : rows);
 
       // ── Desligados com aviso prévio: incluir funcionários que estavam trabalhando no mês ──
       // Funcionários desligados que tinham aviso prévio cujo último dia (dataFim) cai dentro do mês
@@ -2379,6 +2577,7 @@ export const payrollEngineRouter = router({
       for (const row of avisoDesligadosRows as any[]) {
         const empId = Number(row.id);
         if (ativosIds.has(empId)) continue;
+        if (selVale && !selVale.has(empId)) continue; // Rev. 5128 — recálculo parcial
         const ultimoDiaAviso = new Date(row.avisoUltimoDia);
         const diaNoMes = ultimoDiaAviso.getUTCDate();
         const mesAviso = ultimoDiaAviso.getUTCMonth() + 1;
@@ -2409,6 +2608,7 @@ export const payrollEngineRouter = router({
 
       const excluidos = await db.select({
         id: employees.id,
+        companyId: employees.companyId, // Rev. 5126 — p/ snapshot por empresa
         nomeCompleto: employees.nomeCompleto,
       }).from(employees).where(
         and(
@@ -2419,7 +2619,7 @@ export const payrollEngineRouter = router({
           sql`(${employees.valorHora} IS NULL OR ${employees.valorHora} = '')`,
           sql`(${employees.tipoRemuneracao} IS NULL OR ${employees.tipoRemuneracao} != 'mensalista')`,
         )
-      );
+      ).then(rows => selVale ? rows.filter(e => selVale.has(Number(e.id))) : rows);
 
       // Count faltas ONLY from day 1 to 15 of current month (not the full ponto period)
       const primeiroDiaMes = `${year}-${String(month).padStart(2, '0')}-01`;
@@ -2538,6 +2738,7 @@ export const payrollEngineRouter = router({
       const editadosMap = new Map<number, any>();
       const editadosNomes: string[] = [];
       for (const r of editadosRows as any[]) {
+        if (selVale && !selVale.has(Number(r.employeeId))) continue; // Rev. 5128 — só pergunta sobre editados DENTRO da seleção
         editadosMap.set(Number(r.employeeId), r);
         editadosNomes.push(r.nomeCompleto);
       }
@@ -2567,10 +2768,12 @@ export const payrollEngineRouter = router({
             DELETE FROM payroll_advances
             WHERE "companyId" = ${cid} AND "mesReferencia" = ${input.mesReferencia}
               AND "employeeId" NOT IN (${sql.join(editadosIds.map(id => sql`${id}`), sql`,`)})
+              ${selValeSql ? sql`AND "employeeId" IN (${selValeSql})` : sql``}
           `);
         } else {
           await db.execute(sql`
             DELETE FROM payroll_advances WHERE "companyId" = ${cid} AND "mesReferencia" = ${input.mesReferencia}
+            ${selValeSql ? sql`AND "employeeId" IN (${selValeSql})` : sql``}
           `);
         }
       }
@@ -2588,7 +2791,8 @@ export const payrollEngineRouter = router({
       const ledgerInsertRows: any[] = [];
       const ordemVale = ordemArredondamento(input.mesReferencia, "vale");
       for (const cid of allCompanyIds) {
-        await db.execute(sql`DELETE FROM payroll_rounding_ledger WHERE "companyId" = ${cid} AND "mesReferencia" = ${input.mesReferencia} AND "origem" = 'vale'`);
+        await db.execute(sql`DELETE FROM payroll_rounding_ledger WHERE "companyId" = ${cid} AND "mesReferencia" = ${input.mesReferencia} AND "origem" = 'vale'
+          ${selValeSql ? sql`AND "employeeId" IN (${selValeSql})` : sql``}`);
       }
       const saldosArred = await carregarSaldosArredondamento(db, allCompanyIds);
 
@@ -2812,12 +3016,15 @@ export const payrollEngineRouter = router({
         `);
       }
 
+      // Delete existing financial events for this vale (avoid duplicates on recalc).
+      // Rev. 5128 — SEMPRE deletar (mesmo sem eventos novos): um selecionado que
+      // ficou inelegível/rejeitado não pode manter o evento financeiro antigo ativo.
+      for (const cid of allCompanyIds) {
+        await db.execute(sql`DELETE FROM financial_events WHERE "companyId" = ${cid} AND "mesCompetencia" = ${input.mesReferencia} AND "origemTipo" = 'payroll_advance'
+          ${selValeSql ? sql`AND "employeeId" IN (${selValeSql})` : sql``}`);
+      }
       // Batch INSERT all financial events in one query
       if (eventInsertRows.length > 0) {
-        // Also delete existing financial events for this vale (avoid duplicates on recalc)
-        for (const cid of allCompanyIds) {
-          await db.execute(sql`DELETE FROM financial_events WHERE "companyId" = ${cid} AND "mesCompetencia" = ${input.mesReferencia} AND "origemTipo" = 'payroll_advance'`);
-        }
         await db.execute(sql`
           INSERT INTO financial_events ("companyId", tipo, categoria, "mesCompetencia", "dataPrevista", valor, status, "employeeId", "employeeName", descricao, "origemTipo", "criadoPor")
           VALUES ${sql.join(eventInsertRows, sql`,`)}
@@ -2830,6 +3037,14 @@ export const payrollEngineRouter = router({
           INSERT INTO payroll_rounding_ledger ("companyId", "employeeId", "origem", "mesReferencia", "ordem",
             "valorExato", "saldoAnterior", "ajusteAplicado", "valorPago", "residualGerado")
           VALUES ${sql.join(ledgerInsertRows, sql`,`)}
+          ON CONFLICT ("companyId", "employeeId", "origem", "mesReferencia") DO UPDATE SET
+            "ordem" = EXCLUDED."ordem",
+            "valorExato" = EXCLUDED."valorExato",
+            "saldoAnterior" = EXCLUDED."saldoAnterior",
+            "ajusteAplicado" = EXCLUDED."ajusteAplicado",
+            "valorPago" = EXCLUDED."valorPago",
+            "residualGerado" = EXCLUDED."residualGerado",
+            "atualizadoEm" = NOW()
         `);
       }
 
@@ -2845,22 +3060,105 @@ export const payrollEngineRouter = router({
           ? `Vale calculado: ${empList.length} funcionários, ${bloqueados} com alerta (decisão pendente), total R$ ${formatMoney(totalVale)}`
           : `Vale calculado: ${empList.length} funcionários, total R$ ${formatMoney(totalVale)}`,
       };
-      const valeJson = JSON.stringify(valeResultPayload);
+
+      // Rev. 5126 — Snapshot POR EMPRESA: cada payroll_period recebe SOMENTE
+      // os funcionários da própria empresa. Antes, em modo grupo, o MESMO
+      // JSON combinado era gravado em todas as empresas — funcionário do
+      // Hotel aparecia (e pedia decisão) no vale da FC.
+      const empCompanyMap = new Map<number, number>(empList.map((e: any) => [Number(e.id), Number(e.companyId)]));
+      const excluidosCompanyMap = new Map<number, number>(excluidos.map((e: any) => [Number(e.id), Number(e.companyId)]));
+
+      // Rev. 5128b — acumula o resultado MESCLADO (parcial + preservados) para
+      // devolver à tela; sem isso o front mostrava só os selecionados.
+      const mergedFuncs: any[] = [];
+      const mergedExcluidos: { id: number; nome: string }[] = [];
+      let mergedVale = 0;
+      let mergedAlertas = 0;
 
       // Update period for all companies
       for (const cid of allCompanyIds) {
-        const companyVale = advanceInsertRows.length > 0 ? totalVale : 0;
+        // Deny-by-default: item sem empresa mapeada fica FORA de todos os
+        // snapshots (nunca inferir a empresa do destino — vaza de novo).
+        let funcsCia: any[] = results.filter((f: any) => empCompanyMap.get(Number(f.employeeId)) === cid);
+        let excluidosCiaLista: { id: number; nome: string }[] = excluidos
+          .filter((e: any) => excluidosCompanyMap.get(Number(e.id)) === cid)
+          .map((e: any) => ({ id: e.id, nome: e.nomeCompleto }));
+
+        // Rev. 5128 — recálculo PARCIAL: mescla com o snapshot existente da
+        // empresa (mantém quem NÃO estava na seleção; substitui os selecionados).
+        if (selVale) {
+          const prevSnapRows = ((await db.execute(sql`
+            SELECT "valeResultJson" FROM payroll_periods
+            WHERE "companyId" = ${cid} AND "mesReferencia" = ${input.mesReferencia}
+            LIMIT 1
+          `)) as any).rows || [];
+          const rawPrev = prevSnapRows[0]?.valeResultJson;
+          if (rawPrev) {
+            try {
+              const prev = typeof rawPrev === 'string' ? JSON.parse(rawPrev) : rawPrev;
+              const keepF = (Array.isArray(prev?.funcionarios) ? prev.funcionarios : [])
+                .filter((f: any) => !selVale.has(Number(f.employeeId)));
+              const keepE = (Array.isArray(prev?.excluidos) ? prev.excluidos : [])
+                .filter((e: any) => !selVale.has(Number(e.id)));
+              funcsCia = [...keepF, ...funcsCia].sort((a: any, b: any) =>
+                String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR', { sensitivity: 'base' }));
+              const idsExcl = new Set(excluidosCiaLista.map(e => Number(e.id)));
+              excluidosCiaLista = [...keepE.filter((e: any) => !idsExcl.has(Number(e.id))), ...excluidosCiaLista];
+            } catch (e) {
+              console.error('[gerarVale] snapshot anterior ilegível no merge parcial (empresa', cid, '):', (e as any)?.message);
+            }
+          }
+        }
+
+        let valeCia = 0;
+        let alertasCia = 0;
+        for (const f of funcsCia) {
+          if (f.status === "calculado") valeCia += Number(f.valorLiquido) || 0;
+          if (f.temAlerta || f.bloqueado) alertasCia++;
+        }
+        valeCia = Math.round(valeCia * 100) / 100;
+        const payloadCia = {
+          ...valeResultPayload,
+          totalFuncionarios: funcsCia.length,
+          totalAlertas: alertasCia,
+          totalVale: valeCia,
+          funcionarios: funcsCia,
+          excluidos: excluidosCiaLista,
+          message: alertasCia > 0
+            ? `Vale calculado: ${funcsCia.length} funcionários, ${alertasCia} com alerta (decisão pendente), total R$ ${formatMoney(valeCia)}`
+            : `Vale calculado: ${funcsCia.length} funcionários, total R$ ${formatMoney(valeCia)}`,
+        };
+        mergedFuncs.push(...funcsCia);
+        mergedExcluidos.push(...excluidosCiaLista);
+        mergedVale += valeCia;
+        mergedAlertas += alertasCia;
         await db.execute(sql`
           UPDATE payroll_periods SET 
             status = 'vale_gerado',
             "valeGeradoEm" = NOW(),
             "valeGeradoPor" = ${ctx.user.name || "Sistema"},
-            "totalVale" = ${formatMoney(companyVale)},
-            "valeResultJson" = ${valeJson}
+            "totalVale" = ${formatMoney(valeCia)},
+            "valeResultJson" = ${JSON.stringify(payloadCia)}
           WHERE "companyId" = ${cid} AND "mesReferencia" = ${input.mesReferencia}
         `);
       }
 
+      if (selVale) {
+        // Rev. 5128b — devolve o resultado JÁ MESCLADO (recalculados + preservados)
+        mergedVale = Math.round(mergedVale * 100) / 100;
+        mergedFuncs.sort((a: any, b: any) => String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR', { sensitivity: 'base' }));
+        return {
+          ...valeResultPayload,
+          totalFuncionarios: mergedFuncs.length,
+          totalAlertas: mergedAlertas,
+          totalVale: mergedVale,
+          funcionarios: mergedFuncs,
+          excluidos: mergedExcluidos,
+          message: mergedAlertas > 0
+            ? `Vale recalculado (${selVale.size} selecionado(s)): ${mergedFuncs.length} funcionários, ${mergedAlertas} com alerta (decisão pendente), total R$ ${formatMoney(mergedVale)}`
+            : `Vale recalculado (${selVale.size} selecionado(s)): ${mergedFuncs.length} funcionários, total R$ ${formatMoney(mergedVale)}`,
+        };
+      }
       return valeResultPayload;
       } catch (err: any) {
         console.error('[gerarVale] Erro:', err?.message || err, err?.stack);
@@ -2901,6 +3199,11 @@ export const payrollEngineRouter = router({
         contaEmpresaId: employees.contaBancariaEmpresaId,
         tipoChavePix: employees.tipoChavePix,
         chavePix: employees.chavePix,
+        // Rev. 5145 — conta bancária PRÓPRIA do funcionário (cadastro)
+        banco: employees.banco,
+        bancoNome: employees.bancoNome,
+        agencia: employees.agencia,
+        conta: employees.conta,
       }).from(employees).where(
         and(
           inArray(employees.companyId, allowed),
@@ -2922,6 +3225,10 @@ export const payrollEngineRouter = router({
           cpf: e.cpf || null,
           tipoChavePix: e.tipoChavePix || null,
           chavePix: e.chavePix || null,
+          // Rev. 5145 — conta do próprio funcionário (onde ele RECEBE)
+          banco: e.banco || e.bancoNome || null,
+          agencia: e.agencia || null,
+          conta: e.conta || null,
           contaEmpresaId: e.contaEmpresaId || null,
           contaEmpresaBanco: ce?.banco || null,
           contaEmpresaCodigoBanco: ce?.codigoBanco || null,
@@ -2954,6 +3261,8 @@ export const payrollEngineRouter = router({
       }
       const rows = ((await db.execute(sql`
         SELECT e.id AS "employeeId", e."fotoUrl", e.status,
+               e."nomeCompleto",
+               e.funcao, e."tipoContrato",
                (SELECT o.nome FROM obra_funcionarios ofx
                   JOIN obras o ON o.id = ofx."obraId"
                  WHERE ofx."employeeId" = e.id AND ofx."isActive" = 1
@@ -2962,7 +3271,7 @@ export const payrollEngineRouter = router({
         WHERE e."companyId" IN (${sql.join(allowed.map(id => sql`${id}`), sql`,`)})
           AND e."deletedAt" IS NULL
       `)) as any).rows || [];
-      return rows as Array<{ employeeId: number; fotoUrl: string | null; status: string | null; obraNome: string | null }>;
+      return rows as Array<{ employeeId: number; fotoUrl: string | null; status: string | null; nomeCompleto: string | null; funcao: string | null; tipoContrato: string | null; obraNome: string | null }>;
     }),
 
   // ============================================================
@@ -3482,10 +3791,18 @@ export const payrollEngineRouter = router({
       pontoInicioManual: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       pontoFimManual: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       forcarRecalculoPonto: z.boolean().optional(),
+      // Rev. 5128 — ressimulação PARCIAL: recalcula SÓ estes funcionários,
+      // preservando payments/snapshot dos demais.
+      employeeIds: z.array(z.number()).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+      const selSim: Set<number> | null = (input.employeeIds && input.employeeIds.length > 0)
+        ? new Set(input.employeeIds.map(Number))
+        : null;
+      const selSimSql = selSim ? sql.join([...selSim].map(id => sql`${id}`), sql`,`) : null;
 
       // Tenant guard: intersecta as empresas pedidas com as acessíveis do usuário.
       // resolveCompanyIds confia no companyId/companyIds do cliente — sem isto,
@@ -3631,6 +3948,8 @@ export const payrollEngineRouter = router({
 
       const divergencias: { employeeId: number; nome: string; funcao: string | null; motivo: string }[] = [];
       const empList = allCltAtivos.filter(emp => {
+        // Rev. 5128 — ressimulação parcial: fora da seleção = não recalcula (preservado)
+        if (selSim && !selSim.has(Number(emp.id))) return false;
         // Rev. 4886 — Mensalista com salário base preenchido NÃO exige valor hora
         // (o bruto vem direto do salarioBase — Rev. 4884).
         if ((emp as any).tipoRemuneracao === 'mensalista' && parseBRL(emp.salarioBase) > 0) return true;
@@ -3939,6 +4258,7 @@ export const payrollEngineRouter = router({
               AND "mesCompetencia" = ${input.mesReferencia}
               AND "origemRegistro" NOT IN ('manual', 'ajuste_manual', 'ajusteManual', 'aferido')
               AND "resolucaoTipo" IS NULL
+              ${selSimSql ? sql`AND "employeeId" IN (${selSimSql})` : sql``}
           `);
 
           // Rev. 3972 — Pré-carregar datas de férias do período do ponto para não gerar
@@ -4190,7 +4510,16 @@ export const payrollEngineRouter = router({
           SUM("isFalta") as "totalFaltas",
           SUM("isAtraso") as "totalAtrasos",
           SUM("minutosAtraso") as "totalMinutosAtraso",
+          COALESCE(SUM("isFalta") FILTER (WHERE data >= ${BANCO_HORAS_DATA_INICIO}::date), 0) as "totalFaltasBancoHoras",
+          COALESCE(SUM("minutosAtraso") FILTER (WHERE data >= ${BANCO_HORAS_DATA_INICIO}::date), 0) as "totalMinutosAtrasoBancoHoras",
           ARRAY_AGG(CASE WHEN "isFalta" = 1 THEN to_char(data, 'DD/MM/YYYY') END ORDER BY data) FILTER (WHERE "isFalta" = 1) as "diasFalta",
+          ARRAY_AGG(CASE WHEN "isFalta" = 1 THEN to_char(data, 'YYYY-MM-DD') END ORDER BY data) FILTER (WHERE "isFalta" = 1) as "diasFaltaISO",
+          ARRAY_AGG(CASE WHEN "isFalta" = 1 THEN to_char(data, 'YYYY-MM-DD') || '|' || COALESCE("horasTrabalhadas", '0:00') END ORDER BY data)
+            FILTER (WHERE "isFalta" = 1 AND "horasTrabalhadas" ~ '^\d+:\d+$' AND "horasTrabalhadas" NOT IN ('0:00', '00:00')) as "faltasParciais",
+          ARRAY_AGG(CASE WHEN "isFalta" = 1 THEN to_char(data, 'YYYY-MM-DD') END ORDER BY data)
+            FILTER (WHERE "isFalta" = 1 AND data >= ${BANCO_HORAS_DATA_INICIO}::date) as "diasFaltaBancoHorasISO",
+          ARRAY_AGG(CASE WHEN "isFalta" = 1 THEN to_char(data, 'YYYY-MM-DD') || '|' || COALESCE("horasTrabalhadas", '0:00') END ORDER BY data)
+            FILTER (WHERE "isFalta" = 1 AND data >= ${BANCO_HORAS_DATA_INICIO}::date AND "horasTrabalhadas" ~ '^\d+:\d+$' AND "horasTrabalhadas" NOT IN ('0:00', '00:00')) as "faltasParciaisBancoHoras",
           ARRAY_AGG(CASE WHEN "isAtraso" = 1 THEN to_char(data, 'DD/MM/YYYY') || ' (' || "minutosAtraso" || ' min)' END ORDER BY data) FILTER (WHERE "isAtraso" = 1) as "diasAtraso"
         FROM timecard_daily 
         WHERE "companyId" IN (${allCompanyIdsSql}) 
@@ -4215,12 +4544,30 @@ export const payrollEngineRouter = router({
         WHERE "companyId" IN (${allCompanyIdsSql})
           AND "mesReferencia" = ${input.mesReferencia}
       `)) as any).rows || [];
-      const dsrMap = new Map<number, { qtdFalta: number; valorFalta: number }>();
+      const dsrMap = new Map<number, { qtdFalta: number; valorFalta: number; qtdFaltaBancoHoras: number }>();
       for (const r of dsrRows) {
         dsrMap.set(Number(r.employeeId), {
           qtdFalta: Number(r.qtdFalta) || 0,
           valorFalta: parseBRL(r.valorFalta) || 0,
+          qtdFaltaBancoHoras: 0,
         });
+      }
+      // O resumo é mensal e não permite separar 1–14/05 de 15–31/05. Para o
+      // Banco de Horas, a contagem vem das linhas diárias que originaram o DSR.
+      const dsrBancoRows = ((await db.execute(sql`
+        SELECT "employeeId", COUNT(*) AS "qtdFaltaBancoHoras"
+        FROM ponto_descontos
+        WHERE "companyId" IN (${allCompanyIdsSql})
+          AND "mesReferencia" = ${input.mesReferencia}
+          AND tipo IN ('falta_dsr', 'dsr_falta')
+          AND data >= ${BANCO_HORAS_DATA_INICIO}::date
+          AND status IN ('calculado', 'revisado')
+        GROUP BY "employeeId"
+      `)) as any).rows || [];
+      for (const r of dsrBancoRows) {
+        const atual = dsrMap.get(Number(r.employeeId)) || { qtdFalta: 0, valorFalta: 0, qtdFaltaBancoHoras: 0 };
+        atual.qtdFaltaBancoHoras = Number(r.qtdFaltaBancoHoras) || 0;
+        dsrMap.set(Number(r.employeeId), atual);
       }
 
       // Ler default de aplicarDsrFalta do payroll_periods (se já existir registro)
@@ -4258,7 +4605,11 @@ export const payrollEngineRouter = router({
           WHERE df."companyId" IN (${allCompanyIdsSql})
             AND df."diferenca_mes_pagamento" = ${input.mesReferencia}
             AND df."valorRetroativo" IS NOT NULL
-            AND CAST(NULLIF(df."valorRetroativo", '') AS NUMERIC) > 0
+            -- Rev. 5046 — valorRetroativo tem formato MISTO (BR "147,63" e dot-decimal):
+            -- cast ingênuo quebrava a simulação inteira quando havia retroativo no mês.
+            AND CAST(NULLIF(CASE WHEN df."valorRetroativo" ~ ','
+              THEN replace(replace(df."valorRetroativo", '.', ''), ',', '.')
+              ELSE regexp_replace(df."valorRetroativo", '[^0-9.]', '', 'g') END, '') AS NUMERIC) > 0
             AND (d.status IS NULL OR d.status != 'cancelado')
         `)) as any).rows || [];
         for (const r of diffRows) {
@@ -4313,7 +4664,10 @@ export const payrollEngineRouter = router({
           liquidoOverridesMap.set(Number(r.employeeId), { salarioLiquido: liq, obs: marcadores });
         }
       }
-      const todosOverrideIds = Array.from(new Set([...overridesMap.keys(), ...liquidoOverridesMap.keys()]));
+      // Rev. 5128 — ressimulação parcial: só pergunta sobre overrides de quem está NA seleção
+      // (os demais nem serão recalculados; seus overrides ficam intactos nos payments preservados).
+      const todosOverrideIds = Array.from(new Set([...overridesMap.keys(), ...liquidoOverridesMap.keys()]))
+        .filter(id => !selSim || selSim.has(Number(id)));
       if (todosOverrideIds.length > 0 && !input.manterOverrides && !input.descartarOverrides && input.manterOverridesIds === undefined) {
         // Lista nomes dos funcionários com ajustes manuais para o RH decidir individualmente
         const nomesRows = ((await db.execute(sql`
@@ -4348,17 +4702,25 @@ export const payrollEngineRouter = router({
       // Clear existing payments for this month
       await db.execute(sql`
         DELETE FROM payroll_payments WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
+        ${selSimSql ? sql`AND "employeeId" IN (${selSimSql})` : sql``}
       `);
+
+      // A competência pode cruzar o marco de implantação. As agregações abaixo
+      // preservam a folha inteira, mas os movimentos de Banco de Horas consideram
+      // apenas os dias posteriores a 15/05/2026.
+      const bancoHorasMesVigente = bancoHorasMesTemDiasVigentes(input.mesReferencia);
 
       // Rev. 3977 — Banco de Horas: reverter débitos de atraso/falta desta mesma competência antes
       // de recalcular (idempotência entre recálculos do mesmo período). Débito é marcado com
       // tipo='debito_atraso_falta' e a competência embutida na descrição (não há coluna dedicada).
-      {
+      if (bancoHorasMesVigente) {
         const _debitoMarker977 = `Débito atraso/falta ${input.mesReferencia}`;
         const _oldDebitos977 = ((await db.execute(sql`
           SELECT id, "employeeId", "companyId", minutos FROM banco_horas_lancamentos
           WHERE "companyId" IN (${allCompanyIdsSql}) AND tipo = 'debito_atraso_falta'
             AND descricao LIKE ${_debitoMarker977 + '%'}
+            AND data >= ${BANCO_HORAS_DATA_INICIO}::date
+            ${selSimSql ? sql`AND "employeeId" IN (${selSimSql})` : sql``}
         `)) as any).rows || [];
         for (const d of _oldDebitos977) {
           // Rev. 4000 — reversão soma o valor ABSOLUTO de volta ao saldo, independente do sinal
@@ -4374,18 +4736,22 @@ export const payrollEngineRouter = router({
             DELETE FROM banco_horas_lancamentos
             WHERE "companyId" IN (${allCompanyIdsSql}) AND tipo = 'debito_atraso_falta'
               AND descricao LIKE ${_debitoMarker977 + '%'}
+              AND data >= ${BANCO_HORAS_DATA_INICIO}::date
+              ${selSimSql ? sql`AND "employeeId" IN (${selSimSql})` : sql``}
           `);
         }
       }
 
       // Rev. 3983 — Banco de Horas: mesma reversão idempotente acima, para os débitos de DSR
       // perdido redirecionados (tipo='debito_dsr', lançamento separado do de atraso/falta).
-      {
+      if (bancoHorasMesVigente) {
         const _debitoMarkerDsr983 = `Débito DSR ${input.mesReferencia}`;
         const _oldDebitosDsr983 = ((await db.execute(sql`
           SELECT id, "employeeId", "companyId", minutos FROM banco_horas_lancamentos
           WHERE "companyId" IN (${allCompanyIdsSql}) AND tipo = 'debito_dsr'
             AND descricao LIKE ${_debitoMarkerDsr983 + '%'}
+            AND data >= ${BANCO_HORAS_DATA_INICIO}::date
+            ${selSimSql ? sql`AND "employeeId" IN (${selSimSql})` : sql``}
         `)) as any).rows || [];
         for (const d of _oldDebitosDsr983) {
           // Rev. 4000 — mesma reversão via ABS() do bloco de atraso/falta acima.
@@ -4399,6 +4765,8 @@ export const payrollEngineRouter = router({
             DELETE FROM banco_horas_lancamentos
             WHERE "companyId" IN (${allCompanyIdsSql}) AND tipo = 'debito_dsr'
               AND descricao LIKE ${_debitoMarkerDsr983 + '%'}
+              AND data >= ${BANCO_HORAS_DATA_INICIO}::date
+              ${selSimSql ? sql`AND "employeeId" IN (${selSimSql})` : sql``}
           `);
         }
       }
@@ -4411,6 +4779,7 @@ export const payrollEngineRouter = router({
         WHERE "companyId" IN (${allCompanyIdsSql}) 
           AND "mesDesconto" = ${input.mesReferencia} 
           AND status = 'aplicado'
+          ${selSimSql ? sql`AND "employeeId" IN (${selSimSql})` : sql``}
       `);
 
       const results: any[] = [];
@@ -4533,7 +4902,8 @@ export const payrollEngineRouter = router({
       // ledger folha/mês ANTES de ler saldos (idempotente em re-simulação).
       const ledgerInsertRowsFolha: any[] = [];
       const ordemFolha = ordemArredondamento(input.mesReferencia, "folha");
-      await db.execute(sql`DELETE FROM payroll_rounding_ledger WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia} AND "origem" = 'folha'`);
+      await db.execute(sql`DELETE FROM payroll_rounding_ledger WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia} AND "origem" = 'folha'
+        ${selSimSql ? sql`AND "employeeId" IN (${selSimSql})` : sql``}`);
       const saldosArredFolha = await carregarSaldosArredondamento(db, [input.companyId]);
 
       // Rev. 3978 — DIFERENÇA SALARIAL retroativa do DISSÍDIO deixou de ser lançada
@@ -4740,8 +5110,12 @@ export const payrollEngineRouter = router({
         const descontoAdiantamento = adv && adv.status !== 'rejeitado' ? parseBRL(adv.valorTotalVale) : 0;
 
         const faltaData = faltasMap.get(emp.id);
-        const faltasQtdMes = faltaData?.totalFaltas || 0;
-        const atrasosMinutos = faltaData?.totalMinutosAtraso || 0;
+        // Rev. 5046 — Number(): vêm do db.execute como STRING; somar com `+` concatenava
+        // (débitos bilionários no banco de horas). Multiplicação/divisão coagiam por sorte.
+        const faltasQtdMes = Number(faltaData?.totalFaltas || 0);
+        const atrasosMinutos = Number(faltaData?.totalMinutosAtraso || 0);
+        const faltasQtdBancoHoras = Number(faltaData?.totalFaltasBancoHoras || 0);
+        const atrasosMinutosBancoHoras = Number(faltaData?.totalMinutosAtrasoBancoHoras || 0);
 
         const vrDiario = vrDiarioMap.get(emp.id) || 0;
         const vaLancamento = vaMap.get(emp.id) || 0;
@@ -4764,7 +5138,9 @@ export const payrollEngineRouter = router({
         // (faltas vão p/ "FALTAS", atrasos p/ "ATRASOS" e o resto p/ "OUTROS"=acertoEscuroValor)
         const adjustments = adjMap.get(emp.id) || [];
         let escFaltasValor = 0, escFaltasVr = 0, escFaltasVt = 0, escFaltasQtd = 0;
+        let escFaltasBancoHorasValor = 0;
         let escAtrasosValor = 0;
+        let escAtrasosBancoHorasValor = 0;
         let acertoEscuroValor = 0;
         const acertoEscuroDetalhes = adjustments.map((a: any) => ({ data: a.data, tipo: a.tipo, valor: a.valorTotal, descricao: a.descricao }));
         const fmtDataBR = (d: any) => {
@@ -4784,8 +5160,10 @@ export const payrollEngineRouter = router({
             escFaltasVr    += parseBRL(a.valorVrDesconto);
             escFaltasVt    += parseBRL(a.valorVtDesconto);
             escFaltasQtd   += 1;
+            if (bancoHorasEstaVigente(a.data)) escFaltasBancoHorasValor += parseBRL(a.valorDesconto);
           } else if (a.tipo === 'atraso') {
             escAtrasosValor += parseBRL(a.valorTotal);
+            if (bancoHorasEstaVigente(a.data)) escAtrasosBancoHorasValor += parseBRL(a.valorTotal);
           } else {
             acertoEscuroValor += parseBRL(a.valorTotal);
           }
@@ -4803,7 +5181,7 @@ export const payrollEngineRouter = router({
         const descontoVtFaltas = Math.round(Math.max(0, Math.min(descontoVtFaltasBruto, tetoVt6pct - vtValorMensal)) * 100) / 100;
 
         // DSR perdido (Lei 605/49 Art. 6º) — apenas DSR Falta (decisão RH FC, Rev. 1194)
-        const dsrInfo = dsrMap.get(emp.id) || { qtdFalta: 0, valorFalta: 0 };
+        const dsrInfo = dsrMap.get(emp.id) || { qtdFalta: 0, valorFalta: 0, qtdFaltaBancoHoras: 0 };
         const dsrFaltaValorAplicado = aplicarDsrFalta ? dsrInfo.valorFalta : 0;
 
         // Rev. 3977 — Banco de Horas: quando a empresa usa banco de horas (he_banco_horas=Sim)
@@ -4816,9 +5194,49 @@ export const payrollEngineRouter = router({
         // atraso/falta e quantas são de DSR. A regra de QUANDO se perde o DSR (Lei 605/49 Art. 6º — 1
         // DSR por semana com falta injustificada, não por falta) não muda, só o destino do valor.
         const usaBancoHorasAtrasoFalta = criteria.heBancoHoras && Number((emp as any).bancoHorasExcecao || 0) !== 1;
+        // Rev. 5046 — Falta PARCIAL (dia com batidas, ex.: saiu mais cedo): no banco de
+        // horas debita só o DÉFICIT REAL do dia (jornada esperada − trabalhado), não o
+        // dia cheio. Decisão do usuário 13/08/2026: "a regra para o banco é exatamente
+        // o que a pessoa trabalhou, nem mais, nem menos". Dia sem nenhuma batida segue
+        // como dia cheio; o caminho monetário (empresa sem banco) não muda.
+        let faltaParcialQtd = 0;
+        let faltaParcialDeficitMin = 0;
+        const faltaParcialDias = new Set<string>();
+        for (const fp of ((faltaData?.faltasParciaisBancoHoras as string[] | null) || [])) {
+          const [fpData, fpHoras] = String(fp).split('|');
+          const [fh, fm] = (fpHoras || '0:00').split(':').map(Number);
+          const trabMin = (fh || 0) * 60 + (fm || 0);
+          if (trabMin <= 0) continue;
+          const expMin = getExpectedMins((emp as any).jornadaTrabalho, fpData, criteria.cargaHorariaDiaria ?? 8);
+          faltaParcialQtd++;
+          faltaParcialDias.add(fpData);
+          faltaParcialDeficitMin += Math.max(0, expMin - trabMin);
+        }
+        // Rev. 5046 — Mensalista sem valorHora cadastrado (ex.: Kelly/Andressa/Carolina)
+        // ficava FORA do débito do banco (a conversão monetária→minutos exigia valorHora>0).
+        // Fallback: deriva do salário-base ÷ horas mensais. Atrasos entram em MINUTOS
+        // diretos (não dependem de valor-hora).
+        const valorHoraBanco = valorHora > 0
+          ? valorHora
+          : (parseBRL(emp.salarioBase) > 0 ? parseBRL(emp.salarioBase) / (horasMensaisBaseEmp || 220) : 0);
         let minutosDebitoBancoHoras = 0;
-        if (usaBancoHorasAtrasoFalta && valorHora > 0 && (descontoFaltasBase > 0 || descontoAtrasosBase > 0)) {
-          minutosDebitoBancoHoras = Math.round(((descontoFaltasBase + descontoAtrasosBase) / valorHora) * 60);
+        if (usaBancoHorasAtrasoFalta && (faltasQtdBancoHoras > 0 || atrasosMinutosBancoHoras > 0 || escFaltasBancoHorasValor > 0 || escAtrasosBancoHorasValor > 0 || faltaParcialDeficitMin > 0)) {
+          // Rev. 5140 — Convenção coletiva: banco de horas é HORA POR HORA. Falta de dia
+          // cheio debita a JORNADA REAL do dia (seg-qui 9h, sexta 8h, conforme
+          // jornadaTrabalho), e NÃO o valor-dia legal da folha (salário/30 = 7h20).
+          // Decisão do usuário 17/08/2026. O desconto MONETÁRIO (empresa sem banco de
+          // horas) continua usando salário/30 — só o destino "banco" muda.
+          let minutosFaltasCheias = 0;
+          for (const dIso of ((faltaData?.diasFaltaBancoHorasISO as string[] | null) || [])) {
+            if (!dIso || faltaParcialDias.has(dIso)) continue;
+            minutosFaltasCheias += getExpectedMins((emp as any).jornadaTrabalho, dIso, criteria.cargaHorariaDiaria ?? 8);
+          }
+          // Faltas/atrasos "do escuro" (ajustes monetários sem dia no ponto) seguem
+          // convertidos por valor-hora — não têm data/jornada para consultar.
+          const minutosEscuro = valorHoraBanco > 0
+            ? Math.round(((escFaltasBancoHorasValor + escAtrasosBancoHorasValor) / valorHoraBanco) * 60)
+            : 0;
+          minutosDebitoBancoHoras = minutosFaltasCheias + minutosEscuro + atrasosMinutosBancoHoras + faltaParcialDeficitMin;
           if (minutosDebitoBancoHoras > 0) {
             bancoHorasDebitosBatch.push({
               employeeId: emp.id,
@@ -4829,13 +5247,13 @@ export const payrollEngineRouter = router({
         }
 
         let minutosDebitoDsrBancoHoras = 0;
-        if (usaBancoHorasAtrasoFalta && aplicarDsrFalta && dsrInfo.qtdFalta > 0) {
-          minutosDebitoDsrBancoHoras = dsrInfo.qtdFalta * DSR_MINUTOS_POR_PERDA;
+        if (usaBancoHorasAtrasoFalta && aplicarDsrFalta && dsrInfo.qtdFaltaBancoHoras > 0) {
+          minutosDebitoDsrBancoHoras = dsrInfo.qtdFaltaBancoHoras * DSR_MINUTOS_POR_PERDA;
           bancoHorasDebitosDsrBatch.push({
             employeeId: emp.id,
             companyId: (emp as any).companyId ?? input.companyId,
             minutos: minutosDebitoDsrBancoHoras,
-            qtdDsr: dsrInfo.qtdFalta,
+            qtdDsr: dsrInfo.qtdFaltaBancoHoras,
           });
         }
 
@@ -5165,7 +5583,7 @@ export const payrollEngineRouter = router({
 
       // Rev. 3977 — Banco de Horas: grava débitos de atraso/falta redirecionados (idempotente —
       // débitos antigos desta competência já foram revertidos/apagados no início da simulação).
-      if (bancoHorasDebitosBatch.length > 0) {
+      if (bancoHorasMesVigente && bancoHorasDebitosBatch.length > 0) {
         const _debitoDescricao977 = `Débito atraso/falta ${input.mesReferencia} (banco de horas)`;
         const _dataFimMes977 = `${year}-${String(month).padStart(2, '0')}-${String(diasNoMesSim).padStart(2, '0')}`;
         for (const d of bancoHorasDebitosBatch) {
@@ -5189,7 +5607,7 @@ export const payrollEngineRouter = router({
 
       // Rev. 3983 — Banco de Horas: grava débitos de DSR perdido redirecionados, num tipo PRÓPRIO
       // ('debito_dsr') para aparecer discriminado no extrato, separado do atraso/falta acima.
-      if (bancoHorasDebitosDsrBatch.length > 0) {
+      if (bancoHorasMesVigente && bancoHorasDebitosDsrBatch.length > 0) {
         const _dataFimMesDsr983 = `${year}-${String(month).padStart(2, '0')}-${String(diasNoMesSim).padStart(2, '0')}`;
         for (const d of bancoHorasDebitosDsrBatch) {
           const _debitoDescricaoDsr983 = `Débito DSR ${input.mesReferencia} (banco de horas) — ${d.qtdDsr} DSR${d.qtdDsr > 1 ? 's' : ''} perdido${d.qtdDsr > 1 ? 's' : ''} x 7h20`;
@@ -5209,8 +5627,50 @@ export const payrollEngineRouter = router({
         }
       }
 
+      // Rev. 5128 — ressimulação PARCIAL: carrega o snapshot anterior e separa o que
+      // será PRESERVADO (quem não está na seleção). Os selecionados são substituídos.
+      let prevPagKeepFuncs: any[] = [];
+      let prevPagKeepDivergencias: any[] = [];
+      let prevPagKeepExcluidos: any[] = [];
+      if (selSim) {
+        const prevPagRows = ((await db.execute(sql`
+          SELECT "pagamentoResultJson" FROM payroll_periods
+          WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
+            AND "pagamentoResultJson" IS NOT NULL
+          LIMIT 1
+        `)) as any).rows || [];
+        const rawPrevPag = prevPagRows[0]?.pagamentoResultJson;
+        if (rawPrevPag) {
+          try {
+            const prev = typeof rawPrevPag === 'string' ? JSON.parse(rawPrevPag) : rawPrevPag;
+            const keep = (arr: any[]) => (Array.isArray(arr) ? arr : []).filter((it: any) => !selSim.has(Number(it.employeeId)));
+            prevPagKeepFuncs = keep(prev?.funcionarios);
+            prevPagKeepDivergencias = keep(prev?.divergencias);
+            prevPagKeepExcluidos = keep(prev?.excluidosPorDecisaoAviso);
+          } catch (e) {
+            console.error('[simularPagamento] snapshot anterior ilegível no merge parcial:', (e as any)?.message);
+          }
+        }
+      }
+      const resultsMerged: any[] = selSim
+        ? [...prevPagKeepFuncs, ...results].sort((a: any, b: any) =>
+            String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR', { sensitivity: 'base' }))
+        : results;
+      if (selSim) {
+        // Recalcula os totais gerais a partir da lista MESCLADA (preservados + recalculados)
+        grandTotalLiquido = 0; grandTotalBruto = 0; grandTotalDescontos = 0;
+        for (const f of resultsMerged) {
+          if (f.alertaAvisoEncerrado) continue;
+          grandTotalLiquido += Number(f.salarioLiquido) || 0;
+          grandTotalBruto += Number(f.salarioBruto) || 0;
+          grandTotalDescontos += Number(f.totalDescontos) || 0;
+        }
+        divergencias.unshift(...prevPagKeepDivergencias);
+        excluidosPorDecisaoAviso.unshift(...prevPagKeepExcluidos);
+      }
+
       // Vale fora da folha: funcionários com vale calculado mas não incluídos na folha mensal
-      const empIdsNaFolha = new Set(empList.map((e: any) => Number(e.id)));
+      const empIdsNaFolha = new Set(resultsMerged.map((f: any) => Number(f.employeeId)));
       const valeAdvRows = ((await db.execute(sql`
         SELECT pa."employeeId", pa."valorTotalVale", pa."valorLiquidoVale", e."nomeCompleto", e.funcao
         FROM payroll_advances pa
@@ -5237,8 +5697,16 @@ export const payrollEngineRouter = router({
             )
           )
       `)) as any).rows || [];
+      // Rev. 5036 — PJ/Sócio nunca entram no vale (são pagos por outro fluxo);
+      // não devem aparecer no alerta "vale fora da folha". Mesmo filtro de
+      // inelegibilidade usado na sanitização do snapshot do vale (Rev. 3292).
+      const idsInelegiveisForaFolha = await getIdsInelegiveisVale(
+        db,
+        valeAdvRows.map((r: any) => Number(r.employeeId)),
+        input.mesReferencia,
+      );
       const valeForaDaFolha = valeAdvRows
-        .filter((r: any) => !empIdsNaFolha.has(Number(r.employeeId)))
+        .filter((r: any) => !empIdsNaFolha.has(Number(r.employeeId)) && !idsInelegiveisForaFolha.has(Number(r.employeeId)))
         .map((r: any) => ({
           employeeId: Number(r.employeeId),
           nome: r.nomeCompleto || `ID ${r.employeeId}`,
@@ -5252,20 +5720,20 @@ export const payrollEngineRouter = router({
       const totalValeForaDaFolhaLiquido = valeForaDaFolha.reduce((s: number, r: any) => s + r.valorLiquido, 0);
 
       // Rev. 3984 — alerta "pagar ou não?" (aviso prévio encerrando no mês, sem decisão ainda)
-      const alertasAvisoEncerrado = (results as any[])
+      const alertasAvisoEncerrado = (resultsMerged as any[])
         .filter(r => r.alertaAvisoEncerrado)
         .map(r => ({ employeeId: r.employeeId, nome: r.nome, funcao: r.funcao, avisoDataFim: r.avisoDataFim, valorLiquidoEstimado: r.salarioLiquido }))
         .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' }));
 
       const pagamentoResultPayload = {
-        totalFuncionarios: empList.length,
+        totalFuncionarios: resultsMerged.length,
         totalCltAtivos: allCltAtivos.length,
         totalBruto: grandTotalBruto,
         totalDescontos: grandTotalDescontos,
         totalLiquido: grandTotalLiquido,
         dataPagamentoPrevista,
         diasUteis,
-        funcionarios: results,
+        funcionarios: resultsMerged,
         divergencias,
         valeForaDaFolha,
         totalValeForaDaFolha: Math.round(totalValeForaDaFolhaBruto * 100) / 100,
@@ -5277,10 +5745,10 @@ export const payrollEngineRouter = router({
         alertasAvisoEncerrado,
         excluidosPorDecisaoAviso,
         message: divergencias.length > 0
-          ? `Simulação concluída: ${empList.length} de ${allCltAtivos.length} CLTs ativos processados. ATENÇÃO: ${divergencias.length} funcionário(s) excluído(s) da folha — verifique as divergências.`
+          ? `Simulação concluída: ${selSim ? `${empList.length} colaborador(es) ressimulados (${resultsMerged.length} na folha)` : `${empList.length} de ${allCltAtivos.length} CLTs ativos processados`}. ATENÇÃO: ${divergencias.length} funcionário(s) excluído(s) da folha — verifique as divergências.`
           : alertasAvisoEncerrado.length > 0
-          ? `Simulação concluída: ${empList.length} funcionários, líquido total R$ ${formatMoney(grandTotalLiquido)}. ATENÇÃO: ${alertasAvisoEncerrado.length} funcionário(s) com aviso prévio encerrando no mês aguardam decisão.`
-          : `Simulação concluída: ${empList.length} funcionários, líquido total R$ ${formatMoney(grandTotalLiquido)}`,
+          ? `Simulação concluída: ${selSim ? `${empList.length} colaborador(es) ressimulados (${resultsMerged.length} na folha)` : `${empList.length} funcionários`}, líquido total R$ ${formatMoney(grandTotalLiquido)}. ATENÇÃO: ${alertasAvisoEncerrado.length} funcionário(s) com aviso prévio encerrando no mês aguardam decisão.`
+          : `Simulação concluída: ${selSim ? `${empList.length} colaborador(es) ressimulados (${resultsMerged.length} na folha)` : `${empList.length} funcionários`}, líquido total R$ ${formatMoney(grandTotalLiquido)}`,
       };
       const pagJson = JSON.stringify(pagamentoResultPayload);
 
@@ -6863,9 +7331,10 @@ Responda EXATAMENTE no formato JSON abaixo:`;
   // Sem verificações de PDF contábil — é o fluxo interno de adiantamento.
   // ============================================================
   consolidarVale: protectedProcedure
-    .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
+    .input(z.object({ companyId: z.number(), mesReferencia: z.string().regex(/^\d{4}-\d{2}$/) }))
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
+      await assertFolhaComplAccess(ctx, input.companyId); // Rev. 5038 — anti-IDOR
       await ensurePeriodExists(db, resolveCompanyIds(input), input.mesReferencia);
       const agora = new Date().toISOString().replace("T", " ").substring(0, 19);
       const quem = ctx.user?.name || "Sistema";
@@ -6891,14 +7360,22 @@ Responda EXATAMENTE no formato JSON abaixo:`;
           AND status != 'consolidado'
       `);
 
-      return { success: true };
+      // Rev. 5038 — consolidar = valor EXATO vira título no Contas a Pagar
+      const fin = await upsertTituloFolhaOficial(db, input.companyId, input.mesReferencia, 'vale', quem);
+      return { success: true, financeiro: fin };
     }),
 
   desconsolidarVale: protectedProcedure
-    .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
-    .mutation(async ({ input }) => {
+    .input(z.object({ companyId: z.number(), mesReferencia: z.string().regex(/^\d{4}-\d{2}$/) }))
+    .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
+      await assertFolhaComplAccess(ctx, input.companyId); // Rev. 5038 — anti-IDOR
       await ensurePeriodExists(db, resolveCompanyIds(input), input.mesReferencia);
+
+      // Rev. 5038 — título com baixa BLOQUEIA a desconsolidação (senão fica
+      // um título pago órfão com a competência reaberta). Cancela ANTES de reverter.
+      const fin = await cancelarTituloFolhaOficial(db, input.companyId, input.mesReferencia, 'vale');
+      if (fin.aviso) throw new TRPCError({ code: "BAD_REQUEST", message: fin.aviso.replace('não foi cancelado (estorne manualmente se necessário)', 'estorne no Financeiro antes de desconsolidar') });
 
       // Reverte payroll_periods para vale_gerado
       await db.execute(sql`
@@ -6922,7 +7399,7 @@ Responda EXATAMENTE no formato JSON abaixo:`;
           AND status = 'consolidado'
       `);
 
-      return { success: true };
+      return { success: true, financeiro: fin };
     }),
 
   consolidarHE: protectedProcedure
@@ -6986,9 +7463,10 @@ Responda EXATAMENTE no formato JSON abaixo:`;
     }),
 
   consolidarPagamento: protectedProcedure
-    .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
+    .input(z.object({ companyId: z.number(), mesReferencia: z.string().regex(/^\d{4}-\d{2}$/) }))
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
+      await assertFolhaComplAccess(ctx, input.companyId); // Rev. 5038 — anti-IDOR
       await ensurePeriodExists(db, resolveCompanyIds(input), input.mesReferencia);
       const agora = new Date().toISOString().replace("T", " ").substring(0, 19);
       const quem = ctx.user?.name || "Sistema";
@@ -6998,21 +7476,29 @@ Responda EXATAMENTE no formato JSON abaixo:`;
             "pagamentoConsolidadoPor" = ${quem}
         WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
       `);
-      return { success: true };
+      // Rev. 5038 — consolidar = valor EXATO vira título no Contas a Pagar
+      const fin = await upsertTituloFolhaOficial(db, input.companyId, input.mesReferencia, 'pagamento', quem);
+      return { success: true, financeiro: fin };
     }),
 
   desconsolidarPagamento: protectedProcedure
-    .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
-    .mutation(async ({ input }) => {
+    .input(z.object({ companyId: z.number(), mesReferencia: z.string().regex(/^\d{4}-\d{2}$/) }))
+    .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
+      await assertFolhaComplAccess(ctx, input.companyId); // Rev. 5038 — anti-IDOR
       await ensurePeriodExists(db, resolveCompanyIds(input), input.mesReferencia);
+
+      // Rev. 5038 — título com baixa BLOQUEIA a desconsolidação. Cancela ANTES de reverter.
+      const fin = await cancelarTituloFolhaOficial(db, input.companyId, input.mesReferencia, 'pagamento');
+      if (fin.aviso) throw new TRPCError({ code: "BAD_REQUEST", message: fin.aviso.replace('não foi cancelado (estorne manualmente se necessário)', 'estorne no Financeiro antes de desconsolidar') });
+
       await db.execute(sql`
         UPDATE payroll_periods
         SET "pagamentoConsolidadoEm" = NULL,
             "pagamentoConsolidadoPor" = NULL
         WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
       `);
-      return { success: true };
+      return { success: true, financeiro: fin };
     }),
 
   gerarRemessaCnab: protectedProcedure
@@ -7021,6 +7507,9 @@ Responda EXATAMENTE no formato JSON abaixo:`;
       mesReferencia: z.string(),
       codigoBanco: z.string(),
       contaBancariaId: z.number().optional(),
+      // Rev. 5035 — 'vale' gera a remessa do adiantamento (payroll_advances);
+      // default 'folha' (payroll_payments) preserva o comportamento existente.
+      tipo: z.enum(['folha', 'vale']).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
@@ -7035,7 +7524,7 @@ Responda EXATAMENTE no formato JSON abaixo:`;
       }
 
       const companyRows = ((await db.execute(sql`
-        SELECT cnpj, "razaoSocial" FROM companies WHERE id = ${input.companyId} LIMIT 1
+        SELECT cnpj, "razaoSocial", endereco, cidade, estado, cep FROM companies WHERE id = ${input.companyId} LIMIT 1
       `)) as any).rows || [];
       if (!companyRows[0]) throw new TRPCError({ code: "NOT_FOUND", message: "Empresa não encontrada" });
       const company = companyRows[0];
@@ -7050,15 +7539,34 @@ Responda EXATAMENTE no formato JSON abaixo:`;
       if (!bankRows[0]) throw new TRPCError({ code: "NOT_FOUND", message: `Conta bancária da empresa não encontrada para o banco ${input.codigoBanco}. Configure uma conta bancária nas configurações.` });
       const bankAccount = bankRows[0];
 
-      const payRows = ((await db.execute(sql`
-        SELECT pp."salarioLiquido", pp."dataPagamentoPrevista",
-          e."nomeCompleto", e.cpf, e.banco, e.agencia, e.conta, e."tipoConta",
-          e."tipoChavePix", e."chavePix", e."contaBancariaEmpresaId"
-        FROM payroll_payments pp
-        LEFT JOIN employees e ON pp."employeeId" = e.id
-        WHERE pp."companyId" = ${input.companyId} AND pp."mesReferencia" = ${input.mesReferencia}
-        ORDER BY e."nomeCompleto"
-      `)) as any).rows || [];
+      // Rev. 5035 — fonte dos pagamentos: folha (payroll_payments) ou vale
+      // (payroll_advances). No vale, líquido = valorLiquidoVale (arredondado) com
+      // fallback no valorTotalVale; sem dataPagamento definida, usa a data de hoje.
+      const isVale = input.tipo === 'vale';
+      const payRows = isVale
+        ? (((await db.execute(sql`
+            SELECT pa."employeeId",
+              COALESCE(NULLIF(pa."valorLiquidoVale", ''), pa."valorTotalVale") AS "salarioLiquido",
+              COALESCE(pa."dataPagamento"::text, to_char(CURRENT_DATE, 'YYYY-MM-DD')) AS "dataPagamentoPrevista",
+              e."nomeCompleto", e.cpf, e.banco, e.agencia, e.conta, e."tipoConta",
+              e."tipoChavePix", e."chavePix", e."contaBancariaEmpresaId",
+              e.logradouro, e.numero, e.complemento, e.bairro, e.cidade, e.estado, e.cep
+            FROM payroll_advances pa
+            LEFT JOIN employees e ON pa."employeeId" = e.id
+            WHERE pa."companyId" = ${input.companyId} AND pa."mesReferencia" = ${input.mesReferencia}
+              AND pa.status <> 'rejeitado' AND pa.bloqueado = 0
+            ORDER BY e."nomeCompleto"
+          `)) as any).rows || [])
+        : (((await db.execute(sql`
+            SELECT pp."employeeId", pp."salarioLiquido", pp."dataPagamentoPrevista",
+              e."nomeCompleto", e.cpf, e.banco, e.agencia, e.conta, e."tipoConta",
+              e."tipoChavePix", e."chavePix", e."contaBancariaEmpresaId",
+              e.logradouro, e.numero, e.complemento, e.bairro, e.cidade, e.estado, e.cep
+            FROM payroll_payments pp
+            LEFT JOIN employees e ON pp."employeeId" = e.id
+            WHERE pp."companyId" = ${input.companyId} AND pp."mesReferencia" = ${input.mesReferencia}
+            ORDER BY e."nomeCompleto"
+          `)) as any).rows || []);
 
       const funcBancoCodigo = input.codigoBanco;
       const bankCodeMap: Record<string, string> = {
@@ -7085,6 +7593,106 @@ Responda EXATAMENTE no formato JSON abaixo:`;
 
       if (funcionariosFiltrados.length === 0) {
         throw new TRPCError({ code: "NOT_FOUND", message: `Nenhum funcionário vinculado a esta conta de pagamento para ${input.mesReferencia}.` });
+      }
+
+      // ── Rev. 5031 — CAIXA (104): leiaute próprio 080/041 ──────────────────────
+      // Favorecido = conta PESSOAL do funcionário (Segmento A) + CPF/endereço
+      // (Segmento B, obrigatório). NSA sequencial persistido em cnab_remessas.
+      if (input.codigoBanco === '104') {
+        const convenio = String(bankAccount.convenio || '').replace(/\D/g, '');
+        const problemas: string[] = [];
+        if (!convenio || convenio.length > 6) problemas.push(`Conta da empresa: convênio Caixa inválido ("${bankAccount.convenio || ''}" — deve ter até 6 dígitos, fornecido pela Caixa)`);
+        if (!bankAccount.cnab_codigo_compromisso) problemas.push('Conta da empresa: falta o Código do Compromisso (4 dígitos, fornecido pela Caixa) — configure na conta bancária');
+
+        // Código do banco do funcionário: usa código numérico se o cadastro tiver
+        // (ex.: "104", "341 - Itaú"), senão tenta pelo nome. Banco DESCONHECIDO é
+        // ERRO (nunca assumir Caixa — arquivo iria com roteamento errado).
+        const bankCodeOf = (banco: string): string => {
+          const m = String(banco || '').match(/\b(\d{3})\b/);
+          if (m) return m[1];
+          return matchBankCode(banco || '');
+        };
+        for (const r of funcionariosFiltrados) {
+          const faltas: string[] = [];
+          if (!String(r.cpf || '').replace(/\D/g, '')) faltas.push('CPF');
+          if (!String(r.agencia || '').trim()) faltas.push('agência');
+          if (!String(r.conta || '').trim()) faltas.push('conta');
+          if (bankCodeOf(r.banco) === '000') faltas.push(`banco não identificado ("${r.banco || 'vazio'}" — informe o código de 3 dígitos no cadastro, ex.: "104 - Caixa")`);
+          if (parseFloat(r.salarioLiquido || '0') <= 0) faltas.push('líquido zerado');
+          if (faltas.length) problemas.push(`${r.nomeCompleto || `Funcionário #${r.employeeId}`}: ${faltas.join(', ')}`);
+        }
+        if (problemas.length) {
+          throw new TRPCError({ code: "PRECONDITION_FAILED", message: `Dados incompletos para gerar a remessa Caixa:\n• ${problemas.slice(0, 15).join('\n• ')}${problemas.length > 15 ? `\n• ... e mais ${problemas.length - 15}` : ''}` });
+        }
+
+        // Endereço da empresa: companies.endereco é livre ("Rua X, 123 - Bairro").
+        const endRaw = String(company.endereco || '');
+        const endM = endRaw.match(/^(.*?)[,]\s*(\d+)\s*(.*)$/);
+        const ambiente: 'T' | 'P' = (bankAccount.cnab_ambiente === 'T') ? 'T' : 'P';
+
+        const caixaFuncs = funcionariosFiltrados.map((r: any) => ({
+          nome: r.nomeCompleto || '',
+          cpf: r.cpf || '',
+          codigoBanco: bankCodeOf(r.banco),
+          agencia: r.agencia || '',
+          conta: r.conta || '',
+          valorLiquido: parseFloat(r.salarioLiquido || '0'),
+          dataPagamento: r.dataPagamentoPrevista || '',
+          seuNumero: String(r.employeeId || 0),
+          logradouro: r.logradouro || '', numero: r.numero || '',
+          complemento: r.complemento || '', bairro: r.bairro || '',
+          cidade: r.cidade || '', cep: r.cep || '', uf: r.estado || '',
+        }));
+
+        // NSA: max já usado nesta conta + 1 (o manual exige evolução 1 em 1).
+        // Alocação ATÔMICA: advisory lock por conta dentro da transação evita que
+        // duas gerações simultâneas leiam o mesmo MAX e colidam no índice único.
+        const totalValorPrev = funcionariosFiltrados.reduce((s: number, r: any) => s + parseFloat(r.salarioLiquido || '0'), 0);
+        const alocado = await db.transaction(async (tx: any) => {
+          await tx.execute(sql`SELECT pg_advisory_xact_lock(478009, ${bankAccount.id})`);
+          const nsaRes = ((await tx.execute(sql`
+            SELECT COALESCE(MAX(nsa), 0) + 1 AS prox FROM cnab_remessas WHERE conta_bancaria_id = ${bankAccount.id}
+          `)) as any).rows || [];
+          const nsaTx = Number(nsaRes[0]?.prox || 1);
+          const nomeTx = `CNAB240_CAIXA_${isVale ? 'VALE_' : ''}${input.mesReferencia.replace('-', '')}_NSA${String(nsaTx).padStart(6, '0')}${(bankAccount.cnab_ambiente === 'T') ? '_TESTE' : ''}.rem`;
+          await tx.execute(sql`
+            INSERT INTO cnab_remessas (company_id, conta_bancaria_id, nsa, mes_referencia, nome_arquivo, total_funcionarios, total_valor, ambiente, gerado_por_id, gerado_por_nome)
+            VALUES (${input.companyId}, ${bankAccount.id}, ${nsaTx}, ${input.mesReferencia}, ${nomeTx}, ${funcionariosFiltrados.length}, ${totalValorPrev}, ${(bankAccount.cnab_ambiente === 'T') ? 'T' : 'P'}, ${ctx.user?.id ?? null}, ${ctx.user?.name ?? null})
+          `);
+          return { nsa: nsaTx, nomeArquivo: nomeTx };
+        });
+        const nsa = alocado.nsa;
+
+        const arquivoCaixa = gerarCnab240Caixa({
+          cnpj: company.cnpj || '',
+          razaoSocial: company.razaoSocial || '',
+          convenio,
+          parametroTransmissao: bankAccount.cnab_parametro_transmissao || '00',
+          ambiente,
+          tipoCompromisso: bankAccount.cnab_tipo_compromisso || '02',
+          codigoCompromisso: bankAccount.cnab_codigo_compromisso || '',
+          agencia: bankAccount.agencia || '',
+          conta: bankAccount.conta || '',
+          logradouro: endM ? endM[1] : endRaw,
+          numero: endM ? endM[2] : '',
+          complemento: endM ? endM[3] : '',
+          cidade: company.cidade || '',
+          cep: company.cep || '',
+          uf: company.estado || '',
+        }, caixaFuncs, nsa);
+
+        const totalValorCx = caixaFuncs.reduce((s, f) => s + f.valorLiquido, 0);
+        console.log(`[CNAB Caixa] Remessa gerada: empresa ${input.companyId}, ${input.mesReferencia}, NSA ${nsa}, ${caixaFuncs.length} func., R$${totalValorCx.toFixed(2)} (${ambiente}) por ${ctx.user?.name ?? ctx.user?.id}`);
+
+        return {
+          arquivo: arquivoCaixa,
+          nomeArquivo: alocado.nomeArquivo,
+          totalFuncionarios: caixaFuncs.length,
+          totalValor: totalValorCx,
+          banco: 'Caixa',
+          nsa,
+          ambiente,
+        };
       }
 
       // Favorecido = conta da empresa para pagamento (conta salário). O banco
@@ -7119,10 +7727,144 @@ Responda EXATAMENTE no formato JSON abaixo:`;
 
       return {
         arquivo,
-        nomeArquivo: `REMESSA_${bancoNome.toUpperCase()}_${input.mesReferencia.replace('-', '')}.rem`,
+        nomeArquivo: `REMESSA_${isVale ? 'VALE_' : ''}${bancoNome.toUpperCase()}_${input.mesReferencia.replace('-', '')}.rem`,
         totalFuncionarios: cnabFuncionarios.length,
         totalValor,
         banco: bancoNome,
+      };
+    }),
+
+  // ── Rev. 5034 — Poka-yoke da remessa CNAB: conferência prévia (dry-run) ─────
+  // NÃO gera arquivo, NÃO consome NSA. Devolve checklist: configuração da conta,
+  // pendências por funcionário e alerta de remessa já gerada no mesmo mês (evita
+  // envio duplicado ao banco por engano).
+  conferirRemessaCnab: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      mesReferencia: z.string(),
+      codigoBanco: z.string(),
+      contaBancariaId: z.number().optional(),
+      // Rev. 5035 — 'vale' confere a remessa do adiantamento (payroll_advances)
+      tipo: z.enum(['folha', 'vale']).optional(),
+    }))
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const empresasPermitidas = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!empresasPermitidas.some((c: any) => c.id === input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa" });
+      }
+
+      let bankAccountFilter = sql`"companyId" = ${input.companyId} AND "codigoBanco" = ${input.codigoBanco} AND ativo = 1 AND "deletedAt" IS NULL`;
+      if (input.contaBancariaId) {
+        bankAccountFilter = sql`id = ${input.contaBancariaId} AND "companyId" = ${input.companyId} AND ativo = 1 AND "deletedAt" IS NULL`;
+      }
+      const bankRows = ((await db.execute(sql`
+        SELECT * FROM company_bank_accounts WHERE ${bankAccountFilter} LIMIT 1
+      `)) as any).rows || [];
+      const bankAccount = bankRows[0] || null;
+
+      const bloqueios: string[] = [];
+      const avisos: string[] = [];
+      if (!bankAccount) bloqueios.push(`Conta bancária da empresa não encontrada para o banco ${input.codigoBanco}.`);
+
+      // Configuração específica da Caixa (leiaute 080/041)
+      if (bankAccount && input.codigoBanco === '104') {
+        const convenio = String(bankAccount.convenio || '').replace(/\D/g, '');
+        if (!convenio || convenio.length > 6) bloqueios.push(`Convênio Caixa inválido ("${bankAccount.convenio || 'vazio'}") — deve ter até 6 dígitos, fornecido pela Caixa.`);
+        if (!bankAccount.cnab_codigo_compromisso) bloqueios.push('Falta o Código do Compromisso (4 dígitos) no cadastro da conta.');
+        if (!String(bankAccount.agencia || '').trim() || !String(bankAccount.conta || '').trim()) bloqueios.push('Conta da empresa sem agência/conta preenchidas.');
+        if (bankAccount.cnab_ambiente === 'T') avisos.push('Conta configurada em ambiente de TESTE (T) — o banco não efetiva pagamentos deste arquivo.');
+      }
+
+      const isVale = input.tipo === 'vale';
+      const payRows = isVale
+        ? (((await db.execute(sql`
+            SELECT pa."employeeId",
+              COALESCE(NULLIF(pa."valorLiquidoVale", ''), pa."valorTotalVale") AS "salarioLiquido",
+              pa."dataPagamento"::text AS "dataPagamentoPrevista",
+              e."nomeCompleto", e.cpf, e.banco, e.agencia, e.conta, e."contaBancariaEmpresaId"
+            FROM payroll_advances pa
+            LEFT JOIN employees e ON pa."employeeId" = e.id
+            WHERE pa."companyId" = ${input.companyId} AND pa."mesReferencia" = ${input.mesReferencia}
+              AND pa.status <> 'rejeitado' AND pa.bloqueado = 0
+            ORDER BY e."nomeCompleto"
+          `)) as any).rows || [])
+        : (((await db.execute(sql`
+            SELECT pp."employeeId", pp."salarioLiquido", pp."dataPagamentoPrevista",
+              e."nomeCompleto", e.cpf, e.banco, e.agencia, e.conta, e."contaBancariaEmpresaId"
+            FROM payroll_payments pp
+            LEFT JOIN employees e ON pp."employeeId" = e.id
+            WHERE pp."companyId" = ${input.companyId} AND pp."mesReferencia" = ${input.mesReferencia}
+            ORDER BY e."nomeCompleto"
+          `)) as any).rows || []);
+
+      const bankCodeMap: Record<string, string> = {
+        'caixa': '104', 'santander': '033', 'bradesco': '237',
+        'itau': '341', 'itaú': '341', 'banco do brasil': '001',
+        'c6': '336', 'nubank': '260', 'inter': '077',
+      };
+      const bankCodeOf = (banco: string): string => {
+        const m = String(banco || '').match(/\b(\d{3})\b/);
+        if (m) return m[1];
+        const lower = (banco || '').toLowerCase();
+        for (const [key, code] of Object.entries(bankCodeMap)) if (lower.includes(key)) return code;
+        return '000';
+      };
+      const funcionarios = input.contaBancariaId
+        ? payRows.filter((r: any) => Number(r.contaBancariaEmpresaId) === input.contaBancariaId)
+        : payRows.filter((r: any) => bankCodeOf(r.banco || '') === input.codigoBanco);
+
+      if (funcionarios.length === 0) bloqueios.push(`Nenhum funcionário vinculado a esta conta de pagamento em ${input.mesReferencia}.`);
+      for (const r of funcionarios) {
+        const faltas: string[] = [];
+        if (!String(r.cpf || '').replace(/\D/g, '')) faltas.push('CPF');
+        if (input.codigoBanco === '104') {
+          if (!String(r.agencia || '').trim()) faltas.push('agência');
+          if (!String(r.conta || '').trim()) faltas.push('conta');
+          if (bankCodeOf(r.banco) === '000') faltas.push(`banco não identificado ("${r.banco || 'vazio'}")`);
+        }
+        if (parseFloat(r.salarioLiquido || '0') <= 0) faltas.push('líquido zerado');
+        // Vale sem data de pagamento não bloqueia: a geração usa a data de hoje.
+        if (!r.dataPagamentoPrevista && !isVale) faltas.push('sem data de pagamento prevista');
+        if (faltas.length) bloqueios.push(`${r.nomeCompleto || `Funcionário #${r.employeeId}`}: ${faltas.join(', ')}`);
+      }
+      if (isVale && funcionarios.some((r: any) => !r.dataPagamentoPrevista)) {
+        avisos.push('Vales sem data de pagamento definida: o arquivo usará a data de HOJE como data de pagamento.');
+      }
+
+      // Duplicidade: já existe remessa gerada para esta conta neste mês?
+      let remessasAnteriores: any[] = [];
+      if (bankAccount) {
+        try {
+          // O nome do arquivo carrega o marcador VALE_ — usado p/ separar remessas
+          // de vale das de folha na checagem de duplicidade (mesma conta+mês).
+          remessasAnteriores = ((await db.execute(sql`
+            SELECT nsa, nome_arquivo, total_funcionarios, total_valor, ambiente, gerado_por_nome, created_at AS criado_em
+            FROM cnab_remessas
+            WHERE conta_bancaria_id = ${bankAccount.id} AND mes_referencia = ${input.mesReferencia}
+              AND ${isVale ? sql`nome_arquivo LIKE '%VALE_%'` : sql`nome_arquivo NOT LIKE '%VALE_%'`}
+            ORDER BY nsa DESC LIMIT 5
+          `)) as any).rows || [];
+        } catch { /* tabela só existe p/ Caixa; outros bancos não rastreiam NSA */ }
+        for (const rem of remessasAnteriores) {
+          avisos.push(`Já foi gerada a remessa ${isVale ? 'de VALE ' : ''}NSA ${rem.nsa} deste mês (${rem.total_funcionarios} func., R$ ${Number(rem.total_valor).toFixed(2)}${rem.gerado_por_nome ? `, por ${rem.gerado_por_nome}` : ''}). Gerar de novo cria um NOVO arquivo — não envie os dois ao banco.`);
+        }
+      }
+
+      const totalValor = funcionarios.reduce((s: number, r: any) => s + parseFloat(r.salarioLiquido || '0'), 0);
+      return {
+        podeGerar: bloqueios.length === 0,
+        bloqueios,
+        avisos,
+        totalFuncionarios: funcionarios.length,
+        totalValor,
+        banco: bankAccount?.banco || `Banco ${input.codigoBanco}`,
+        agencia: bankAccount?.agencia || '',
+        conta: bankAccount?.conta || '',
+        convenio: bankAccount?.convenio || null,
+        ambiente: bankAccount?.cnab_ambiente === 'T' ? 'T' : 'P',
+        remessasAnteriores: remessasAnteriores.map((r: any) => ({ nsa: r.nsa, arquivo: r.nome_arquivo, em: r.criado_em, por: r.gerado_por_nome })),
       };
     }),
 
@@ -7404,6 +8146,11 @@ Responda EXATAMENTE no formato JSON abaixo:`;
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
       await assertFolhaComplAccess(ctx, input.companyId);
+      // Poka-Yoke (pedido do user): todo ajuste manual exige descrição do que
+      // está sendo considerado no cálculo (ex.: complemento + valor de férias).
+      if (input.valor !== null && !(input.motivo || '').trim()) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Descreva nas observações o que está sendo considerado no cálculo" });
+      }
       // Poka-Yoke: só funcionário da própria empresa
       const chk = ((await db.execute(sql`
         SELECT id FROM employees WHERE id = ${input.employeeId} AND "companyId" = ${input.companyId} AND "deletedAt" IS NULL
@@ -7427,15 +8174,22 @@ Responda EXATAMENTE no formato JSON abaixo:`;
     }),
 
   folhaComplementarGerarTitulo: protectedProcedure
-    .input(z.object({ companyId: z.number(), mesReferencia: z.string().regex(/^\d{4}-\d{2}$/), dataVencimento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }))
+    .input(z.object({
+      companyId: z.number(), mesReferencia: z.string().regex(/^\d{4}-\d{2}$/), dataVencimento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      // Rev. 5036 — 'vale' = % de adiantamento; 'pagamento' = restante;
+      // 'integral' (default, compat) = valor cheio num título só.
+      parcela: z.enum(['integral', 'vale', 'pagamento']).optional(),
+    }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
       await assertFolhaComplAccess(ctx, input.companyId);
       const calc = await calcularFolhaComplementar(db, input.companyId, input.mesReferencia);
-      if (calc.total <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Total da folha complementar é zero — nada a lançar." });
+      const parcela = input.parcela || 'integral';
+      const valorTitulo = parcela === 'vale' ? calc.totalVale : parcela === 'pagamento' ? calc.totalPagamento : calc.total;
+      if (valorTitulo <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Valor da parcela da folha complementar é zero — nada a lançar." });
       const [ano, mes] = input.mesReferencia.split('-');
-      const desc = `Folha Complementar ${mes}/${ano}`;
+      const desc = parcela === 'vale' ? `Vale Complementar ${mes}/${ano}` : `Folha Complementar ${mes}/${ano}`;
       // Dedup: 1 título ativo por competência (título com baixa/cancelado não conta)
       const exist = ((await db.execute(sql`
         SELECT id, status, valor_previsto FROM financial_entries
@@ -7447,12 +8201,12 @@ Responda EXATAMENTE no formato JSON abaixo:`;
         if (exist[0].status === 'a_pagar') {
           await db.execute(sql`
             UPDATE financial_entries
-            SET valor_previsto = ${calc.total.toFixed(2)}, data_vencimento = ${input.dataVencimento}, updated_at = NOW()
+            SET valor_previsto = ${valorTitulo.toFixed(2)}, data_vencimento = ${input.dataVencimento}, updated_at = NOW()
             WHERE id = ${exist[0].id} AND company_id = ${input.companyId} AND status = 'a_pagar'
           `);
-          return { ok: true, entryId: Number(exist[0].id), atualizado: true, valor: calc.total };
+          return { ok: true, entryId: Number(exist[0].id), atualizado: true, valor: valorTitulo };
         }
-        throw new TRPCError({ code: "BAD_REQUEST", message: `Já existe título da Folha Complementar ${mes}/${ano} com baixa — estorne no Financeiro antes de regerar.` });
+        throw new TRPCError({ code: "BAD_REQUEST", message: `Já existe título "${desc}" com baixa — estorne no Financeiro antes de regerar.` });
       }
       const compet = `${ano}-${mes}-01`;
       const res: any = await db.execute(sql`
@@ -7461,8 +8215,8 @@ Responda EXATAMENTE no formato JSON abaixo:`;
           valor_previsto, data_competencia, data_vencimento, status,
           origem_modulo, origem_id, origem_descricao, descricao, created_at, updated_at
         ) VALUES (
-          ${input.companyId}, 'FOLHA COMPLEMENTAR', 'despesa', 'fixa',
-          ${calc.total.toFixed(2)}, ${compet}, ${input.dataVencimento}, 'a_pagar',
+          ${input.companyId}, ${parcela === 'vale' ? 'VALE COMPLEMENTAR' : 'FOLHA COMPLEMENTAR'}, 'despesa', 'fixa',
+          ${valorTitulo.toFixed(2)}, ${compet}, ${input.dataVencimento}, 'a_pagar',
           'folha_complementar', ${calc.periodId || null}, ${desc},
           ${desc + ` — ${calc.funcionarios.length} colaborador(es)`}, NOW(), NOW()
         )
@@ -7474,10 +8228,142 @@ Responda EXATAMENTE no formato JSON abaixo:`;
       const newId = Number((Array.isArray(res) ? res[0] : res?.rows?.[0])?.id) || null;
       if (!newId) throw new TRPCError({ code: "CONFLICT", message: "Título desta competência já foi gerado por outra requisição — recarregue a tela." });
       const userName = (ctx as any)?.user?.name || 'Sistema';
-      console.log(`[FolhaComplementar] ${desc}: título #${newId} de R$ ${calc.total.toFixed(2)} gerado por ${userName}`);
-      return { ok: true, entryId: newId, atualizado: false, valor: calc.total };
+      console.log(`[FolhaComplementar] ${desc}: título #${newId} de R$ ${valorTitulo.toFixed(2)} gerado por ${userName}`);
+      return { ok: true, entryId: newId, atualizado: false, valor: valorTitulo };
     }),
 });
+
+// ============================================================
+// Rev. 5038 — Integração Folha OFICIAL ↔ Financeiro
+// Regra do usuário: o valor EXATO só vira título quando a parcela é
+// CONSOLIDADA (consolidarVale / consolidarPagamento). Antes disso, o
+// Financeiro mostra apenas a PREVISÃO (payrollProjectionBridge, origem
+// folha_prevista_*, baseada sempre na folha anterior).
+// Valores monetários em payroll_* são VARCHAR de formato misto → fc_money().
+// ============================================================
+// Recuo p/ dia útil (sáb/dom → sexta), mesma regra da projeção.
+function diaUtilOuAnterior(ano: number, mes1a12: number, dia: number): string {
+  const d = new Date(Date.UTC(ano, mes1a12 - 1, dia));
+  const dow = d.getUTCDay();
+  if (dow === 0) d.setUTCDate(d.getUTCDate() - 2);
+  else if (dow === 6) d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+async function upsertTituloFolhaOficial(
+  db: any, companyId: number, mesReferencia: string, parcela: 'vale' | 'pagamento', userName: string,
+): Promise<{ entryId: number | null; valor: number; aviso?: string }> {
+  const [ano, mes] = mesReferencia.split('-');
+  const isVale = parcela === 'vale';
+
+  const totRes: any = await db.execute(isVale ? sql`
+    SELECT COALESCE(SUM(fc_money("valorLiquidoVale")),0) AS total, COUNT(*) AS qtd
+    FROM payroll_advances
+    WHERE "companyId" = ${companyId} AND "mesReferencia" = ${mesReferencia}
+      AND status <> 'rejeitado' AND COALESCE(bloqueado,0) = 0
+  ` : sql`
+    SELECT COALESCE(SUM(fc_money("salarioLiquido")),0) AS total, COUNT(*) AS qtd
+    FROM payroll_payments
+    WHERE "companyId" = ${companyId} AND "mesReferencia" = ${mesReferencia}
+      AND status <> 'cancelado'
+  `);
+  const tot = (totRes?.rows ?? totRes)?.[0] || {};
+  const valor = Number(tot.total) || 0;
+  const qtd = Number(tot.qtd) || 0;
+  if (valor <= 0) return { entryId: null, valor: 0, aviso: 'Sem valores calculados nesta competência — nenhum título gerado.' };
+
+  const desc = isVale ? `Vale Folha ${mes}/${ano}` : `Folha de Pagamento ${mes}/${ano}`;
+  const contaNome = isVale ? 'FOLHA DE PAGAMENTO — VALE' : 'FOLHA DE PAGAMENTO';
+  // Vencimento pelos critérios da empresa (folha_dia_vale / folha_dia_pagamento),
+  // recuando p/ dia útil: vale no mês da competência, pagamento no mês seguinte.
+  const crit = await getPayrollCriteria(db, companyId);
+  let venc: string;
+  if (isVale) venc = diaUtilOuAnterior(Number(ano), Number(mes), crit.diaAdiantamento || 20);
+  else {
+    const next = new Date(Date.UTC(Number(ano), Number(mes), 1)); // mês seguinte
+    venc = diaUtilOuAnterior(next.getUTCFullYear(), next.getUTCMonth() + 1, crit.diaPagamento || 5);
+  }
+  const origemId = parseInt(`${ano}${mes}`, 10) * 100 + (isVale ? 8 : 9);
+
+  // Remove a PREVISÃO desta parcela/competência (ela é substituída pelo exato)
+  await db.execute(sql`
+    DELETE FROM financial_entries
+    WHERE company_id = ${companyId} AND status = 'previsto'
+      AND origem_modulo = ${isVale ? 'folha_prevista_vale' : 'folha_prevista_pagamento'}
+      AND TO_CHAR(data_competencia,'YYYY-MM') = ${mesReferencia}
+  `);
+  // Pagamento consolidado também substitui a projeção genérica de folha do mês
+  if (!isVale) {
+    await db.execute(sql`
+      DELETE FROM financial_entries
+      WHERE company_id = ${companyId} AND status = 'previsto'
+        AND origem_modulo = 'folha_projetada'
+        AND TO_CHAR(data_competencia,'YYYY-MM') = ${mesReferencia}
+    `);
+  }
+
+  // Dedup: 1 título ativo por competência+parcela (mesmo padrão da Complementar)
+  const exist = ((await db.execute(sql`
+    SELECT id, status FROM financial_entries
+    WHERE company_id = ${companyId} AND origem_modulo = 'folha_oficial'
+      AND origem_descricao = ${desc} AND status <> 'cancelado'
+    LIMIT 1
+  `)) as any).rows || [];
+  if (exist.length) {
+    if (exist[0].status === 'a_pagar') {
+      await db.execute(sql`
+        UPDATE financial_entries
+        SET valor_previsto = ${valor.toFixed(2)}, data_vencimento = ${venc}, updated_at = NOW()
+        WHERE id = ${exist[0].id} AND company_id = ${companyId} AND status = 'a_pagar'
+      `);
+      console.log(`[FolhaOficial] ${desc}: título #${exist[0].id} atualizado p/ R$ ${valor.toFixed(2)} por ${userName}`);
+      return { entryId: Number(exist[0].id), valor };
+    }
+    return { entryId: Number(exist[0].id), valor, aviso: `Título "${desc}" já tem baixa no Financeiro — valor não foi alterado (estorne antes de reconsolidar).` };
+  }
+  const res: any = await db.execute(sql`
+    INSERT INTO financial_entries (
+      company_id, conta_nome, tipo, natureza,
+      valor_previsto, data_competencia, data_vencimento, status,
+      origem_modulo, origem_id, origem_descricao, descricao, created_at, updated_at
+    ) VALUES (
+      ${companyId}, ${contaNome}, 'despesa', 'fixa',
+      ${valor.toFixed(2)}, ${`${ano}-${mes}-01`}, ${venc}, 'a_pagar',
+      'folha_oficial', ${origemId}, ${desc},
+      ${desc + ` — ${qtd} colaborador(es)`}, NOW(), NOW()
+    )
+    ON CONFLICT DO NOTHING
+    RETURNING id
+  `);
+  // Dedup atômico via índice único parcial uq_fin_entries_folha_oficial
+  // (company_id, origem_descricao WHERE origem_modulo='folha_oficial' AND status<>'cancelado').
+  const newId = Number((Array.isArray(res) ? res[0] : res?.rows?.[0])?.id) || null;
+  if (!newId) return { entryId: null, valor, aviso: 'Título desta competência acabou de ser gerado por outra requisição.' };
+  console.log(`[FolhaOficial] ${desc}: título #${newId} de R$ ${valor.toFixed(2)} gerado por ${userName}`);
+  return { entryId: newId, valor };
+}
+
+async function cancelarTituloFolhaOficial(
+  db: any, companyId: number, mesReferencia: string, parcela: 'vale' | 'pagamento',
+): Promise<{ cancelado: boolean; aviso?: string }> {
+  const [ano, mes] = mesReferencia.split('-');
+  const desc = parcela === 'vale' ? `Vale Folha ${mes}/${ano}` : `Folha de Pagamento ${mes}/${ano}`;
+  const exist = ((await db.execute(sql`
+    SELECT id, status FROM financial_entries
+    WHERE company_id = ${companyId} AND origem_modulo = 'folha_oficial'
+      AND origem_descricao = ${desc} AND status <> 'cancelado'
+    LIMIT 1
+  `)) as any).rows || [];
+  if (!exist.length) return { cancelado: false };
+  if (exist[0].status !== 'a_pagar') {
+    return { cancelado: false, aviso: `Título "${desc}" já tem baixa no Financeiro — não foi cancelado (estorne manualmente se necessário).` };
+  }
+  await db.execute(sql`
+    UPDATE financial_entries SET status = 'cancelado', updated_at = NOW()
+    WHERE id = ${exist[0].id} AND company_id = ${companyId} AND status = 'a_pagar'
+  `);
+  return { cancelado: true };
+}
 
 // Rev. 4895 — Guard de tenant da Folha Complementar (anti-IDOR): o usuário
 // precisa ter acesso à empresa (admin/admin_master = global via getCompaniesForUser).
@@ -7557,6 +8443,21 @@ async function calcularFolhaComplementar(db: any, companyId: number, mesReferenc
   }
   total = Math.round(total * 100) / 100;
 
+  // Rev. 5036 — split vale/pagamento do complemento, espelhando a folha oficial:
+  // vale = % de adiantamento da empresa (padrão 40%) sobre o valor final do mês;
+  // pagamento = restante. Assim o financeiro enxerga o valor TODO nos 2 momentos.
+  // Rev. 5037 — split fixo 50/50 (decisão do user): metade no vale, metade no pagamento.
+  const pctVale = 50;
+  let totalVale = 0;
+  for (const f of funcionarios) {
+    if (f.excluido) { f.valorVale = 0; f.valorPagamento = 0; continue; }
+    f.valorVale = Math.round(f.valorFinal * pctVale) / 100; // valorFinal * pct/100, arredondado a centavos
+    f.valorPagamento = Math.round((f.valorFinal - f.valorVale) * 100) / 100;
+    totalVale += f.valorVale;
+  }
+  totalVale = Math.round(totalVale * 100) / 100;
+  const totalPagamento = Math.round((total - totalVale) * 100) / 100;
+
   const perRows = ((await db.execute(sql`
     SELECT id FROM payroll_periods WHERE "companyId" = ${companyId} AND "mesReferencia" = ${mesReferencia} LIMIT 1
   `)) as any).rows || [];
@@ -7569,8 +8470,17 @@ async function calcularFolhaComplementar(db: any, companyId: number, mesReferenc
       AND origem_descricao = ${`Folha Complementar ${mesT}/${anoT}`} AND status <> 'cancelado'
     LIMIT 1
   `)) as any).rows || [];
+  const tituloValeRows = ((await db.execute(sql`
+    SELECT id, status, valor_previsto, data_vencimento FROM financial_entries
+    WHERE company_id = ${companyId} AND origem_modulo = 'folha_complementar'
+      AND origem_descricao = ${`Vale Complementar ${mesT}/${anoT}`} AND status <> 'cancelado'
+    LIMIT 1
+  `)) as any).rows || [];
 
-  return { funcionarios, total, periodId, titulo: tituloRows[0] || null, diasNoMes };
+  return {
+    funcionarios, total, periodId, titulo: tituloRows[0] || null, diasNoMes,
+    pctVale, totalVale, totalPagamento, tituloVale: tituloValeRows[0] || null,
+  };
 }
 // ============================================================
 // HELPER FUNCTIONS

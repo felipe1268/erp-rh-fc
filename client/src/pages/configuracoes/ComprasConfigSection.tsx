@@ -138,7 +138,7 @@ export function ComprasConfigSection() {
         )}
       </div>
 
-      {/* Sub-seção: Comissão de Compradores */}
+      {/* Sub-seção: Prêmio de Compradores */}
       <div className="border-b border-rose-100">
         <button
           onClick={() => setExpanded(expanded === "comissao" ? null : "comissao")}
@@ -146,7 +146,7 @@ export function ComprasConfigSection() {
         >
           <div className="flex items-center gap-3">
             <Percent className="w-4 h-4 text-rose-500" />
-            <span className="font-medium text-gray-800 text-sm">Comissão de Compradores</span>
+            <span className="font-medium text-gray-800 text-sm">Prêmio de Compradores</span>
             <span className="px-2 py-0.5 bg-rose-100 text-rose-700 rounded text-xs font-mono">
               {comissaoPercentual}%
             </span>
@@ -157,7 +157,7 @@ export function ComprasConfigSection() {
         {expanded === "comissao" && (
           <div className="px-4 pb-4 bg-white space-y-4">
             <p className="text-xs text-gray-500">
-              Percentual da economia (diferença entre orçamento e valor negociado) que será creditado como comissão ao comprador responsável pela negociação.
+              Percentual da economia (diferença entre orçamento e valor negociado) que será creditado como prêmio (gratificação) ao comprador responsável pela negociação.
             </p>
             <div className="flex items-end gap-4">
               <div className="w-40">
@@ -178,7 +178,7 @@ export function ComprasConfigSection() {
                 <p>Negociado: R$ 8.500,00</p>
                 <p>Economia: R$ 1.500,00</p>
                 <p className="font-bold text-rose-700 mt-1">
-                  Comissão ({comissaoPercentual}%): R$ {(1500 * parseFloat(comissaoPercentual || "0") / 100).toFixed(2)}
+                  Prêmio ({comissaoPercentual}%): R$ {(1500 * parseFloat(comissaoPercentual || "0") / 100).toFixed(2)}
                 </p>
               </div>
             </div>

@@ -4,6 +4,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { trpc } from "@/lib/trpc";
 import DashboardLayout from "@/components/DashboardLayout";
 import FullScreenDialog from "@/components/FullScreenDialog";
+import { PersonPhoto } from "@/components/PersonPhoto";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -151,6 +152,22 @@ export default function LancamentosParceiros() {
     { companyId: companyId ?? 0 },
     { enabled: !!companyId }
   );
+  const parceirosPorId = useMemo(
+    () => new Map((parceiros as any[]).map((parceiro: any) => [Number(parceiro.id), parceiro])),
+    [parceiros]
+  );
+  const colaboradoresPorId = useMemo(
+    () => new Map((colaboradores as any[]).map((colaborador: any) => [Number(colaborador.id), colaborador])),
+    [colaboradores]
+  );
+  const getParceiroNome = (id: number) => {
+    const p: any = parceirosPorId.get(Number(id));
+    return p ? p.nomeFantasia || p.razaoSocial : "—";
+  };
+  const getColaboradorNome = (id: number) => {
+    const c: any = colaboradoresPorId.get(Number(id));
+    return c ? c.nomeCompleto || c.nome : "—";
+  };
   const createMut = trpc.parceiros.lancamentos.create.useMutation({
     onError: (e) => toast.error(`Erro ao registrar: ${e.message}`),
   });
@@ -262,16 +279,6 @@ export default function LancamentosParceiros() {
       reader.readAsDataURL(file);
     };
     input.click();
-  };
-
-  const getParceiroNome = (id: number) => {
-    const p = parceiros.find((p: any) => p.id === id);
-    return p ? (p as any).nomeFantasia || (p as any).razaoSocial : "—";
-  };
-
-  const getColaboradorNome = (id: number) => {
-    const c = colaboradores.find((c: any) => c.id === id);
-    return c ? ((c as any).nomeCompleto || (c as any).nome) : "—";
   };
 
   const statusBadge = (status: string) => {
@@ -483,63 +490,76 @@ export default function LancamentosParceiros() {
               <p>Nenhum lançamento encontrado</p>
             </div>
           ) : (
-            filtered.map((l: any) => (
-              <div
-                key={l.id}
-                className="bg-card rounded-xl border p-4 hover:border-purple-300 hover:shadow-sm cursor-pointer transition"
-                onClick={() => setEditLanc({ ...l, valor: moedaBRFromDb(l.valor) })}
-                title="Clique para editar / excluir este lançamento"
-              >
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="font-semibold text-foreground">{getColaboradorNome(l.employeeId)}</h3>
-                      {statusBadge(l.status)}
-                      {!l.comprovanteUrl && (
-                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-700 border border-red-200">
-                          <AlertTriangle className="h-3 w-3" /> Sem comprovante
-                        </span>
+            filtered.map((l: any) => {
+              const colaborador: any = colaboradoresPorId.get(Number(l.employeeId));
+              const colaboradorNome = getColaboradorNome(l.employeeId);
+              return (
+                <div
+                  key={l.id}
+                  className="bg-card rounded-xl border p-4 hover:border-purple-300 hover:shadow-sm cursor-pointer transition"
+                  onClick={() => setEditLanc({ ...l, valor: moedaBRFromDb(l.valor) })}
+                  title="Clique para editar / excluir este lançamento"
+                >
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                    <div className="flex items-start gap-3 flex-1 min-w-0 w-full sm:w-auto">
+                      <PersonPhoto
+                        src={colaborador?.fotoUrl ?? colaborador?.foto_url ?? null}
+                        alt={colaboradorNome}
+                        size="md"
+                        clickable={false}
+                        showZoomHint={false}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="font-semibold text-foreground">{colaboradorNome}</h3>
+                          {statusBadge(l.status)}
+                          {!l.comprovanteUrl && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-700 border border-red-200">
+                              <AlertTriangle className="h-3 w-3" /> Sem comprovante
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap gap-3 mt-1 text-xs text-muted-foreground">
+                          <span className="flex items-center gap-0.5"><Store className="h-3 w-3" />{getParceiroNome(l.parceiroConveniadoId)}</span>
+                          <span>Data: {l.dataCompra ? new Date(l.dataCompra).toLocaleDateString("pt-BR") : "—"}</span>
+                          <span className="font-semibold text-foreground">{fmtBRL(l.valor)}</span>
+                        </div>
+                        {l.descricaoItens && <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{l.descricaoItens}</p>}
+                      </div>
+                    </div>
+                    <div className="flex gap-2 flex-wrap" onClick={(e) => e.stopPropagation()}>
+                      {l.comprovanteUrl && (
+                        <a href={l.comprovanteUrl} target="_blank" rel="noreferrer">
+                          <Button size="sm" variant="outline"><FileText className="h-3.5 w-3.5 mr-1" /> Ver</Button>
+                        </a>
+                      )}
+                      <Button size="sm" variant="outline" onClick={() => handleUpload(l.id)}>
+                        <Upload className="h-3.5 w-3.5 mr-1" /> Comprovante
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => setEditLanc({ ...l, valor: moedaBRFromDb(l.valor) })}>
+                        <Pencil className="h-3.5 w-3.5 mr-1" /> Editar
+                      </Button>
+                      <Button size="sm" variant="outline" className="text-red-600 hover:bg-red-50" onClick={() => setConfirmDel(l)}>
+                        <Trash2 className="h-3.5 w-3.5 mr-1" /> Excluir
+                      </Button>
+                      {l.status === "pendente" && (
+                        <>
+                          <Button size="sm" className="bg-emerald-500 hover:bg-emerald-600 text-white" onClick={() => aprovarMut.mutate({ id: l.id, aprovado: true })}>
+                            <CheckCircle className="h-3.5 w-3.5 mr-1" /> Aprovar
+                          </Button>
+                          <Button size="sm" variant="outline" className="text-red-600 hover:bg-red-50" onClick={() => {
+                            const motivo = prompt("Motivo da rejeição:");
+                            if (motivo) aprovarMut.mutate({ id: l.id, aprovado: false, motivoRejeicao: motivo });
+                          }}>
+                            <XCircle className="h-3.5 w-3.5 mr-1" /> Rejeitar
+                          </Button>
+                        </>
                       )}
                     </div>
-                    <div className="flex flex-wrap gap-3 mt-1 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-0.5"><Store className="h-3 w-3" />{getParceiroNome(l.parceiroConveniadoId)}</span>
-                      <span>Data: {l.dataCompra ? new Date(l.dataCompra).toLocaleDateString("pt-BR") : "—"}</span>
-                      <span className="font-semibold text-foreground">{fmtBRL(l.valor)}</span>
-                    </div>
-                    {l.descricaoItens && <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{l.descricaoItens}</p>}
-                  </div>
-                  <div className="flex gap-2 flex-wrap" onClick={(e) => e.stopPropagation()}>
-                    {l.comprovanteUrl && (
-                      <a href={l.comprovanteUrl} target="_blank" rel="noreferrer">
-                        <Button size="sm" variant="outline"><FileText className="h-3.5 w-3.5 mr-1" /> Ver</Button>
-                      </a>
-                    )}
-                    <Button size="sm" variant="outline" onClick={() => handleUpload(l.id)}>
-                      <Upload className="h-3.5 w-3.5 mr-1" /> Comprovante
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => setEditLanc({ ...l, valor: moedaBRFromDb(l.valor) })}>
-                      <Pencil className="h-3.5 w-3.5 mr-1" /> Editar
-                    </Button>
-                    <Button size="sm" variant="outline" className="text-red-600 hover:bg-red-50" onClick={() => setConfirmDel(l)}>
-                      <Trash2 className="h-3.5 w-3.5 mr-1" /> Excluir
-                    </Button>
-                    {l.status === "pendente" && (
-                      <>
-                        <Button size="sm" className="bg-emerald-500 hover:bg-emerald-600 text-white" onClick={() => aprovarMut.mutate({ id: l.id, aprovado: true })}>
-                          <CheckCircle className="h-3.5 w-3.5 mr-1" /> Aprovar
-                        </Button>
-                        <Button size="sm" variant="outline" className="text-red-600 hover:bg-red-50" onClick={() => {
-                          const motivo = prompt("Motivo da rejeição:");
-                          if (motivo) aprovarMut.mutate({ id: l.id, aprovado: false, motivoRejeicao: motivo });
-                        }}>
-                          <XCircle className="h-3.5 w-3.5 mr-1" /> Rejeitar
-                        </Button>
-                      </>
-                    )}
                   </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>

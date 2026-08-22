@@ -1441,7 +1441,8 @@ export const chequesRouter = router({
                 data_compensacao = COALESCE(f.data_compensacao, v.dt),
                 updated_at = NOW()
            FROM (VALUES ${valuesSql}) AS v(id, dt)
-          WHERE f.id = v.id AND f.company_id=$${n} AND COALESCE(f.conciliado,0)<>1
+          WHERE f.id = v.id AND f.company_id=$${n}
+            AND f.status='compensado' AND COALESCE(f.conciliado,0)<>1
           RETURNING f.id`,
         flat);
       conferidos += (upd.rows?.length ?? 0);
@@ -1489,7 +1490,8 @@ export const chequesRouter = router({
       `SELECT id, numero_cheque AS "numeroCheque", valor, status,
               data_compensacao AS "dataCompensacao", COALESCE(conciliado,0) AS conciliado
          FROM financial_cheques
-        WHERE company_id=$1 AND excluido_em IS NULL AND status='pendente'${extra}`, params);
+         WHERE company_id=$1 AND excluido_em IS NULL
+           AND status='pendente' AND COALESCE(conciliado,0)=0${extra}`, params);
     const matchCheque = await montarMatcherExtrato(db, input.companyId);
     const alvos: { id: number; dt: string }[] = [];
     for (const c of (res.rows as any[])) {
@@ -1519,8 +1521,8 @@ export const chequesRouter = router({
                 data_conciliacao=COALESCE(f.data_conciliacao, v.dt),
                 updated_at=NOW()
            FROM (VALUES ${valuesSql}) AS v(id, dt)
-          WHERE f.id = v.id AND f.company_id=$${n}
-            AND f.status='pendente' AND f.excluido_em IS NULL
+           WHERE f.id = v.id AND f.company_id=$${n}
+             AND f.status='pendente' AND COALESCE(f.conciliado,0)=0 AND f.excluido_em IS NULL
           RETURNING f.id`,
         flat);
       atualizados += (upd.rows?.length ?? 0);

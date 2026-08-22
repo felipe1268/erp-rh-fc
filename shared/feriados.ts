@@ -125,3 +125,43 @@ export function feriadoNacional(raw: string | Date | null | undefined): string |
   }
   return null;
 }
+
+/**
+ * Rescisão (art. 477 §6º CLT): se o prazo cair em sábado, domingo ou feriado
+ * nacional, o pagamento deve ser ANTECIPADO para o dia útil anterior.
+ */
+export function anteciparParaDiaUtil(iso: string): string {
+  let p = ymd(iso);
+  if (!p) return iso;
+  for (let i = 0; i < 10; i++) {
+    const dt = new Date(Date.UTC(p.y, p.m - 1, p.d));
+    const dow = dt.getUTCDay();
+    const isoStr = `${p.y}-${String(p.m).padStart(2, "0")}-${String(p.d).padStart(2, "0")}`;
+    if (dow !== 0 && dow !== 6 && !feriadoNacional(isoStr)) return isoStr;
+    dt.setUTCDate(dt.getUTCDate() - 1);
+    p = { y: dt.getUTCFullYear(), m: dt.getUTCMonth() + 1, d: dt.getUTCDate() };
+  }
+  return iso;
+}
+
+/**
+ * Data-limite de pagamento da rescisão: término + 10 dias corridos, MAS o
+ * término "para efeito de pagamento" ignora os dias EXTRAS do aviso (Lei
+ * 12.506: +3d/ano são INDENIZADOS — o contrato trabalhado encerra nos 30 dias).
+ * Regra do usuário: cap = início do aviso + 29 dias (dia 1 = próprio início).
+ * Resultado sempre antecipado para dia útil.
+ */
+export function dataLimitePagamentoRescisao(dataInicioAviso: string | null | undefined, dataFimAviso: string | null | undefined): string | null {
+  const fim = ymd(dataFimAviso);
+  if (!fim) return null;
+  let base = new Date(Date.UTC(fim.y, fim.m - 1, fim.d));
+  const ini = ymd(dataInicioAviso);
+  if (ini) {
+    const cap = new Date(Date.UTC(ini.y, ini.m - 1, ini.d));
+    cap.setUTCDate(cap.getUTCDate() + 29);
+    if (cap.getTime() < base.getTime()) base = cap;
+  }
+  base.setUTCDate(base.getUTCDate() + 10);
+  const isoStr = base.toISOString().split("T")[0];
+  return anteciparParaDiaUtil(isoStr);
+}

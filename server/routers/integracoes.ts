@@ -3,6 +3,8 @@ import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
 import { employeeIntegrations, clientes, employees } from "../../drizzle/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
+import { TRPCError } from "@trpc/server";
+import { assertRaioXAccess, assertFullRaioXAccess, assertFullRaioXAccessForEmployees, assertEmployeeInCompany } from "../raioXGuard";
 
 function calcularStatus(dataVencimento: string | null | undefined): { status: string; diasRestantes: number } {
   if (!dataVencimento) return { status: "SEM_VENCIMENTO", diasRestantes: 9999 };
@@ -25,7 +27,16 @@ export const integracoesRouter = router({
       tipo:       z.string().optional(),
       status:     z.string().optional(),
     }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      // Rev. 5194 — Raio-X guard.
+      // With employeeId: guard the specific employee (self or full access allowed).
+      // Without employeeId: tenant-wide query — only full-access users permitted;
+      // non-full users must not obtain all employees' integration records.
+      if (input.employeeId != null) {
+        await assertRaioXAccess(ctx as any, input.employeeId);
+      } else {
+        await assertFullRaioXAccess(ctx as any);
+      }
       const db = await getDb();
       const rows = await db
         .select({
@@ -72,6 +83,15 @@ export const integracoesRouter = router({
       observacoes:    z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
+      // Rev. 5196 — management mutation: hidden/disabled for self-only users in
+      // the Raio-X UI, so enforce full access server-side. Target company must
+      // be within scope, the target employee must belong to it, AND the
+      // employee's ACTUAL company (derived server-side) must equal
+      // input.companyId — even when the caller has both companies in scope, this
+      // blocks persisting the record under the wrong tenant.
+      await assertFullRaioXAccess(ctx as any, input.companyId);
+      await assertRaioXAccess(ctx as any, input.employeeId);
+      await assertEmployeeInCompany(input.employeeId, input.companyId);
       const db = await getDb();
       const userId = (ctx as any).user?.id ?? null;
 
@@ -109,6 +129,17 @@ export const integracoesRouter = router({
       observacoes:    z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
+      // Rev. 5196 — bulk creation: no self user may ever bulk-create. Require
+      // full access AND validate EVERY target employee is within authorized
+      // company scope (admin_master exempt). Also verify companyId scope, AND
+      // that EVERY target employee's ACTUAL company equals input.companyId — even
+      // when the caller has both companies in scope, this blocks writing records
+      // under the wrong tenant.
+      await assertFullRaioXAccess(ctx as any, input.companyId);
+      await assertFullRaioXAccessForEmployees(ctx as any, input.employeeIds);
+      for (const empId of input.employeeIds) {
+        await assertEmployeeInCompany(empId, input.companyId);
+      }
       const db = await getDb();
       const userId = (ctx as any).user?.id ?? null;
 
@@ -149,21 +180,49 @@ export const integracoesRouter = router({
       observacoes:    z.string().optional(),
       clienteNome:    z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       const { id, companyId, ...data } = input;
+      // Rev. 5195 — derive the record's employee/company server-side BEFORE auth.
+      // Do NOT trust client-supplied companyId/employeeId for authorization.
+      const [rec] = await db.select({
+        employeeId: employeeIntegrations.employeeId,
+        companyId:  employeeIntegrations.companyId,
+      })
+        .from(employeeIntegrations)
+        .where(eq(employeeIntegrations.id, id))
+        .limit(1);
+      if (!rec) throw new TRPCError({ code: "NOT_FOUND", message: "Registro não encontrado." });
+      // Management mutation: hidden/disabled for self-only users → require full
+      // access scoped to the record's real company, plus target-employee scope.
+      await assertFullRaioXAccess(ctx as any, rec.companyId);
+      await assertRaioXAccess(ctx as any, rec.employeeId);
+      // Persist against the record's real company (not the client-supplied one).
       await db.update(employeeIntegrations)
         .set({ ...data, atualizadoEm: new Date().toISOString() })
-        .where(and(eq(employeeIntegrations.id, id), eq(employeeIntegrations.companyId, companyId)));
+        .where(eq(employeeIntegrations.id, id));
       return { success: true };
     }),
 
   excluir: protectedProcedure
     .input(z.object({ id: z.number(), companyId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
+      // Rev. 5195 — resolve the record's employee/company server-side first.
+      const [rec] = await db.select({
+        employeeId: employeeIntegrations.employeeId,
+        companyId:  employeeIntegrations.companyId,
+      })
+        .from(employeeIntegrations)
+        .where(eq(employeeIntegrations.id, input.id))
+        .limit(1);
+      if (!rec) throw new TRPCError({ code: "NOT_FOUND", message: "Registro não encontrado." });
+      // Management mutation: hidden/disabled for self-only users → require full
+      // access scoped to the record's real company, plus target-employee scope.
+      await assertFullRaioXAccess(ctx as any, rec.companyId);
+      await assertRaioXAccess(ctx as any, rec.employeeId);
       await db.delete(employeeIntegrations)
-        .where(and(eq(employeeIntegrations.id, input.id), eq(employeeIntegrations.companyId, input.companyId)));
+        .where(eq(employeeIntegrations.id, input.id));
       return { success: true };
     }),
 
@@ -173,7 +232,10 @@ export const integracoesRouter = router({
       employeeId: z.number(),
       clienteId:  z.number(),
     }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      // Rev. 5195 — Raio-X guard: this reveals a specific employee's integration
+      // status, so authorize the target before returning any data.
+      await assertRaioXAccess(ctx as any, input.employeeId);
       const db = await getDb();
       const rows = await db
         .select()
@@ -193,7 +255,9 @@ export const integracoesRouter = router({
 
   kpis: protectedProcedure
     .input(z.object({ companyId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      // Rev. 5195 — tenant-wide personnel aggregate → full access only.
+      await assertFullRaioXAccess(ctx as any, input.companyId);
       const db = await getDb();
       const rows = await db
         .select()

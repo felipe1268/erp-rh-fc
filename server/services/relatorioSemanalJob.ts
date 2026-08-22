@@ -14,7 +14,7 @@ import { sendEmail } from "./smtpService";
 
 const ATIVOS = `('Ativo','Ferias','Férias','Afastado','Aviso','Licenca','Licença')`;
 
-function resolveLogoSource(logoUrl: string | null | undefined): string | Buffer | null {
+function resolveLogoSource(logoUrl: string | null | undefined, isFcGroup?: boolean): string | Buffer | null {
   if (logoUrl) {
     if (logoUrl.startsWith("data:image")) {
       const m = logoUrl.match(/^data:image\/\w+;base64,(.+)$/);
@@ -24,12 +24,16 @@ function resolveLogoSource(logoUrl: string | null | undefined): string | Buffer 
       if (fs.existsSync(localPath)) return localPath;
     }
   }
-  const fallbacks = [
-    path.join(process.cwd(), "client", "public", "logo-fc.jpg"),
-    path.join(process.cwd(), "public", "logo-fc.jpg"),
-  ];
-  for (const p of fallbacks) {
-    try { if (fs.existsSync(p)) return p; } catch {}
+  // Fallback para a logo FC apenas para empresas do grupo FC (sem logo própria).
+  // Outras empresas (Hotel, LOCNOW etc.) ficam sem logo em vez de exibir a logo errada.
+  if (isFcGroup) {
+    const fallbacks = [
+      path.join(process.cwd(), "client", "public", "logo-fc.jpg"),
+      path.join(process.cwd(), "public", "logo-fc.jpg"),
+    ];
+    for (const p of fallbacks) {
+      try { if (fs.existsSync(p)) return p; } catch {}
+    }
   }
   return null;
 }
@@ -113,7 +117,10 @@ function gerarPdfEmpresa(company: any, dados: Awaited<ReturnType<typeof coletarD
 
     // Cabeçalho
     let y = 36;
-    const logoSrc = resolveLogoSource(company.logoUrl);
+    // Grupo FC: CNPJ 29.353.906/xxxx-xx — usa logo FC como fallback se não tiver logo própria.
+    // Outras empresas (Hotel, LOCNOW etc.) só exibem a logo delas; sem fallback.
+    const isFcGroup = (company.cnpj || "").replace(/\D/g, "").startsWith("29353906");
+    const logoSrc = resolveLogoSource(company.logoUrl, isFcGroup);
     const headerX = logoSrc ? mL + 66 : mL;
     if (logoSrc) { try { doc.image(logoSrc, mL, y, { fit: [54, 54] }); } catch {} }
     doc.font("Helvetica-Bold").fontSize(14).fillColor(dark)
@@ -136,13 +143,29 @@ function gerarPdfEmpresa(company: any, dados: Awaited<ReturnType<typeof coletarD
       doc.moveTo(mL, doc.y + 2).lineTo(pageW - mR, doc.y + 2).lineWidth(0.5).strokeColor(border).stroke();
       doc.moveDown(0.4);
     };
+    const FONT_SIZE = 8.5;
+    const ROW_PAD = 5;   // espaço extra acima/abaixo do texto em cada linha
     const linha = (cols: string[], widths: number[], bold = false, cor = dark) => {
-      if (doc.y > doc.page.height - 70) doc.addPage();
+      const font = bold ? "Helvetica-Bold" : "Helvetica";
+      doc.font(font).fontSize(FONT_SIZE);
+      // Calcula a altura necessária para cada coluna e usa a maior
+      let rowH = FONT_SIZE + ROW_PAD;
+      cols.forEach((c, i) => {
+        const h = doc.heightOfString(c || "—", { width: widths[i] - 6 });
+        if (h + ROW_PAD > rowH) rowH = h + ROW_PAD;
+      });
+      // Verifica quebra de página considerando a altura real da linha
+      if (doc.y + rowH > doc.page.height - doc.page.margins.bottom - 6) doc.addPage();
       const y0 = doc.y;
+      doc.fillColor(cor);
       let x = mL;
-      doc.font(bold ? "Helvetica-Bold" : "Helvetica").fontSize(8.5).fillColor(cor);
-      cols.forEach((c, i) => { doc.text(c || "—", x, y0, { width: widths[i] - 6, lineBreak: false, ellipsis: true }); x += widths[i]; });
-      doc.y = y0 + 13;
+      // Renderiza cada coluna na mesma posição vertical y0, permitindo quebra de linha
+      // dentro da coluna (sem sobreposição: o avanço manual garante separação correta)
+      cols.forEach((c, i) => {
+        doc.font(font).fontSize(FONT_SIZE).text(c || "—", x, y0, { width: widths[i] - 6, lineBreak: true });
+        x += widths[i];
+      });
+      doc.y = y0 + rowH;
     };
     const vazio = (msg: string) => { doc.font("Helvetica-Oblique").fontSize(8.5).fillColor(mid).text(msg, mL, doc.y); doc.moveDown(0.3); };
     const wPad = pageW - mL - mR;

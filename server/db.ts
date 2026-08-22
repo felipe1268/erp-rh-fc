@@ -539,7 +539,7 @@ export async function userCanAccessObraAlmox(
  * individual), espelhando `userManagement.getMyPermissions`. Usado em guards
  * server-side de nível de módulo.
  */
-async function getUserModuleAccessMap(userId: number): Promise<Record<string, unknown>> {
+export async function getUserModuleAccessMap(userId: number): Promise<Record<string, unknown>> {
   const db = await getDb();
   if (!db) return {};
   let moduleAccess: Record<string, unknown> = {};
@@ -563,6 +563,56 @@ async function getUserModuleAccessMap(userId: number): Promise<Record<string, un
     }
   } catch {}
   return moduleAccess;
+}
+
+/**
+ * Espelha o RouteGuard do client para endpoints que expõem um módulo inteiro.
+ * Admins sempre acessam; usuário sem grupo mantém a regra legada permissiva.
+ * Quando há grupo, o sistema novo de module_access tem prioridade e o legado
+ * consulta a permissão explícita da rota.
+ */
+export async function userCanViewModulePage(
+  userId: number,
+  role: string | null | undefined,
+  moduleId: string,
+  pageId: string,
+  route: string,
+): Promise<boolean> {
+  if (role === "admin_master" || role === "admin") return true;
+
+  const db = await getDb();
+  if (!db) return false;
+
+  const groupPerms = await getUserEffectiveGroupPermissions(userId);
+  if (groupPerms.groups.length === 0) return true;
+
+  const groupIds = groupPerms.groups.map((group: any) => Number(group.id)).filter(Number.isFinite);
+  const groupRows = groupIds.length > 0
+    ? await db
+        .select({ moduleAccess: (userGroups as any).moduleAccess })
+        .from(userGroups)
+        .where(inArray(userGroups.id, groupIds))
+    : [];
+
+  const groupModuleAccess: Record<string, unknown> = {};
+  for (const group of groupRows) {
+    if (!(group as any).moduleAccess) continue;
+    try {
+      Object.assign(groupModuleAccess, JSON.parse((group as any).moduleAccess as string));
+    } catch {}
+  }
+
+  if (Object.keys(groupModuleAccess).length > 0) {
+    const permission = normalizeModulePerm(moduleId, groupModuleAccess[moduleId]);
+    if (!permission) return false;
+    if (permission.level === "admin" || permission.level === "viewer") return true;
+    const pagePermission = permission.pages?.[pageId];
+    return pagePermission == null ? true : pagePermission.view === true;
+  }
+
+  return groupPerms.permissions.some(
+    (permission: any) => permission.rota === route && Number(permission.canView) === 1,
+  );
 }
 
 /**
@@ -592,6 +642,24 @@ export async function userHasOrcamentoModuleAccess(userId: number, role?: string
     const ma = await getUserModuleAccessMap(userId);
     const perm = normalizeModulePerm("orcamento", (ma as any)["orcamento"]);
     return perm?.level === "admin";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Reembolso — quem ENXERGA todos os lançamentos (não só os próprios).
+ * Regra: admin_master OU admin do módulo "reembolso" OU admin do módulo "financeiro".
+ * Operações de escrita (aprovar, criar fundo, alterar critérios) permanecem
+ * restritas a admin_master — este helper é só para visibilidade.
+ */
+export async function userIsReembolsoAdmin(userId: number, role?: string | null): Promise<boolean> {
+  if (role === "admin_master") return true;
+  try {
+    const ma = await getUserModuleAccessMap(userId);
+    const permR = normalizeModulePerm("reembolso",   (ma as any)["reembolso"]);
+    const permF = normalizeModulePerm("financeiro",  (ma as any)["financeiro"]);
+    return permR?.level === "admin" || permF?.level === "admin";
   } catch {
     return false;
   }
@@ -910,7 +978,7 @@ export async function updateEmployee(id: number, companyId: number, data: Partia
     "telefone", "celular", "email",
     "contatoEmergencia", "telefoneEmergencia", "parentescoEmergencia",
     // Profissional
-    "cargo", "funcao", "setor", "codigoInterno", "codigoContabil",
+    "cargo", "funcao", "setor", "codigoInterno", "codigoContabil", "empregadorDocumentos",
     "dataAdmissao", "dataDemissao", "tipoContrato", "jornadaTrabalho",
     "salarioBase", "valorHora", "horasMensais", "tipoRemuneracao",
     // EPI / uniforme (Rev. 2854)
@@ -993,6 +1061,34 @@ export async function updateEmployee(id: number, companyId: number, data: Partia
   // Normalizar cidade: Title Case + acentos corretos
   if (sanitized.cidade && typeof sanitized.cidade === 'string') {
     sanitized.cidade = normalizeCidadeInput(sanitized.cidade);
+  }
+  // Normalizar jornadaTrabalho: intervalo deve ser sempre HH:MM.
+  // Texto livre ("1 hora") fazia parsers HH:MM lerem 0 → banco de horas debitava
+  // o intervalo como falta (jornada 10h em vez de 9h).
+  if (sanitized.jornadaTrabalho && typeof sanitized.jornadaTrabalho === 'string') {
+    try {
+      const j = JSON.parse(sanitized.jornadaTrabalho);
+      if (j && typeof j === 'object' && !Array.isArray(j)) {
+        let changed = false;
+        for (const d of Object.keys(j)) {
+          const iv = j[d]?.intervalo;
+          if (iv != null && iv !== '' && !/^\d{1,2}:\d{2}$/.test(String(iv))) {
+            const s = String(iv).trim().toLowerCase();
+            let mins = 0;
+            const hText = s.match(/(\d+(?:[.,]\d+)?)\s*h(?:ora)?s?/);
+            const mText = s.match(/(\d+)\s*min/);
+            if (hText) mins = Math.round(Number(hText[1].replace(',', '.')) * 60) + (mText ? Number(mText[1]) : 0);
+            else if (mText) mins = Number(mText[1]);
+            else { const n = Number(s.replace(',', '.')); if (Number.isFinite(n)) mins = n <= 3 ? Math.round(n * 60) : Math.round(n); }
+            if (mins > 0) {
+              j[d].intervalo = `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`;
+              changed = true;
+            }
+          }
+        }
+        if (changed) sanitized.jornadaTrabalho = JSON.stringify(j);
+      }
+    } catch { /* JSON inválido: manter como veio */ }
   }
   // Validar código interno: não permitir números proibidos (dinâmico)
   if (sanitized.codigoInterno) {
@@ -1129,7 +1225,27 @@ export async function getEmployees(companyId: number, search?: string, status?: 
       ));
     alocacoes.forEach(a => { empObraMap[a.employeeId] = { obraId: a.obraId, obraNome: a.obraNome }; });
   }
-  return rows.map(r => ({ ...r, obraAtualId: empObraMap[r.id]?.obraId || null, obraAtualNome: empObraMap[r.id]?.obraNome || null }));
+  // Enrich with CIPA (membro ativo → cargo + fim da estabilidade/vigência)
+  const cipaMap: Record<number, { cargo: string; fim: string | null }> = {};
+  if (empIds.length > 0) {
+    const membros = await db.select({
+      employeeId: cipaMembersTable.employeeId,
+      cargoCipa: cipaMembersTable.cargoCipa,
+      fimEstabilidade: cipaMembersTable.fimEstabilidade,
+    }).from(cipaMembersTable)
+      .where(and(
+        inArray(cipaMembersTable.employeeId, empIds),
+        eq(cipaMembersTable.statusMembro, "Ativo"),
+      ));
+    membros.forEach(m => { cipaMap[m.employeeId] = { cargo: String(m.cargoCipa || "").replace(/_/g, " "), fim: m.fimEstabilidade ?? null }; });
+  }
+  return rows.map(r => ({
+    ...r,
+    obraAtualId: empObraMap[r.id]?.obraId || null,
+    obraAtualNome: empObraMap[r.id]?.obraNome || null,
+    cipaCargo: cipaMap[r.id]?.cargo || null,
+    cipaFimEstabilidade: cipaMap[r.id]?.fim || null,
+  }));
 }
 
 export async function getEmployeeById(id: number, companyId: number) {
@@ -3551,6 +3667,11 @@ export async function getEquipeObra(obraId: number, companyId: number, obraIds?:
     cpf: employees.cpf,
     fotoUrl: employees.fotoUrl,
     tipoContrato: employees.tipoContrato,
+    // Rev. 5060 — status do contrato de experiência p/ a Lista de Funcionários
+    experienciaStatus: employees.experienciaStatus,
+    experienciaFim1: employees.experienciaFim1,
+    experienciaFim2: employees.experienciaFim2,
+    experienciaEfetivadoEm: employees.experienciaEfetivadoEm,
   }).from(employees).where(and(
     sql`${employees.id} IN (${sql.raw(empIdsAll.join(","))})`,
     sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra', 'Inativo')`,

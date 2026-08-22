@@ -27,7 +27,7 @@ import {
   FileSignature, ShieldCheck, Megaphone, AlertTriangle, BellRing,
   UserX, Hammer, Save, History, RotateCcw, Eye, FileText, Search, Info, Loader2,
   XCircle, Sparkles, Upload, BadgeCheck, FilePlus2, Undo2, Printer, Trash2, Handshake,
-  Settings2,
+  Settings2, Pencil,
 } from "lucide-react";
 import RichTextEditor, { type RichTextEditorHandle } from "@/components/RichTextEditor";
 import {
@@ -123,7 +123,7 @@ function IaProgressBar({ active, label }: { active: boolean; label: string }) {
  * 100% fiel ao modelo institucional. Empresa vem dos exemplos dos placeholders
  * (já são os dados reais da FC); logo sempre com fallback ${origin}/logo-fc.jpg.
  */
-function buildFcPreviewHtml(bodyHtml: string, meta: DocumentTemplateMeta, geradoPor: string, margins?: { top?: number; right?: number; bottom?: number; left?: number }): string {
+function buildFcPreviewHtml(bodyHtml: string, meta: DocumentTemplateMeta, geradoPor: string, margins?: { top?: number; right?: number; bottom?: number; left?: number }, companyLogoUrl?: string | null): string {
   if (!bodyHtml) return "";
   const dados: Record<string, string> = {};
   meta.placeholders.forEach(p => { dados[p.chave] = p.exemplo; });
@@ -132,12 +132,16 @@ function buildFcPreviewHtml(bodyHtml: string, meta: DocumentTemplateMeta, gerado
   const hoje = new Date();
   const dataBr = hoje.toLocaleDateString("pt-BR");
   const razao = dados.empresaRazaoSocial || "FC ENGENHARIA E CONSTRUCAO LTDA";
+  // Rev. 5022 — logo da EMPRESA ATIVA (companies.logoUrl); fallback logo FC.
+  // Dentro de iframe srcDoc/window.open, URL relativa não resolve — prefixa origin.
+  const logoRaw = (companyLogoUrl || "").trim() || "/logo-fc.jpg";
+  const logo = logoRaw.startsWith("/") ? `${origin}${logoRaw}` : logoRaw;
   return buildFcDocument({
     empresa: {
       razaoSocial: razao,
       cnpj: dados.empresaCnpj || "",
       endereco: dados.empresaEndereco || "",
-      logoUrl: `${origin}/logo-fc.jpg`,
+      logoUrl: logo,
     },
     titulo: meta.titulo,
     numero: `001/${hoje.getFullYear()}`,
@@ -146,15 +150,25 @@ function buildFcPreviewHtml(bodyHtml: string, meta: DocumentTemplateMeta, gerado
     corpoHtml: corpo,
     assinaturas: {
       localData: `Guaratinguetá - SP, ${dataBr}`,
-      partes: [
-        { nome: razao, subtitulo: dados.empresaCnpj ? `CNPJ: ${dados.empresaCnpj}` : undefined },
-        { nome: dados.empNome || "Colaborador(a)", subtitulo: dados.empCpf ? `CPF: ${dados.empCpf}` : undefined },
-      ],
+      // Rev. 5005 — contrato de terceiros tem layout próprio: 4 assinaturas
+      // obrigatórias (Contratado → Gestor do Projeto → Financeiro → Sócio
+      // Administrador) + 2 testemunhas opcionais. Demais docs: 2 partes padrão.
+      partes: meta.tipo === "contrato_terceiros"
+        ? [
+            { nome: dados.contratadaNome || "CONTRATADA", subtitulo: dados.contratadaCnpj ? `CNPJ: ${dados.contratadaCnpj} — CONTRATADA` : "CONTRATADA" },
+            { nome: dados.gestorProjetoNome || "____________________", subtitulo: "Gestor do Projeto" },
+            { nome: dados.gestorFinanceiroNome || "____________________", subtitulo: "Responsável Financeiro" },
+            { nome: dados.socioAdministradorNome || razao, subtitulo: "Sócio Administrador — CONTRATANTE" },
+          ]
+        : [
+            { nome: razao, subtitulo: dados.empresaCnpj ? `CNPJ: ${dados.empresaCnpj}` : undefined },
+            { nome: dados.empNome || "Colaborador(a)", subtitulo: dados.empCpf ? `CPF: ${dados.empCpf}` : undefined },
+          ],
       testemunhas: true,
     },
     geradoPor,
     pageTitle: meta.titulo,
-    logoSrc: `${origin}/logo-fc.jpg`,
+    logoSrc: logo,
     margins,
   });
 }
@@ -275,7 +289,9 @@ function plainTextModelToHtml(text: string): string {
 export default function TemplatesDocsTab() {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin" || user?.role === "admin_master";
-  const { selectedCompanyId } = useCompany();
+  const { selectedCompanyId, selectedCompany } = useCompany();
+  // Rev. 5022 — logo da empresa ativa pro cabeçalho dos documentos
+  const companyLogoUrl: string | null = (selectedCompany as any)?.logoUrl ?? null;
 
   const [secaoAtiva, setSecaoAtiva] = useState<Secao>("iso");
 
@@ -317,6 +333,8 @@ export default function TemplatesDocsTab() {
   const [novoTab, setNovoTab] = useState<"assunto" | "pdf">("assunto");
   const [novoTitulo, setNovoTitulo] = useState("");
   const [novoCodigo, setNovoCodigo] = useState("");
+  // Rev. 5022 — setor do novo documento (define o prefixo do código ISO auto)
+  const [novoSetor, setNovoSetor] = useState<string>("rh");
   const [novoInstrucoes, setNovoInstrucoes] = useState("");
   const [novoConteudo, setNovoConteudo] = useState("");
   const [novoSugestoes, setNovoSugestoes] = useState<string[]>([]);
@@ -371,6 +389,18 @@ export default function TemplatesDocsTab() {
     });
   }, [listAllQuery.data, buscaDoc, filtroStatus, categoriaSelecionada]);
 
+  // Rev. 5026 — sincroniza a seleção com a lista filtrada: ao trocar de
+  // categoria/status/busca, se o documento selecionado saiu da lista, seleciona
+  // o primeiro da lista filtrada (evita mostrar o editor de um doc de OUTRA
+  // categoria, ex.: filtro SST vazio exibindo "Contrato de Experiência").
+  useEffect(() => {
+    if (!listAllQuery.data) return; // aguarda dados reais
+    if (docsLista.length === 0) return; // lista vazia → editor fica oculto
+    if (!docsLista.some((r: any) => r.tipo === tipoSelecionado)) {
+      setTipoSelecionado(docsLista[0].tipo);
+    }
+  }, [docsLista, tipoSelecionado, listAllQuery.data]);
+
   const STATUS_FILTROS: { value: string; label: string }[] = [
     { value: "todos", label: "Todos" },
     { value: "vigente", label: "Vigente" },
@@ -385,13 +415,19 @@ export default function TemplatesDocsTab() {
   // Rev. 4415: guarda isFetching — durante refetch após save/aprovar, o dado
   // stale pode ter conteudoHtml:"" (estado "Não criado" anterior). Sem o guarda,
   // o editor ia para branco e permanecia vazio até o próximo refetch completar.
+  // Rev. 5044 — identidade do doc hidratado: em cache hit, o efeito de reset
+  // (troca de tipo) rodava DEPOIS da hidratação e apagava o editor — botão
+  // Aprovar/Salvar ficava desabilitado até redigitar. Agora a hidratação é
+  // keyed por tipo e o reset não mexe mais no conteúdo.
+  const lastHydratedTipo = useRef<string | null>(null);
   useEffect(() => {
     // Aguarda a query principal terminar; para contrato_pj aguarda o modelo também
     if (getQuery.isLoading) return;
     if (tipoSelecionado === "contrato_pj" && modeloPjQuery.isLoading) return;
-    // Se há um refetch em background (dado stale pode estar desatualizado),
-    // preserva o conteúdo atual do editor em vez de sobrescrever com dado antigo.
-    if (getQuery.isFetching) return;
+    // Refetch em background: preserva as EDIÇÕES do MESMO doc; mas se o tipo
+    // mudou (cache hit de outro doc), hidrata já com o dado em cache.
+    if (getQuery.isFetching && lastHydratedTipo.current === tipoSelecionado) return;
+    lastHydratedTipo.current = tipoSelecionado;
 
     const saved = getQuery.data?.conteudoHtml || "";
     if (saved) {
@@ -418,7 +454,8 @@ export default function TemplatesDocsTab() {
     setIaInstrucoes("");
     setMostrarPreview(false);
     setIaSugestoes([]);
-    setConteudoEditado("");
+    // (conteudoEditado NÃO é resetado aqui — a hidratação keyed por tipo acima
+    // cuida disso; resetar aqui causava a corrida que deixava o editor vazio)
     setElaboradoPorNome("");
     setDataVigencia("");
     setProximaRevisao("");
@@ -460,6 +497,18 @@ export default function TemplatesDocsTab() {
       invalidarTudo();
     },
     onError: (e) => toast.error(e.message || "Falha ao salvar template."),
+  });
+
+  // Rev. 5044 — edição do título de documento CUSTOM em rascunho (lapisinho)
+  const [editandoTitulo, setEditandoTitulo] = useState<string | null>(null);
+  const renomearMut = trpc.systemDocumentTemplates.renomear.useMutation({
+    onSuccess: () => {
+      toast.success("Título atualizado!");
+      setEditandoTitulo(null);
+      utils.systemDocumentTemplates.listAll.invalidate();
+      utils.systemDocumentTemplates.get.invalidate();
+    },
+    onError: (e: any) => toast.error(e?.message || "Erro ao renomear"),
   });
 
   const restoreMut = trpc.systemDocumentTemplates.restoreVersion.useMutation({
@@ -566,8 +615,8 @@ export default function TemplatesDocsTab() {
     [marginTop, marginRight, marginBottom, marginLeft],
   );
   const previewHtml = useMemo(
-    () => buildFcPreviewHtml(conteudoEditado, meta, user?.name || "Sistema", templateMargins),
-    [conteudoEditado, meta, user, templateMargins]
+    () => buildFcPreviewHtml(conteudoEditado, meta, user?.name || "Sistema", templateMargins, companyLogoUrl),
+    [conteudoEditado, meta, user, templateMargins, companyLogoUrl]
   );
 
   // Placeholders agrupados + filtrados pela busca
@@ -665,7 +714,7 @@ export default function TemplatesDocsTab() {
   // ── Novo Documento (Rev. 2751) ──
   const abrirNovo = () => {
     setNovoTab(iaSt?.lerPdf ? "pdf" : "assunto");
-    setNovoTitulo(""); setNovoCodigo(""); setNovoInstrucoes(""); setNovoConteudo(""); setNovoSugestoes([]);
+    setNovoTitulo(""); setNovoCodigo(""); setNovoSetor(categoriaSelecionada !== "todos" ? categoriaSelecionada : "rh"); setNovoInstrucoes(""); setNovoConteudo(""); setNovoSugestoes([]);
     setNovoOpen(true);
   };
 
@@ -693,7 +742,7 @@ export default function TemplatesDocsTab() {
   // Rev. 2752 — Abre o documento institucional COMPLETO numa janela isolada e
   // dispara a impressão (réplica exata do que será impresso/lido).
   const handleImprimir = () => {
-    const html = buildFcPreviewHtml(conteudoEditado, meta, user?.name || "Sistema", templateMargins);
+    const html = buildFcPreviewHtml(conteudoEditado, meta, user?.name || "Sistema", templateMargins, companyLogoUrl);
     if (!html) { toast.error("Sem conteúdo para imprimir."); return; }
     const w = window.open("", "_blank");
     if (!w) { toast.error("Permita pop-ups para imprimir o documento."); return; }
@@ -710,14 +759,14 @@ export default function TemplatesDocsTab() {
       toast.error("Gere ou escreva o conteúdo do documento antes de criar.");
       return;
     }
-    criarNovoMut.mutate({ titulo: novoTitulo.trim(), codigo: novoCodigo || undefined, conteudoHtml: novoConteudo });
+    criarNovoMut.mutate({ titulo: novoTitulo.trim(), codigo: novoCodigo || undefined, setor: novoSetor as any, conteudoHtml: novoConteudo });
   };
 
   // Rev. 2752 — Preview do modal "Novo Documento" = documento institucional
   // COMPLETO (mesmo wrapper da impressão), renderizado em <iframe srcDoc>.
   const novoPreviewHtml = useMemo(
-    () => buildFcPreviewHtml(novoConteudo, getDocMetaOrFallback("", novoTitulo), user?.name || "Sistema"),
-    [novoConteudo, novoTitulo, user]
+    () => buildFcPreviewHtml(novoConteudo, getDocMetaOrFallback("", novoTitulo), user?.name || "Sistema", undefined, companyLogoUrl),
+    [novoConteudo, novoTitulo, user, companyLogoUrl]
   );
 
   const visualizandoVersaoAntiga = versaoVisualizada != null && getQuery.data?.template?.versaoAtual && versaoVisualizada !== getQuery.data.template.versaoAtual;
@@ -863,14 +912,42 @@ export default function TemplatesDocsTab() {
         )}
       </div>
 
-      <div className="grid grid-cols-12 gap-4">
+      {docsLista.length > 0 && <div className="grid grid-cols-12 gap-4">
         {/* PRINCIPAL — Ficha ISO + Editor (largo) */}
         <div className="col-span-12 lg:col-span-9 space-y-4">
           {/* Ficha ISO */}
           <div className="bg-white border rounded-lg p-4">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
-                <h3 className="text-base font-semibold text-gray-800">{meta.titulo}</h3>
+                {editandoTitulo !== null ? (
+                  <div className="flex items-center gap-1.5">
+                    <Input
+                      value={editandoTitulo}
+                      onChange={(e) => setEditandoTitulo(e.target.value)}
+                      className="h-8 text-base font-semibold w-72"
+                      autoFocus
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && editandoTitulo.trim().length >= 3) renomearMut.mutate({ tipo: tipoSelecionado, titulo: editandoTitulo.trim() });
+                        if (e.key === "Escape") setEditandoTitulo(null);
+                      }}
+                    />
+                    <Button size="sm" className="h-8" disabled={renomearMut.isPending || editandoTitulo.trim().length < 3}
+                      onClick={() => renomearMut.mutate({ tipo: tipoSelecionado, titulo: editandoTitulo.trim() })}>
+                      {renomearMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Salvar"}
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-8" onClick={() => setEditandoTitulo(null)}>Cancelar</Button>
+                  </div>
+                ) : (
+                  <>
+                    <h3 className="text-base font-semibold text-gray-800">{meta.titulo}</h3>
+                    {/* Rev. 5044 — rascunho de doc custom: lapisinho p/ corrigir/complementar o título */}
+                    {statusAtual === "rascunho" && isCustomTipo(tipoSelecionado) && (
+                      <button type="button" className="text-gray-400 hover:text-blue-600" title="Editar título" onClick={() => setEditandoTitulo(meta.titulo)}>
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </>
+                )}
                 <StatusBadge status={statusAtual} />
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -1195,10 +1272,21 @@ export default function TemplatesDocsTab() {
                       <span className="italic">Template ainda não foi criado — ao salvar, será criada a Rev. 1.</span>
                     )}
                   </div>
-                  <Button onClick={handleSalvar} disabled={algumPendente}>
-                    {saveMut.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Save className="w-4 h-4 mr-1" />}
-                    Salvar Nova Revisão
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    {/* Rev. 5044 — descarta as edições não salvas e volta ao conteúdo da revisão atual */}
+                    <Button variant="outline" disabled={algumPendente} onClick={() => {
+                      const saved = getQuery.data?.conteudoHtml || "";
+                      setConteudoEditado(saved ? (saved.includes("<") ? saved : plainTextModelToHtml(saved)) : "");
+                      setComentario("");
+                      toast.info("Edições descartadas — conteúdo voltou à revisão atual.");
+                    }}>
+                      <Undo2 className="w-4 h-4 mr-1" /> Cancelar
+                    </Button>
+                    <Button onClick={handleSalvar} disabled={algumPendente}>
+                      {saveMut.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Save className="w-4 h-4 mr-1" />}
+                      Salvar Nova Revisão
+                    </Button>
+                  </div>
                 </div>
               </div>
             )}
@@ -1275,7 +1363,7 @@ export default function TemplatesDocsTab() {
             </div>
           )}
         </div>
-      </div>
+      </div>}
 
       {/* ── MODAL: Novo Documento (Rev. 2751) — criar doc custom via IA ── */}
       {novoOpen && (
@@ -1289,14 +1377,20 @@ export default function TemplatesDocsTab() {
             </div>
 
             <div className="p-5 space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                 <div className="sm:col-span-2">
                   <label className="text-[11px] font-medium text-gray-600">Título do documento *</label>
                   <Input value={novoTitulo} onChange={e => setNovoTitulo(e.target.value)} placeholder="Ex: Carta de Apresentação para Conta Salário" className="h-9 text-sm" />
                 </div>
                 <div>
+                  <label className="text-[11px] font-medium text-gray-600">Setor</label>
+                  <select value={novoSetor} onChange={e => setNovoSetor(e.target.value)} className="h-9 w-full rounded-md border border-input bg-white px-2 text-sm">
+                    {CATEGORIAS_DOCS.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                  </select>
+                </div>
+                <div>
                   <label className="text-[11px] font-medium text-gray-600">Código ISO (opcional)</label>
-                  <Input value={novoCodigo} onChange={e => setNovoCodigo(e.target.value)} placeholder="auto (FC-DOC-NNN)" className="h-9 text-sm font-mono" />
+                  <Input value={novoCodigo} onChange={e => setNovoCodigo(e.target.value)} placeholder="auto pelo setor" className="h-9 text-sm font-mono" />
                 </div>
               </div>
 

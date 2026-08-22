@@ -216,6 +216,7 @@ export const homeDataRouter = router({
         dataValidade: string;
         diasRestantes: number;
         vencido: boolean;
+        agendadoPara: string | null;
       }> = [];
 
       for (const [empId, aso] of Array.from(asoMap.entries())) {
@@ -246,6 +247,11 @@ export const homeDataRouter = router({
             dataValidade: validadeStr,
             diasRestantes,
             vencido: diasRestantes < 0,
+            // Rev. 5044 — renovação já agendada (qualquer ASO ativo do colaborador)
+            agendadoPara: (() => {
+              const ag = empAsos.map(a => (a as any).dataAgendamentoRenovacao).filter(Boolean).sort().pop();
+              return ag ? toDateStr(ag) : null;
+            })(),
           });
         }
       }

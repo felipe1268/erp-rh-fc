@@ -12,6 +12,7 @@ import {
   medicaoCampo, medicaoCampoContornos, medicaoCampoFotos, medicaoCampoPdfs,
 } from "../drizzle/schema";
 import { sql } from "drizzle-orm";
+import { parseItensExtras, quantidadeExtra } from "../shared/levantamentoConsolidado";
 
 const num = (v: unknown) => parseFloat(String(v ?? "0")) || 0;
 const BRL = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -263,10 +264,18 @@ export async function buildBoletimMedicaoHtml(db: any, medicaoId: number, compan
           : num(c.area) > 0 ? `${QTD(num(c.area))} m²`
           : num(c.perimetro) > 0 ? `${QTD(num(c.perimetro))} m`
           : c.contagem ? `${c.contagem} un` : "-";
+        // Rev. 4863 — vínculos MÚLTIPLOS do contorno na memória de cálculo
+        const extras = parseItensExtras(c.itensJson);
+        const qtdBase = num(c.quantidade);
+        const extrasHtml = extras.length
+          ? `<div style="color:#556;font-size:8px;margin-top:2px">${extras.map((e) =>
+              `+ ${esc(e.eapCodigo || "")} ${esc(e.descricao || "")} — ${QTD(quantidadeExtra(e, qtdBase))} ${esc(e.unidade || "")}`,
+            ).join("<br>")}</div>`
+          : "";
         return `<tr style="background:${i % 2 ? "#fff" : "#fafbfc"}">
           <td class="mono">${esc(c.numero ?? i + 1)}</td>
           <td>${esc(c.rotulo || "-")}</td>
-          <td>${esc(c.itemDescricao || c.servico || "-")}</td>
+          <td>${esc(c.itemDescricao || c.servico || "-")}${extrasHtml}</td>
           <td class="c">${esc(c.tipo || "-")}</td>
           <td class="r b">${medida}</td>
           <td>${esc(c.observacoes || "")}</td>
