@@ -198,8 +198,8 @@ export default function ContratosServicoPage() {
   return (
     <div className="flex h-full bg-slate-50">
       {/* ══ COMANDOS DO MÓDULO ══════════════════════════════════════════════ */}
-      <aside className="hidden md:flex md:w-14 lg:w-52 flex-shrink-0 flex-col border-r border-slate-200 bg-white">
-        <div className="hidden border-b border-slate-100 bg-slate-50 px-3.5 py-3 lg:block">
+      <aside className="hidden md:flex md:w-40 lg:w-52 flex-shrink-0 flex-col border-r border-slate-200 bg-white">
+        <div className="hidden border-b border-slate-100 bg-slate-50 px-3.5 py-3 md:block">
           <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Comandos</p>
           <p className="mt-0.5 text-[11px] leading-relaxed text-slate-400">Ações rápidas do módulo.</p>
         </div>
@@ -235,7 +235,7 @@ export default function ContratosServicoPage() {
                     setActiveTab(command.key);
                   }
                 }}
-                className={`flex w-full items-center justify-center gap-2.5 rounded-lg px-2 py-2.5 text-left text-xs font-semibold transition-colors lg:justify-start lg:px-3 ${
+                className={`flex w-full items-center justify-start gap-2.5 rounded-lg px-3 py-2.5 text-left text-xs font-semibold transition-colors ${
                   isActive
                     ? "bg-[#1B2A4A] text-white shadow-sm"
                     : disabled
@@ -244,7 +244,7 @@ export default function ContratosServicoPage() {
                 }`}
               >
                 <command.Icon className="h-4 w-4 shrink-0" />
-                <span className="hidden lg:inline">{command.label}</span>
+                <span>{command.label}</span>
               </button>
             );
           })}
